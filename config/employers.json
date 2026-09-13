@@ -1,14 +1,14 @@
 {
   "employers": [
-    { "id": "lpl-financial", "name": "LPL Financial", "domain": "lplfinancial.com", "careers_url": "https://careers.lplfinancial.com", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
-    { "id": "wells-fargo", "name": "Wells Fargo", "domain": "wellsfargo.com", "careers_url": "https://www.wellsfargojobs.com", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
-    { "id": "franklin-templeton", "name": "Franklin Templeton", "domain": "franklintempleton.com", "careers_url": "https://www.franklintempletoncareers.com", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
-    { "id": "invesco", "name": "Invesco", "domain": "invesco.com", "careers_url": "https://careers.invesco.com", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
-    { "id": "broadridge", "name": "Broadridge", "domain": "broadridge.com", "careers_url": "https://broadridge.wd1.myworkdayjobs.com", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
-    { "id": "lseg", "name": "LSEG", "domain": "lseg.com", "careers_url": "https://www.lseg.com/en/careers", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
-    { "id": "northern-trust", "name": "Northern Trust", "domain": "northerntrust.com", "careers_url": "https://careers.northerntrust.com", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
-    { "id": "kpmg", "name": "KPMG", "domain": "kpmg.com", "careers_url": "https://kpmg.wd1.myworkdayjobs.com", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
-    { "id": "state-street", "name": "State Street", "domain": "statestreet.com", "careers_url": "https://careers.statestreet.com", "ats_type": "workday", "crawl_delay_seconds": 5, "active": true },
+    { "id": "lpl-financial", "name": "LPL Financial", "domain": "lplfinancial.com", "careers_url": "https://lplfinancial.wd1.myworkdayjobs.com/India_Ext", "ats_type": "workday", "workday": { "tenant": "lplfinancial", "cluster": "wd1", "site": "India_Ext" }, "crawl_delay_seconds": 5, "active": true, "verified": true },
+    { "id": "wells-fargo", "name": "Wells Fargo", "domain": "wellsfargo.com", "careers_url": "https://wf.wd1.myworkdayjobs.com/WellsFargoJobs", "ats_type": "workday", "workday": { "tenant": "wf", "cluster": "wd1", "site": "WellsFargoJobs" }, "crawl_delay_seconds": 5, "active": true, "verified": true },
+    { "id": "invesco", "name": "Invesco", "domain": "invesco.com", "careers_url": "https://invesco.wd1.myworkdayjobs.com/IVZ", "ats_type": "workday", "workday": { "tenant": "invesco", "cluster": "wd1", "site": "IVZ" }, "crawl_delay_seconds": 5, "active": true, "verified": true },
+
+    { "id": "broadridge", "name": "Broadridge", "domain": "broadridge.com", "careers_url": "https://broadridge.wd5.myworkdayjobs.com/Careers", "ats_type": "workday", "workday": { "tenant": "broadridge", "cluster": "wd5", "site": "Careers" }, "crawl_delay_seconds": 5, "active": false, "verified": true, "note": "Workday tenant/site verified 2026-09-13; not one of the 3 Phase 1 pilots — enable in Phase 2." },
+    { "id": "northern-trust", "name": "Northern Trust", "domain": "northerntrust.com", "careers_url": "https://ntrs.wd1.myworkdayjobs.com/northerntrust", "ats_type": "workday", "workday": { "tenant": "ntrs", "cluster": "wd1", "site": "northerntrust" }, "crawl_delay_seconds": 5, "active": false, "verified": true, "note": "Workday tenant/site verified 2026-09-13; not one of the 3 Phase 1 pilots — enable in Phase 2." },
+    { "id": "state-street", "name": "State Street", "domain": "statestreet.com", "careers_url": "https://statestreet.wd1.myworkdayjobs.com/Global", "ats_type": "workday", "workday": { "tenant": "statestreet", "cluster": "wd1", "site": "Global" }, "crawl_delay_seconds": 5, "active": false, "verified": true, "note": "Workday tenant/site verified 2026-09-13; not one of the 3 Phase 1 pilots — enable in Phase 2." },
+    { "id": "lseg", "name": "LSEG", "domain": "lseg.com", "careers_url": "https://www.lseg.com/en/careers", "ats_type": "workday", "crawl_delay_seconds": 5, "active": false, "verified": false, "note": "Listed as Workday in the source spec but tenant/site not yet confirmed — verify before enabling in Phase 2." },
+    { "id": "kpmg", "name": "KPMG", "domain": "kpmg.com", "careers_url": "https://kpmg.com/careers", "ats_type": "workday", "crawl_delay_seconds": 5, "active": false, "verified": false, "note": "Listed as Workday in the source spec but tenant/site not yet confirmed (KPMG member firms vary by country) — verify before enabling in Phase 2." },
 
     { "id": "pwc-ac", "name": "PwC AC", "domain": "pwc.com", "careers_url": "https://www.pwc.com/us/en/careers.html", "ats_type": "oracle", "crawl_delay_seconds": 5, "active": true },
     { "id": "ey-gds", "name": "EY GDS", "domain": "ey.com", "careers_url": "https://careers.ey.com", "ats_type": "oracle", "crawl_delay_seconds": 5, "active": true },
@@ -17,6 +17,7 @@
     { "id": "dtcc", "name": "DTCC", "domain": "dtcc.com", "careers_url": "https://www.dtcc.com/careers", "ats_type": "taleo", "crawl_delay_seconds": 5, "active": true },
     { "id": "bny", "name": "BNY", "domain": "bny.com", "careers_url": "https://www.bny.com/corporate/global/en/careers.html", "ats_type": "taleo", "crawl_delay_seconds": 5, "active": true },
 
+    { "id": "franklin-templeton", "name": "Franklin Templeton", "domain": "franklintempleton.com", "careers_url": "https://careers.franklintempleton.com/us/en/search-results", "ats_type": "custom", "crawl_delay_seconds": 10, "active": false, "note": "Source spec listed this as Workday; verified 2026-09-13 that the real public careers site runs on Phenom People CareerConnect, not Workday. Reclassified to custom; CustomScraper not built until Phase 2." },
     { "id": "charles-schwab", "name": "Charles Schwab", "domain": "schwab.com", "careers_url": "https://schwabjobs.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
     { "id": "vanguard", "name": "Vanguard", "domain": "vanguard.com", "careers_url": "https://www.vanguardjobs.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
     { "id": "standard-chartered", "name": "Standard Chartered", "domain": "sc.com", "careers_url": "https://scb.taleo.net/careersection", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
@@ -44,8 +45,8 @@
   ],
   "meta": {
     "total": 34,
-    "by_ats": { "workday": 9, "oracle": 3, "taleo": 2, "custom": 20 },
+    "by_ats": { "workday": 8, "oracle": 3, "taleo": 2, "custom": 21 },
     "last_reviewed": "2026-09-13",
-    "notes": "ats_type classification follows the Sep 2026 BFSI_Job_Board_Architecture_Spec.md: Workday-based list (incl. KPMG) taken verbatim from spec section 2.3; DTCC/BNY assigned 'taleo' as the spec's explicit Oracle/Taleo examples; Mastercard/Visa (payment-systems subgroup) kept at 5s delay per spec's per-category crawl strategy even though bucketed as ats_type 'custom'."
+    "notes": "ats_type classification follows BFSI_Job_Board_Architecture_Spec.md, corrected against live verification on 2026-09-13: Franklin Templeton moved workday->custom (real site is Phenom People CareerConnect, not Workday, contra the spec's assumption). LPL Financial, Wells Fargo, and Invesco are the 3 Phase 1 pilot Workday employers (active:true, verified real tenant/cluster/site + robots.txt Allow rules). Broadridge, Northern Trust, and State Street are verified real Workday tenants too but deferred to Phase 2 (active:false) since Phase 1's scope per spec is exactly 3 pilots. LSEG and KPMG remain unverified (active:false) pending Phase 2 research."
   }
 }

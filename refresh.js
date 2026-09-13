@@ -5,9 +5,11 @@
  * Pipeline: init db -> scrape employers -> parse roles -> sync to db
  *           -> publish to Claude Artifact -> update run metadata.
  *
- * NOTE: This is the Phase 0 scaffold. lib/database.js, lib/parser.js,
- * and lib/scrapers/* are implemented in Phase 1-2 — running this before
- * then will fail on those imports by design.
+ * Phase 1: only employers with a registered ScraperFactory entry (Workday,
+ * for now — see lib/scrapers/ScraperFactory.js) actually scrape; the rest
+ * fail per-employer with a caught, logged error until Phase 2 lands
+ * Oracle/Taleo/Custom scrapers. lib/publisher.js (Claude Artifact publish)
+ * is still Phase 3 — publishArtifact() no-ops without those env vars set.
  */
 import 'dotenv/config';
 import fs from 'fs';

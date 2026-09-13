@@ -10,17 +10,22 @@
     "lint": "eslint lib/ refresh.js",
     "dev": "nodemon refresh.js"
   },
-  "keywords": ["bfsi", "job-board", "scraper", "india-gcc"],
+  "keywords": [
+    "bfsi",
+    "job-board",
+    "scraper",
+    "india-gcc"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "puppeteer": "^21.0.0",
+    "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
-    "sqlite3": "^5.1.6",
-    "node-cron": "^3.0.2",
-    "winston": "^3.11.0",
     "dotenv": "^16.3.1",
-    "axios": "^1.6.0"
+    "node-cron": "^4.6.0",
+    "puppeteer": "^25.10.0",
+    "sqlite3": "^6.0.1",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "eslint": "^8.50.0",
