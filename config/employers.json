@@ -1,0 +1,49 @@
+{
+  "employers": [
+    { "id": "lpl-financial", "name": "LPL Financial", "domain": "lplfinancial.com", "careers_url": "https://careers.lplfinancial.com", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+    { "id": "wells-fargo", "name": "Wells Fargo", "domain": "wellsfargo.com", "careers_url": "https://www.wellsfargojobs.com", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+    { "id": "franklin-templeton", "name": "Franklin Templeton", "domain": "franklintempleton.com", "careers_url": "https://www.franklintempletoncareers.com", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+    { "id": "invesco", "name": "Invesco", "domain": "invesco.com", "careers_url": "https://careers.invesco.com", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+    { "id": "broadridge", "name": "Broadridge", "domain": "broadridge.com", "careers_url": "https://broadridge.wd1.myworkdayjobs.com", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+    { "id": "lseg", "name": "LSEG", "domain": "lseg.com", "careers_url": "https://www.lseg.com/en/careers", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+    { "id": "northern-trust", "name": "Northern Trust", "domain": "northerntrust.com", "careers_url": "https://careers.northerntrust.com", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+    { "id": "state-street", "name": "State Street", "domain": "statestreet.com", "careers_url": "https://careers.statestreet.com", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+    { "id": "charles-schwab", "name": "Charles Schwab", "domain": "schwab.com", "careers_url": "https://schwabjobs.com", "ats_type": "workday", "crawl_delay_seconds": 8, "active": true },
+
+    { "id": "kpmg", "name": "KPMG", "domain": "kpmg.com", "careers_url": "https://kpmg.wd1.myworkdayjobs.com", "ats_type": "oracle", "crawl_delay_seconds": 8, "active": true },
+    { "id": "pwc-ac", "name": "PwC AC", "domain": "pwc.com", "careers_url": "https://www.pwc.com/us/en/careers.html", "ats_type": "oracle", "crawl_delay_seconds": 8, "active": true },
+    { "id": "ey-gds", "name": "EY GDS", "domain": "ey.com", "careers_url": "https://careers.ey.com", "ats_type": "oracle", "crawl_delay_seconds": 8, "active": true },
+    { "id": "deloitte-usi", "name": "Deloitte USI", "domain": "deloitte.com", "careers_url": "https://apply.deloitte.com", "ats_type": "oracle", "crawl_delay_seconds": 8, "active": true },
+
+    { "id": "vanguard", "name": "Vanguard", "domain": "vanguard.com", "careers_url": "https://www.vanguardjobs.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "standard-chartered", "name": "Standard Chartered", "domain": "sc.com", "careers_url": "https://scb.taleo.net/careersection", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "bank-of-america", "name": "Bank of America", "domain": "bankofamerica.com", "careers_url": "https://careers.bankofamerica.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "bnp-paribas", "name": "BNP Paribas", "domain": "bnpparibas.com", "careers_url": "https://group.bnpparibas/en/careers", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "goldman-sachs", "name": "Goldman Sachs", "domain": "goldmansachs.com", "careers_url": "https://higher.gs.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "morgan-stanley", "name": "Morgan Stanley", "domain": "morganstanley.com", "careers_url": "https://www.morganstanley.com/careers", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "ubs", "name": "UBS", "domain": "ubs.com", "careers_url": "https://jobs.ubs.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "barclays", "name": "Barclays", "domain": "barclays.com", "careers_url": "https://search.jobs.barclays", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "deutsche-bank", "name": "Deutsche Bank", "domain": "db.com", "careers_url": "https://careers.db.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "marsh-mclennan", "name": "Marsh & McLennan", "domain": "mmc.com", "careers_url": "https://careers.mmc.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "aig", "name": "AIG", "domain": "aig.com", "careers_url": "https://careers.aig.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "zurich-insurance", "name": "Zurich Insurance", "domain": "zurich.com", "careers_url": "https://www.zurich.com/careers", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "citadel", "name": "Citadel", "domain": "citadel.com", "careers_url": "https://www.citadel.com/careers", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "bridgewater", "name": "Bridgewater Associates", "domain": "bridgewater.com", "careers_url": "https://www.bridgewater.com/careers", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "blackstone", "name": "Blackstone", "domain": "blackstone.com", "careers_url": "https://www.blackstone.com/careers", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "mastercard", "name": "Mastercard", "domain": "mastercard.com", "careers_url": "https://careers.mastercard.com", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "visa", "name": "Visa", "domain": "visa.com", "careers_url": "https://corporate.visa.com/en/jobs.html", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "ice", "name": "ICE", "domain": "ice.com", "careers_url": "https://www.ice.com/careers", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "cme-group", "name": "CME Group", "domain": "cmegroup.com", "careers_url": "https://www.cmegroup.com/careers.html", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "dtcc", "name": "DTCC", "domain": "dtcc.com", "careers_url": "https://www.dtcc.com/careers", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true },
+    { "id": "bny", "name": "BNY", "domain": "bny.com", "careers_url": "https://www.bny.com/corporate/global/en/careers.html", "ats_type": "custom", "crawl_delay_seconds": 10, "active": true }
+  ],
+  "excluded": [
+    { "name": "Citigroup", "reason": "robots.txt disallows automated crawling of careers pages" },
+    { "name": "JPMorgan Chase", "reason": "ToS explicitly prohibits scraping; use official API/RSS if available in future" }
+  ],
+  "meta": {
+    "total": 34,
+    "by_ats": { "workday": 9, "oracle": 4, "custom": 21 },
+    "last_reviewed": "2026-09-13"
+  }
+}
