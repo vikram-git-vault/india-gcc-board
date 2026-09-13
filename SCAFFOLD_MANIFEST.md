@@ -30,13 +30,17 @@ Quick reference for what exists after Phase 0 and what each later phase adds.
 ## Employer breakdown (`config/employers.json`)
 
 34 active employers + 2 explicitly excluded (Citi, JPMorgan — see
-`ARCHITECTURE.md` §2).
+`ARCHITECTURE.md` §2.1). Classification reconciled against
+`BFSI_Job_Board_Architecture_Spec.md` on 2026-09-13 (KPMG moved to
+Workday, DTCC/BNY split out as a distinct Taleo type per the spec's
+explicit examples).
 
 | ATS type | Count |
 |---|---|
 | Workday | 9 |
-| Oracle | 4 |
-| Custom | 21 |
+| Oracle | 3 |
+| Taleo | 2 |
+| Custom | 20 |
 
 ## Not yet implemented (deferred to later phases, by design)
 
@@ -44,9 +48,10 @@ Quick reference for what exists after Phase 0 and what each later phase adds.
 - `lib/parser.js` — raw listing → normalized role + filter matching
 - `lib/scrapers/BaseScraper.js` — robots.txt check, rate limiting, UA
 - `lib/scrapers/ScraperFactory.js` — ATS type → scraper class
-- `lib/scrapers/WorkdayScraper.js`, `OracleScraper.js`, `CustomScraper.js`
+- `lib/scrapers/WorkdayScraper.js`, `OracleScraper.js`, `TaleoScraper.js`, `CustomScraper.js`
 - `lib/publisher.js` — Claude Artifact publish step
 - `frontend/` contents — React job board UI
+- `bin/cli.js` — manual trigger / health-check CLI (Phase 4)
 - Local cron registration (documented in `docs/SETUP.md`, not run automatically by this scaffold)
 - GitHub Actions secrets (`CLAUDE_API_KEY`, `CLAUDE_ARTIFACT_ID`, `SLACK_WEBHOOK`) — must be added manually in repo settings
 

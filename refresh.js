@@ -56,15 +56,37 @@ async function scrapeEmployers(employers, filters) {
   return results;
 }
 
-async function syncToDatabase(results) {
+async function syncToDatabase(runId, startTime, results) {
   const { syncRoles, recordScrapeRun } = await import('./lib/database.js');
   logger.info('Syncing scraped roles to database');
+
+  let rolesAdded = 0;
+  let rolesUpdated = 0;
   for (const result of results) {
     if (result.status === 'ok') {
-      await syncRoles(result.employer, result.roles);
+      const { added, updated } = await syncRoles(result.employer, result.roles);
+      rolesAdded += added;
+      rolesUpdated += updated;
     }
-    await recordScrapeRun(result);
   }
+
+  // One aggregate scrape_runs row per run; per-employer detail lives in the
+  // structured request logs (see docs/ARCHITECTURE.md §2.3/§7.2), not in the DB.
+  await recordScrapeRun({
+    run_id: runId,
+    start_time: startTime,
+    end_time: new Date().toISOString(),
+    total_sites_targeted: results.length,
+    sites_succeeded: results.filter((r) => r.status === 'ok').length,
+    sites_failed: results.filter((r) => r.status === 'error').length,
+    total_roles_found: results.reduce((sum, r) => sum + (r.count || 0), 0),
+    roles_added: rolesAdded,
+    roles_updated: rolesUpdated,
+    errors: JSON.stringify(
+      results.filter((r) => r.status === 'error').map((r) => ({ employer: r.employer, message: r.error }))
+    ),
+    status: 'completed',
+  });
   logger.info('Sync complete');
 }
 
@@ -81,8 +103,9 @@ async function publishArtifact() {
 
 async function main() {
   const args = process.argv.slice(2);
-  const runStart = new Date().toISOString();
-  logger.info(`=== BFSI job board refresh started at ${runStart} ===`);
+  const runStart = new Date();
+  const runId = `refresh_${runStart.toISOString().replace(/[-:]/g, '').slice(0, 15)}`;
+  logger.info(`=== BFSI job board refresh started at ${runStart.toISOString()} (${runId}) ===`);
 
   if (args.includes('--init')) {
     await initDatabase();
@@ -95,7 +118,7 @@ async function main() {
 
   await initDatabase();
   const results = await scrapeEmployers(employers, filters);
-  await syncToDatabase(results);
+  await syncToDatabase(runId, runStart.toISOString(), results);
   await publishArtifact();
 
   const okCount = results.filter((r) => r.status === 'ok').length;

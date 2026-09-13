@@ -1,18 +1,8 @@
 {
-  "locations": {
-    "primary": ["Bangalore", "Bengaluru", "Mumbai", "Delhi", "Pune", "Hyderabad", "Chennai", "Gurugram", "Gurgaon", "Noida"],
-    "secondary": ["Kolkata", "Ahmedabad", "Remote - India"],
-    "exclude": ["United States", "United Kingdom", "Singapore", "Hong Kong"]
-  },
-  "job_types": ["Full-time", "Permanent"],
-  "experience_levels": {
-    "leadership": {
-      "keywords": ["Director", "VP", "Vice President", "Head of", "Managing Director", "Senior Manager", "Principal", "Lead", "AVP", "Associate Vice President", "SVP", "EVP", "General Manager"]
-    },
-    "senior_ic": {
-      "keywords": ["Senior Manager", "Senior Analyst", "Senior Associate", "Staff", "Architect"]
-    }
-  },
-  "exclude_keywords": ["Intern", "Internship", "Trainee", "Apprentice", "Entry Level", "Graduate Program", "Contract - 3 months"],
+  "locations": ["India", "Bangalore", "Bengaluru", "Mumbai", "Delhi", "Pune", "Hyderabad", "Chennai", "Gurugram", "Gurgaon", "Noida"],
+  "locations_secondary": ["Kolkata", "Ahmedabad", "Remote - India"],
+  "job_types": ["Full-time", "Contract", "Hybrid", "Permanent"],
+  "experience_levels": ["Entry", "Mid", "Senior", "Lead"],
+  "exclude_keywords": ["Intern", "Internship", "Trainee", "Apprentice", "placement", "freelance", "Entry Level", "Graduate Program"],
   "priority_keywords": ["Global Capability Center", "GCC", "Center of Excellence", "Digital Transformation", "Risk Management", "Regulatory", "Compliance", "Technology", "Data & Analytics", "Operations"]
 }

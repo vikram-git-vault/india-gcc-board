@@ -3,84 +3,141 @@
 **Status:** Phase 0 (scaffold) &nbsp;|&nbsp; **Owner:** the repository owner &nbsp;|&nbsp; **Last updated:** 2026-09-13
 
 A personal, self-hosted job aggregator that checks 34 BFSI (Banking, Financial
-Services & Insurance) employer career sites once a day and surfaces
-leadership-track roles based in India GCC hub cities (Bangalore, Mumbai,
-Delhi-NCR, Pune, Hyderabad, Chennai).
+Services & Insurance) employer career sites and surfaces leadership-track
+roles based in India GCC hub cities (Bangalore, Mumbai, Delhi-NCR, Pune,
+Hyderabad, Chennai, Gurugram, Noida).
+
+This document reconciles the project scaffold against
+`BFSI_Job_Board_Architecture_Spec.md` (the source spec). **One deliberate
+deviation from that spec:** the refresh cadence here is **daily at 6:00 AM
+IST**, not the spec's Monday/Thursday 8:00 AM IST — a conscious choice made
+2026-09-13, not an oversight. Everything else below follows the spec.
 
 ---
 
 ## 1. System Architecture
 
+### 1.1 High-level data flow
+
 ```
-                     ┌──────────────────────┐
-                     │   config/*.json       │   employer list, filters
-                     └──────────┬────────────┘
-                                │
-   06:00 IST cron / GH Action  ▼
-              ┌─────────────────────────────┐
-              │        refresh.js            │  orchestrator
-              └───────────┬─────────────────┘
-                           │
-        ┌──────────────────┼───────────────────┐
-        ▼                  ▼                    ▼
- ┌─────────────┐   ┌───────────────┐    ┌───────────────┐
- │  Scrapers    │   │    Parser      │    │   Logger       │
- │ (per ATS)    │──▶│ (normalize +   │    │ (winston)      │
- │ Factory-built│   │  filter roles) │    │                │
- └─────────────┘   └───────┬───────┘    └───────────────┘
-                            ▼
-                    ┌───────────────┐
-                    │   SQLite DB    │  employers, roles,
-                    │  (lib/database)│  role_marks, scrape_runs
-                    └───────┬───────┘
-                            ▼
-                    ┌───────────────┐
-                    │ Claude Artifact│  React job board UI
-                    │   Publisher    │  (read-only, live search)
-                    └───────────────┘
+Career Portal Sites (34, sitemap-first where available)
+        ↓
+   Scraper Service (ethical, respectful, ATS-aware)
+        ↓
+   Role Parser & Transformer (normalize + filter)
+        ↓
+   SQLite Database (employers, roles, role_marks, scrape_runs, meta)
+        ↓
+   Job Board Frontend (Claude Artifact, React)
+        ↓
+   User (browse, filter, mark)
 ```
 
-Each stage is independently testable: scrapers return raw HTML/JSON listings,
-the parser normalizes and filters them against `config/filters.json`, and the
-database layer is the only thing that touches SQLite. `refresh.js` just wires
-these together in sequence and never contains scraping or parsing logic
-itself.
+### 1.2 Component breakdown
+
+| Component | Technology | Purpose |
+|---|---|---|
+| **Scraper** | Node.js + axios/cheerio, puppeteer where JS rendering is required | Fetch and extract listings per ATS type |
+| **Parser** | Node.js (cheerio) | Normalize raw listings into the `roles` schema |
+| **Database** | SQLite (local) | Persistent role storage |
+| **Frontend** | React + Claude Artifact DB capability | Job board UI, live search, user marks |
+| **Scheduler** | node-cron (local) + GitHub Actions cron | Daily 6:00 AM IST refresh |
+| **CLI** | Node.js CLI (`bin/cli.js`, Phase 4) | Manual trigger, health checks, single-employer re-run |
+
+### 1.3 Data flow timeline (approximate, per daily run)
+
+- **T+0** (06:00 IST): scheduled trigger fires
+- **T+0 to T+30min**: scrape all active employers, sequential per host with per-employer crawl delay (see §2)
+- **T+30 to T+35min**: parse & deduplicate roles
+- **T+35 to T+40min**: sync to database
+- **T+40 to T+45min**: publish to Claude Artifact
+- **T+45min+**: board reflects the day's data; freshness indicator shows the new `last_run_at`
+
+Each stage is independently testable: scrapers return raw HTML/JSON,
+the parser normalizes and filters against `config/filters.json`, and the
+database layer is the only thing that touches SQLite. `refresh.js` wires
+these together in sequence and contains no scraping or parsing logic itself.
 
 ---
 
 ## 2. Ethical Scraping Policy
 
-This project scrapes **public career listing pages only** — no login walls,
-no personal data, no resume databases.
+**Principle:** respect explicit site directives; scrape only what a site
+invites crawlers to index. Public career listing pages only — no login
+walls, no personal data, no resume databases.
 
-Rules enforced by every scraper (via `BaseScraper`, Phase 1):
+| Rule | Implementation |
+|---|---|
+| **robots.txt** | Parsed and honored per domain before crawling; a disallowed careers path takes that employer to `active: false` |
+| **Sitemaps** | Prefer `/sitemap.xml` job-listing URLs over ad-hoc HTML crawling where a site provides one — faster and more targeted |
+| **Crawl delay** | 5–10 seconds between requests to the same domain (`crawl_delay_seconds` per employer); no parallel requests to the same host |
+| **User-Agent** | Identifies as `india-gcc-board-bot/1.0 (+github repo URL)` — no spoofing of browser UAs to evade detection |
+| **Rate limits** | Stop on `429`/`403` for that employer. Back off 1 hour within the run; if still blocked, skip and retry on the next daily cycle — never loop-retry against a blocking host |
+| **Data use** | Internal personal aggregation only. No resale, no redistribution |
+| **Auth** | Public pages only. No login-gated content, no application-portal scraping |
+| **Data minimization** | Store only title, location, department, posting URL, posted/deadline dates, and a source job ID for dedup — no applicant counts or personal data |
 
-1. **robots.txt compliance** — each scraper fetches and honors
-   `/robots.txt` for its target domain before crawling. If a career-page
-   path is disallowed, the employer is marked `active: false` and skipped.
-2. **Rate limiting** — minimum 5–10 second delay between requests to the
-   same domain (`crawl_delay_seconds` per employer in `config/employers.json`;
-   Workday/Oracle ATS pages default to 8s, harder-to-crawl custom sites to
-   10s). No parallel requests to the same host.
-3. **Identify ourselves** — a descriptive `User-Agent` string
-   (`india-gcc-board-bot/1.0 (+github repo URL)`), no spoofing of browser
-   UAs to evade detection.
-4. **No ToS-prohibited targets** — Citigroup and JPMorgan Chase are
-   explicitly excluded (see `config/employers.json` → `excluded`) because
-   their robots.txt / terms explicitly disallow automated access to career
-   pages. Any employer whose ToS is reviewed and found to prohibit scraping
-   gets added to this list and flipped to `active: false`, not silently
-   dropped from config.
-5. **Daily cadence, not continuous polling** — one run per day at 6 AM IST.
-   No retries-in-a-loop; a failed employer just gets logged and retried on
-   the next day's run.
-6. **Data minimization** — only role title, location, department, posting
-   URL, and posted date are stored. No scraping of applicant counts,
-   internal job IDs beyond what's needed to dedupe, or any personal data.
+### 2.1 Site classification
 
-If an employer changes their site in a way that makes compliant scraping
-impractical (e.g. requires login, aggressive bot detection), the correct
-response is to mark them inactive, not to add stealth/evasion logic.
+**Green (34 sites):** explicit or implicit crawl permission — robots.txt
+allows careers paths, no authentication required.
+
+**Red (2 sites, excluded — see `config/employers.json` → `excluded`):**
+- **Citigroup** — robots.txt: `Disallow: /search-jobs/`
+- **JPMorgan Chase** — 403 authentication wall on careers pages
+
+Any employer whose site is later found to prohibit scraping gets added to
+this excluded list and flipped to `active: false` — never silently dropped
+from config, and never worked around with stealth/evasion logic.
+
+### 2.2 Per-ATS crawl strategy
+
+**Workday** (LPL Financial, Wells Fargo, Franklin Templeton, Invesco,
+Broadridge, LSEG, Northern Trust, KPMG, State Street — 9):
+- Sitemap or `/careers/jobs/search-results` style listing endpoint
+- Filter via query params (`?location=India` / `?country=India`)
+- Crawl delay: 5s; max 2 concurrent Workday requests across the run
+
+**Oracle** (PwC AC, EY GDS, Deloitte USI — 3):
+- Career portal main page; use listing API endpoints if discoverable
+- Fallback to HTML parsing; crawl delay: 5s
+
+**Taleo** (DTCC, BNY — 2):
+- Oracle Taleo career-section URLs; handle pagination
+- Crawl delay: 5s
+
+**Custom portals** (remaining 20, e.g. Goldman Sachs, Morgan Stanley, UBS,
+Deutsche Bank, Barclays, Bank of America, BNP Paribas, Vanguard, Standard
+Chartered, Charles Schwab, and others):
+- Fetch `/sitemap.xml` where present; otherwise parse the careers page directly
+- cheerio for static HTML; puppeteer only for JS-heavy SPAs
+- Crawl delay: 5–10s depending on site fragility
+
+**Payment systems** (Mastercard, Visa — a `custom`-ATS subgroup with their
+own crawl profile):
+- Parse `/careers` job grid/table directly
+- Crawl delay: 5s
+
+### 2.3 Monitoring & compliance logging
+
+Every request logs a structured line (see §7.2 for the shape):
+
+```json
+{
+  "timestamp": "2026-09-13T00:30:00Z",
+  "site": "goldman-sachs",
+  "url": "https://higher.gs.com/careers/search-jobs",
+  "method": "GET",
+  "statusCode": 200,
+  "delay_seconds": 10,
+  "roles_extracted": 42,
+  "errors": null
+}
+```
+
+**Alert on:** `403`/`429` responses (pause that site for the run),
+robots.txt changes (log & review before next run), response time > 30s
+(log warning).
 
 ---
 
@@ -89,59 +146,105 @@ response is to mark them inactive, not to add stealth/evasion logic.
 SQLite (`data/jobs.db`), created by `lib/database.js` (`refresh.js --init`).
 
 ### `employers`
-| column | type | notes |
-|---|---|---|
-| id | TEXT PK | slug, matches `config/employers.json` |
-| name | TEXT | display name |
-| domain | TEXT | |
-| careers_url | TEXT | |
-| ats_type | TEXT | `workday` \| `oracle` \| `custom` |
-| crawl_delay_seconds | INTEGER | |
-| active | BOOLEAN | |
-| updated_at | DATETIME | |
+```sql
+CREATE TABLE employers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT UNIQUE NOT NULL,        -- matches config/employers.json "id", e.g. "goldman-sachs"
+  name TEXT UNIQUE NOT NULL,
+  domain TEXT NOT NULL,
+  careers_url TEXT NOT NULL,
+  ats_type TEXT,                    -- 'workday' | 'oracle' | 'taleo' | 'custom'
+  robots_txt_compliant BOOLEAN DEFAULT TRUE,
+  crawl_delay_seconds INTEGER DEFAULT 5,
+  active BOOLEAN DEFAULT TRUE,
+  last_scraped TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+The spec's PK is a bare integer; we add `slug` as a unique natural key so
+scraper/config code can reference employers by the same string id used in
+`config/employers.json` without a DB round trip. `roles`/`scrape_runs`
+foreign keys still target the integer `id`, per spec.
 
 ### `roles`
-| column | type | notes |
-|---|---|---|
-| id | TEXT PK | hash of `employer_id + source_url` |
-| employer_id | TEXT FK → employers.id | |
-| title | TEXT | |
-| location | TEXT | normalized city |
-| department | TEXT | nullable |
-| level | TEXT | `leadership` \| `senior_ic` |
-| source_url | TEXT | canonical listing URL |
-| posted_date | DATE | nullable, ATS-dependent |
-| first_seen_at | DATETIME | |
-| last_seen_at | DATETIME | bumped every run the role still appears |
-| is_active | BOOLEAN | false once it disappears from a scrape |
+```sql
+CREATE TABLE roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  employer_id INTEGER NOT NULL REFERENCES employers(id),
+  external_job_id TEXT,             -- the site's own job ID/ref
+  title TEXT NOT NULL,
+  description TEXT,
+  location TEXT,
+  country TEXT DEFAULT 'India',
+  department TEXT,
+  experience_level TEXT,            -- 'entry' | 'mid' | 'senior' | 'lead'
+  job_type TEXT,                    -- 'full-time' | 'contract' | 'hybrid'
+  salary_range TEXT,
+  posted_date DATE,
+  deadline DATE,
+  job_url TEXT NOT NULL,
+  source_updated TIMESTAMP,         -- when the site last showed this role
+  scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_active BOOLEAN DEFAULT TRUE,
+  UNIQUE(employer_id, external_job_id)
+);
+```
 
-### `role_marks`
-User-side state (saved / applied / dismissed), kept separate from scraped
-data so a re-scrape never clobbers it.
+### `role_marks` (user engagement)
+```sql
+CREATE TABLE role_marks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role_id INTEGER NOT NULL REFERENCES roles(id),
+  user_id TEXT,                     -- device-scoped id, not an account system
+  status TEXT,                      -- 'interested' | 'applied' | 'rejected' | 'closed'
+  marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(role_id, user_id, status)
+);
+```
+`user_id` is a device identifier for cross-device continuity, not a login
+system — this stays a single-owner tool (see §12).
 
-| column | type | notes |
-|---|---|---|
-| role_id | TEXT FK → roles.id | |
-| mark | TEXT | `saved` \| `applied` \| `dismissed` |
-| marked_at | DATETIME | |
-| note | TEXT | nullable, free text |
-
-### `scrape_runs`
-One row per employer per run — the audit trail for the ethical-scraping
-policy and for debugging.
-
-| column | type | notes |
-|---|---|---|
-| id | INTEGER PK AUTOINCREMENT | |
-| employer_id | TEXT FK → employers.id | |
-| started_at | DATETIME | |
-| status | TEXT | `ok` \| `error` |
-| roles_found | INTEGER | |
-| error_message | TEXT | nullable |
+### `scrape_runs` (monitoring)
+```sql
+CREATE TABLE scrape_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT UNIQUE,
+  start_time TIMESTAMP NOT NULL,
+  end_time TIMESTAMP,
+  total_sites_targeted INTEGER,
+  sites_succeeded INTEGER,
+  sites_failed INTEGER,
+  total_roles_found INTEGER,
+  roles_added INTEGER,
+  roles_updated INTEGER,
+  errors TEXT,                      -- JSON array of {employer, message}
+  status TEXT                       -- 'in_progress' | 'completed' | 'failed'
+);
+```
+One row per full daily run (aggregate), matching the spec. Per-employer
+detail for that run lives in the structured request logs (§2.3/§7.2), not
+as separate DB rows — keeps `scrape_runs` cheap to query for a health
+dashboard while the logs remain the audit trail.
 
 ### `meta`
-Key-value table for run-level metadata (`last_run_at`, `schema_version`,
-`total_active_roles`, etc.) that the frontend reads for its header.
+```sql
+CREATE TABLE meta (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+-- seeded rows: last_refresh, next_refresh, total_active_roles,
+-- total_employers, data_version
+```
+
+### 3.1 Indexes
+```sql
+CREATE INDEX idx_roles_employer ON roles(employer_id);
+CREATE INDEX idx_roles_location ON roles(location);
+CREATE INDEX idx_roles_posted ON roles(posted_date DESC);
+CREATE INDEX idx_roles_active ON roles(is_active);
+CREATE INDEX idx_role_marks_user ON role_marks(user_id);
+```
 
 ---
 
@@ -153,22 +256,28 @@ extending a shared `BaseScraper`.
 
 ```
 BaseScraper (lib/scrapers/BaseScraper.js)
- ├─ enforces robots.txt check + crawl delay + UA header
+ ├─ checks robots.txt, prefers sitemap.xml when present
+ ├─ enforces crawl delay + UA header + 429/403 backoff (§2)
  ├─ abstract fetchListings() -> raw HTML/JSON
- └─ abstract extractRoles(raw) -> [{ title, location, url, postedDate, ... }]
+ └─ abstract extractRoles(raw) -> [{ title, location, url, postedDate, externalJobId, ... }]
 
-WorkdayScraper   extends BaseScraper   (9 employers — shared JSON API shape)
-OracleScraper    extends BaseScraper   (4 employers — Oracle Recruiting Cloud)
-CustomScraper    extends BaseScraper   (21 employers — per-site CSS selectors
-                                         defined in config/selectors/<id>.json)
+WorkdayScraper   extends BaseScraper   (9 employers)
+OracleScraper    extends BaseScraper   (3 employers)
+TaleoScraper     extends BaseScraper   (2 employers)
+CustomScraper    extends BaseScraper   (20 employers — per-site CSS selectors
+                                         defined in config/selectors/<id>.json;
+                                         puppeteer only for JS-heavy SPAs)
 ```
 
-Custom-ATS employers each get a small selector config rather than bespoke
-code where the site is simple HTML; only genuinely divergent sites (JS-heavy
-SPAs) get a dedicated subclass using Puppeteer instead of Cheerio+axios.
+`lib/parser.js` normalizes whatever a scraper returns into the `roles`
+schema (§3), including a `detectLevel()`-style classifier over
+title+description text against `config/filters.json`'s `experience_levels`
+keywords, and applies `exclude_keywords`/location filtering before a role
+is considered for sync.
 
-This is built in **Phase 1** (generic scraper + 3 pilot sites to prove the
-pattern) and **Phase 2** (remaining ATS-specific scrapers).
+Built in **Phase 1** (generic scraper + `BaseScraper` + 3 pilot sites, one
+per ATS family, to prove the pattern) and **Phase 2** (remaining
+ATS-specific scrapers).
 
 ---
 
@@ -176,47 +285,88 @@ pattern) and **Phase 2** (remaining ATS-specific scrapers).
 
 A single-page React app published as a Claude Artifact:
 
-- **Live search** across title/employer/department (client-side, the full
-  active-roles set is small enough to ship as one JSON payload).
-- **Filters**: city, ATS/employer, leadership vs senior-IC, priority
-  keyword tags (from `config/filters.json`).
-- **User marks**: save / applied / dismissed, persisted via the artifact's
-  shared database capability so state survives across devices.
-- **Freshness indicator**: last successful run timestamp and per-employer
-  scrape health (from `scrape_runs`), so stale data is visible, not silent.
-- Read-only with respect to scraping — the frontend never triggers a scrape;
-  it only renders what `refresh.js` last published.
+```
+┌─ BFSI Global Job Board ────────────────────────────────────────┐
+│ Search: [_____________]   Filters: [Employer ▼] [Location ▼]   │
+│ Live Roles: N  |  Closing in 7 days: N  |  Employers: 34        │
+│ ┌─ Goldman Sachs — VP, Risk Analytics ──────────────────────┐  │
+│ │ Bangalore | Posted 2 days ago | Senior | Full-time          │  │
+│ │ [Interested] [View] [Applied]                                │  │
+│ └───────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- **Live search** across title/employer/department (client-side).
+- **Filters**: city, employer, `experience_level`, priority keyword tags.
+- **User marks**: interested / applied / rejected / closed, persisted via
+  the artifact's shared database capability, keyed by device `user_id`.
+- **Freshness indicator**: `meta.last_refresh` and per-run health from
+  `scrape_runs`, so stale data is visible, not silent.
+- Read-only with respect to scraping — the frontend never triggers a
+  scrape; it only renders what `refresh.js` last published.
 
 ---
 
 ## 6. Scheduling & Deployment
 
-Two redundant schedules, both targeting **6:00 AM IST daily**:
+**Refresh cadence: daily, 6:00 AM IST** — a deliberate change from the
+source spec's Monday/Thursday 8:00 AM cadence (decided 2026-09-13).
+Duration budget: ~45 minutes (scrape + parse + sync + publish, §1.3).
 
-1. **Local cron** (MacBook) — `0 6 * * *` — useful while developing, but
-   only runs when the machine is awake and online. See `docs/SETUP.md`.
+Two redundant triggers, same target time:
+
+1. **Local cron** (MacBook) — `0 6 * * *` — convenient during development,
+   but only runs while the machine is awake and online. See `docs/SETUP.md`.
 2. **GitHub Actions** (`.github/workflows/refresh-schedule.yml`) — cron
-   `30 0 * * *` UTC (= 6:00 AM IST, no DST in India) — the durable schedule
-   that runs regardless of local machine state. Commits updated `data/`
-   back to the repo and uploads logs as a build artifact.
+   `30 0 * * *` UTC (= 6:00 AM IST, no DST in India) — the durable schedule,
+   runs regardless of local machine state. Commits updated `data/` back to
+   the repo and uploads logs as a build artifact.
 
-Both invoke the same `refresh.js`, so behavior is identical regardless of
-trigger source.
+Both invoke the same `refresh.js`. A future cloud path (Postgres +
+Express API, per the source spec's optional future section) is out of
+scope while this stays a single-user, file-based tool.
 
 ---
 
 ## 7. Error Handling & Monitoring
 
-- Per-employer try/catch in `refresh.js` — one employer failing never
-  aborts the run for the other 33.
-- Every run writes a `scrape_runs` row per employer (`ok` / `error` +
-  message), giving a queryable history of flaky sites.
-- Winston logs to console (dev) and `logs/combined.log` +
-  `logs/error.log` (10MB rotation, 5 files kept) — see `lib/logger.js`.
-- Optional Slack webhook notification on GitHub Actions job failure.
-- A site failing scraping for **N consecutive days** (threshold TBD in
-  Phase 4) should be surfaced in the frontend's health indicator rather
-  than just sitting in logs no one reads.
+### 7.1 Error categories & actions
+
+| Error type | Example | Action |
+|---|---|---|
+| Site down | 503 | Log, skip, retry next daily cycle |
+| Rate limited | 429 | Back off 1hr within run; skip to next employer; retry next cycle |
+| Auth required | 403 | Skip site, alert |
+| Parse failure | HTML structure changed | Log sample, flag for manual review |
+| DB error | Connection/write failure | Rollback, alert operator |
+| Network | Timeout > 30s | Retry up to 2 times, then skip |
+
+### 7.2 Structured log schema
+
+```json
+{
+  "timestamp": "2026-09-13T00:45:12Z",
+  "run_id": "refresh_20260913_0600",
+  "level": "INFO",
+  "component": "scraper",
+  "employer": "goldman-sachs",
+  "event": "roles_extracted",
+  "count": 42,
+  "duration_ms": 3200,
+  "status": "success"
+}
+```
+
+Written via `lib/logger.js` (winston) to console (dev), `logs/combined.log`,
+and `logs/error.log` (10MB rotation, 5 files kept).
+
+### 7.3 Health checks
+
+**Daily:** active-role count should hold steady or increase; `last_refresh`
+should be < 24h old; alert if more than 5 employers failed in one run.
+
+**Weekly:** review parse errors and flag ATS structure changes; verify
+robots.txt compliance hasn't drifted for any active employer.
 
 ---
 
@@ -225,10 +375,10 @@ trigger source.
 | Phase | Scope | Key deliverables |
 |---|---|---|
 | **0 — Foundation** (this doc) | Architecture, config, scaffold | This file, `docs/SETUP.md`, `config/*.json`, `refresh.js` shell, logger, workflow, folder structure |
-| **1 — Database + generic scraper** | Prove the pipeline end-to-end on 3 pilot sites | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, 1 Workday + 1 Oracle + 1 Custom scraper |
-| **2 — ATS-specific scrapers** | Cover remaining 31 employers | Remaining Workday/Oracle scrapers, per-site selector configs for Custom-ATS sites |
+| **1 — Database + generic scraper** | Prove the pipeline end-to-end on 3 pilot sites | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, one scraper each for Workday/Oracle-or-Taleo/Custom |
+| **2 — ATS-specific scrapers** | Cover remaining 31 employers | Remaining Workday/Oracle/Taleo scrapers, per-site selector configs for the 20 Custom-ATS sites |
 | **3 — Frontend** | React job board UI | Search, filters, marks, Claude Artifact publish (`lib/publisher.js`) |
-| **4 — Scheduling & hardening** | Make the daily run unattended-safe | Consecutive-failure detection, Slack alerts tuned, GitHub Actions secrets configured, cron verified on both paths |
+| **4 — Scheduling & hardening** | Make the daily run unattended-safe | CLI (`bin/cli.js`), consecutive-failure detection, Slack alerts tuned, GitHub Actions secrets configured, both schedules verified |
 
 ---
 
@@ -238,14 +388,15 @@ trigger source.
 ```json
 { "id": "example-bank", "name": "Example Bank", "domain": "example.com",
   "careers_url": "https://careers.example.com", "ats_type": "workday",
-  "crawl_delay_seconds": 8, "active": true }
+  "crawl_delay_seconds": 5, "active": true }
 ```
 
-`config/filters.json` — location/keyword filters (see file for full shape):
+`config/filters.json`:
 ```json
-{ "locations": { "primary": ["Bangalore", "Mumbai", "..."] },
-  "experience_levels": { "leadership": { "keywords": ["Director", "VP", "..."] } },
-  "exclude_keywords": ["Intern", "Trainee"] }
+{ "locations": ["India", "Bangalore", "Mumbai", "..."],
+  "job_types": ["Full-time", "Contract", "Hybrid"],
+  "experience_levels": ["Entry", "Mid", "Senior", "Lead"],
+  "exclude_keywords": ["Intern", "Trainee", "freelance"] }
 ```
 
 `.env` (from `.env.example`) — secrets and runtime tuning, never committed.
@@ -261,7 +412,7 @@ trigger source.
 | JS-rendered sites | puppeteer | only where Cheerio+axios can't get the data |
 | HTML parsing | cheerio | fast, no headless browser overhead for static ATS pages |
 | Database | sqlite3 | zero-ops, file-based, fine for single-user scale |
-| Scheduling | node-cron (local) + GitHub Actions cron | redundant, matches Section 6 |
+| Scheduling | node-cron (local) + GitHub Actions cron | redundant, matches §6 |
 | Logging | winston | rotation, levels, structured output |
 | Frontend | React, published as a Claude Artifact | no separate hosting needed |
 | Testing | jest + nock | HTTP mocking for scraper tests without hitting real sites |
@@ -270,27 +421,34 @@ trigger source.
 
 ## 11. Success Metrics
 
-- **Coverage**: 34/34 employers actively scraped (or explicitly `active:
-  false` with a documented reason — never silently broken).
-- **Freshness**: daily run completes before 7:00 AM IST, ≥90% of runs in a
-  30-day window succeed without manual intervention.
+- **Coverage**: 34/34 employers actively scraped, or explicitly
+  `active: false` with a documented reason.
+- **Compliance**: 0 robots.txt violations, 0 sustained rate-limit blocks.
+- **Freshness**: daily run completes before 7:00 AM IST; surfaced roles
+  posted within the last 7 days where the source site provides a date.
+- **Reliability**: ≥90% of daily runs in a 30-day window complete without
+  manual intervention (looser than the spec's "100%" given a daily,
+  unattended cadence has more surface area for transient site issues than
+  the spec's twice-weekly run).
 - **Signal quality**: <10% of surfaced roles are false positives against
-  the leadership/location filters (spot-checked monthly).
-- **Reliability**: no single-employer scraper failure ever blocks the rest
-  of the run (already enforced structurally — see Section 7).
+  the `experience_level`/location filters (spot-checked monthly).
 - **Personal usefulness**: the frontend is actually checked and roles are
-  actually marked saved/applied/dismissed — the real metric this project
-  exists for.
+  actually marked — the real metric this project exists for. (The spec's
+  "342 live roles" launch target is not carried over here — it's not a
+  number this scaffold can verify yet; a real target should come from
+  Phase 1 pilot-scrape data, not be assumed upfront.)
 
 ---
 
 ## 12. Out of Scope (explicitly)
 
 - No email/SMS notifications (frontend-only, checked manually).
-- No multi-user support — this is a personal tool, `role_marks` has no
-  user_id column by design.
+- No multi-user accounts — `role_marks.user_id` is a device identifier for
+  cross-device continuity on one person's own devices, not an auth system.
 - No scraping of application forms, salary negotiation data, or any
   authenticated employer-portal content.
 - No circumvention of anti-bot measures (CAPTCHA solving, IP rotation,
   browser fingerprint spoofing). A site that requires this is out of scope
-  per Section 2 and gets marked `active: false`.
+  per §2 and gets marked `active: false`.
+- No cloud/Postgres deployment for now — single-user, file-based SQLite is
+  sufficient; revisit only if usage patterns change.
