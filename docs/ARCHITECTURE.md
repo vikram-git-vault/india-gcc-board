@@ -254,18 +254,37 @@ CREATE INDEX idx_role_marks_user ON role_marks(user_id);
 an employer's config entry and instantiates the matching scraper class, all
 extending a shared `BaseScraper`.
 
+**Design principle — one class per ATS family, parameterized per employer,
+never one class per organization.** Every employer on a given ATS is served
+by the *same* scraper class; what differs between LPL and Wells Fargo is
+config data passed into the constructor (tenant/site slug, base URL,
+selector overrides), not code. Concretely: `ScraperFactory.create(employer)`
+returns `new WorkdayScraper(employer)` for every Workday employer — one
+class, N configured instances. Adding employer #35 on an already-supported
+ATS is a one-line addition to `config/employers.json`; it should never
+require a new class or a code review of scraper logic. This is also why
+`CustomScraper` uses a per-site *selector config* (`config/selectors/<id>.json`)
+rather than a per-employer subclass — even the least standardized ATS
+bucket stays data-driven. A dedicated subclass is only justified when a
+site's fetch/parse *mechanism* fundamentally differs (e.g. needs Puppeteer
+for JS rendering instead of axios+cheerio), not merely because its HTML
+differs.
+
 ```
 BaseScraper (lib/scrapers/BaseScraper.js)
+ ├─ constructor(employerConfig) — captures per-employer params (careers_url,
+ │   tenant/site slug, crawl_delay_seconds, selector overrides, ...)
  ├─ checks robots.txt, prefers sitemap.xml when present
  ├─ enforces crawl delay + UA header + 429/403 backoff (§2)
  ├─ abstract fetchListings() -> raw HTML/JSON
  └─ abstract extractRoles(raw) -> [{ title, location, url, postedDate, externalJobId, ... }]
 
-WorkdayScraper   extends BaseScraper   (9 employers)
-OracleScraper    extends BaseScraper   (3 employers)
-TaleoScraper     extends BaseScraper   (2 employers)
-CustomScraper    extends BaseScraper   (20 employers — per-site CSS selectors
-                                         defined in config/selectors/<id>.json;
+WorkdayScraper   extends BaseScraper   (9 employers, one class)
+OracleScraper    extends BaseScraper   (3 employers, one class)
+TaleoScraper     extends BaseScraper   (2 employers, one class)
+CustomScraper    extends BaseScraper   (20 employers, one class — per-site
+                                         CSS selectors from
+                                         config/selectors/<id>.json;
                                          puppeteer only for JS-heavy SPAs)
 ```
 
@@ -275,9 +294,23 @@ title+description text against `config/filters.json`'s `experience_levels`
 keywords, and applies `exclude_keywords`/location filtering before a role
 is considered for sync.
 
-Built in **Phase 1** (generic scraper + `BaseScraper` + 3 pilot sites, one
-per ATS family, to prove the pattern) and **Phase 2** (remaining
-ATS-specific scrapers).
+### 4.1 Concurrency
+
+Scraper class structure and execution parallelism are independent concerns
+— parallelism belongs in the orchestrator, not in how many classes exist.
+`refresh.js` runs a **bounded worker pool** (small concurrency cap, e.g. 4–6)
+across all active employers regardless of ATS type, with one constraint:
+**never two in-flight requests to the same domain at once** (a per-domain
+mutex/queue), since crawl-delay is a per-domain courtesy, not a global one.
+This gets the speed benefit of parallel scraping without needing per-site
+classes and without violating §2's rate-limit policy — a Workday employer
+and a Custom employer can scrape concurrently; two Workday employers on
+different tenants can too, since `crawl_delay_seconds` only serializes
+requests *within* one domain.
+
+Built in **Phase 1** (generic scraper + `BaseScraper` + 3 pilot Workday
+sites, per the spec's phase-1 scope, to prove the pattern end-to-end) and
+**Phase 2** (remaining ATS-specific coverage).
 
 ---
 
@@ -375,8 +408,8 @@ robots.txt compliance hasn't drifted for any active employer.
 | Phase | Scope | Key deliverables |
 |---|---|---|
 | **0 — Foundation** (this doc) | Architecture, config, scaffold | This file, `docs/SETUP.md`, `config/*.json`, `refresh.js` shell, logger, workflow, folder structure |
-| **1 — Database + generic scraper** | Prove the pipeline end-to-end on 3 pilot sites | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, one scraper each for Workday/Oracle-or-Taleo/Custom |
-| **2 — ATS-specific scrapers** | Cover remaining 31 employers | Remaining Workday/Oracle/Taleo scrapers, per-site selector configs for the 20 Custom-ATS sites |
+| **1 — Database + generic scraper** | Prove the pipeline end-to-end on 3 pilot Workday employers (per spec §8) | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, `WorkdayScraper.js` configured for LPL Financial / Wells Fargo / Franklin Templeton |
+| **2 — ATS-specific scrapers** | Cover remaining 31 employers | Remaining 6 Workday employers, `OracleScraper`/`TaleoScraper`, `CustomScraper` + per-site selector configs for the 20 Custom-ATS sites |
 | **3 — Frontend** | React job board UI | Search, filters, marks, Claude Artifact publish (`lib/publisher.js`) |
 | **4 — Scheduling & hardening** | Make the daily run unattended-safe | CLI (`bin/cli.js`), consecutive-failure detection, Slack alerts tuned, GitHub Actions secrets configured, both schedules verified |
 
