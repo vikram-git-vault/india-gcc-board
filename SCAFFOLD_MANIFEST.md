@@ -2,6 +2,12 @@
 
 Quick reference for what exists after Phase 0 and what each later phase adds.
 
+**Update 2026-09-13:** Phases 1 and 2 are now done — see `docs/ARCHITECTURE.md`
+§8/§8.1 for current employer/scraper status (18/34 active, 558 real roles) and
+what changed from the plan below during real-world verification. The ATS
+breakdown and "not yet implemented" list further down are Phase-0-era and
+kept for history; they no longer reflect current reality.
+
 ## Files created in Phase 0
 
 - [x] `docs/ARCHITECTURE.md` — 12-section system design

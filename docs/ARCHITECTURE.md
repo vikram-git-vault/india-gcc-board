@@ -408,10 +408,49 @@ robots.txt compliance hasn't drifted for any active employer.
 | Phase | Scope | Key deliverables |
 |---|---|---|
 | **0 — Foundation** (this doc) | Architecture, config, scaffold | This file, `docs/SETUP.md`, `config/*.json`, `refresh.js` shell, logger, workflow, folder structure |
-| **1 — Database + generic scraper** | Prove the pipeline end-to-end on 3 pilot Workday employers (per spec §8) | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, `WorkdayScraper.js` configured for LPL Financial / Wells Fargo / Franklin Templeton |
-| **2 — ATS-specific scrapers** | Cover remaining 31 employers | Remaining 6 Workday employers, `OracleScraper`/`TaleoScraper`, `CustomScraper` + per-site selector configs for the 20 Custom-ATS sites |
+| **1 — Database + generic scraper** ✅ | Prove the pipeline end-to-end on 3 pilot Workday employers (per spec §8) | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, `WorkdayScraper.js` configured for LPL Financial / Wells Fargo / Invesco — 106 real roles verified end-to-end |
+| **2 — ATS-specific scrapers** ✅ | Cover as many of the remaining employers as could be verified live | `OracleScraper` (Oracle Fusion Recruiting Cloud), `CustomScraper` (sitemap + schema.org JobPosting, JSON-LD or Microdata), 10 more Workday employers found by direct verification. 18/34 employers active, **558 real India-based roles** as of 2026-09-13. See §8.1 for what didn't make it in and why. |
 | **3 — Frontend** | React job board UI | Search, filters, marks, Claude Artifact publish (`lib/publisher.js`) |
 | **4 — Scheduling & hardening** | Make the daily run unattended-safe | CLI (`bin/cli.js`), consecutive-failure detection, Slack alerts tuned, GitHub Actions secrets configured, both schedules verified |
+
+### 8.1 Phase 2 notes: what verification actually found
+
+The source spec's Workday/Oracle/Taleo classification was wrong often enough
+(Franklin Templeton, PwC AC, EY GDS, KPMG's bucket, Bank of
+America/Barclays/Visa/AIG/CME Group misfiled as "custom" when they're
+Workday) that **every employer's real platform was checked against its
+live site** rather than trusted — see `config/employers.json`'s per-employer
+`note` fields for what was found. Two design decisions came out of this:
+
+- **No dedicated Taleo/Phenom/SuccessFactors/iCIMS scraper classes.**
+  "Oracle" in this codebase specifically means Oracle Fusion Recruiting
+  Cloud (its public, unauthenticated `recruitingCEJobRequisitions` REST
+  API) — no employer was found running genuine legacy Taleo. Phenom,
+  SuccessFactors, and unidentified platforms are all served by one
+  `CustomScraper` via sitemap.xml + schema.org `JobPosting` structured
+  data (JSON-LD or Microdata — both are checked), because that convention
+  turned out to be shared across vendors, while each vendor's private
+  search API is not.
+- **Bugs only surfaced by testing against live sites, not sample data:**
+  a location pre-filter that hard-filtered to zero candidates for
+  platforms whose URL slugs don't embed a city name (fixed: rank instead
+  of filter, degrade to recency when no slug carries a location hint);
+  a JSON-LD-only extractor that silently found nothing on SuccessFactors
+  tenants using Microdata instead (fixed: try both); and an
+  `exclude_keywords`/location matcher using plain `.includes()`, which
+  matched "Intern" inside "international" and "Pune" losing to "India" in
+  a first-match scan — both silently dropped real, legitimate roles
+  (fixed: word-boundary regex matching, longest-match-first for location).
+
+**Remaining inactive employers (16 of 34)** fall into categories, not one
+catch-all "not done yet": genuinely bot-protected (UBS, BNP Paribas,
+Citadel, Blackstone — per §12, not something to work around), confirmed
+platform but needs Puppeteer for a JS-rendered shell (Standard Chartered,
+Vanguard, Goldman Sachs), confirmed platform but the sitemap route doesn't
+work (Charles Schwab's iCIMS 403s on sitemap.xml, Deloitte USI's Avature
+sitemap is a dead stub), or genuinely not yet verified (KPMG, Deutsche
+Bank, Marsh & McLennan, Zurich, Bridgewater, ICE, Morgan Stanley). Each
+has a dated `note` in config explaining which.
 
 ---
 

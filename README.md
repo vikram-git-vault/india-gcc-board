@@ -22,13 +22,13 @@ Full setup, including the daily cron and GitHub Actions schedule, is in
 
 ## Status
 
-Currently: **Phase 0 — foundation scaffold.**
+Currently: **Phase 2 done — 18/34 employers live, 558 real roles.**
 
 | Phase | Status |
 |---|---|
 | 0 — Architecture, config, scaffold | ✅ done |
-| 1 — Database + generic scraper (3 pilot sites) | ⬜ not started |
-| 2 — ATS-specific scrapers (remaining 31) | ⬜ not started |
+| 1 — Database + generic scraper (3 pilot sites) | ✅ done |
+| 2 — ATS-specific scrapers | ✅ done — 18/34 employers active (12 Workday, 2 Oracle, 4 sitemap-based custom), 16 remain inactive pending further verification (see `docs/ARCHITECTURE.md` §8.1) |
 | 3 — Frontend job board | ⬜ not started |
 | 4 — Scheduling & hardening | ⬜ not started |
 
