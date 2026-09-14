@@ -314,16 +314,34 @@ sites, per the spec's phase-1 scope, to prove the pattern end-to-end) and
 
 ---
 
-## 5. Frontend Design (Phase 3) ✅
+## 5. Frontend Design (Phase 3) ✅ — self-hosted (Phase 3b)
 
-Published as a Claude Artifact: **https://claude.ai/code/artifact/35691137-5630-4af7-a06c-72cd225e065c**
+**Self-hosted via `server.js`**, not a Claude Artifact. The board was
+originally published as a Claude Artifact (kept at
+`https://claude.ai/code/artifact/35691137-5630-4af7-a06c-72cd225e065c` as
+a historical/secondary mirror, no longer the primary), but that hosting
+model had a hard limitation worth naming plainly: **there is no public
+API for a plain Node script to write into a published Artifact's
+database.** The `db` capability's write path only exists for a live
+page-viewer's own browser or for an interactive Claude Code session's
+`write_db` tool action — a `node refresh.js` run has no credentials or
+endpoint to push through either way. That made "daily automated refresh"
+false advertising: the scrape could run unattended, but getting the
+result onto the visible board could not, without a human (or a Claude
+session) in the loop every time. See git history on this file for the
+full account of that model, if useful context.
 
-**Built in vanilla JS, not React** — the spec's original plan. Artifacts run
-under a strict CSP that only permits Google Fonts as an external host;
-there's no CDN to load React from, and inlining a bundled React as a data
-URI for a page this size wasn't worth the payload. At 586 rows, plain DOM
-templating (filter in-memory, re-render via `innerHTML`) is fast enough
-that a framework wouldn't change the user experience, only the code size.
+Phase 3b replaces that with `server.js` (Express): a small self-hosted
+server that serves the frontend (`frontend/public/index.html`) and the
+scraped data (`GET /api/roles`, reading `data/roles.json`) directly, over
+plain HTTP, with zero Claude dependency in the runtime loop. This is a
+genuine architecture change, not a patch — see §6 for how it runs and is
+reached from other devices.
+
+**Built in vanilla JS, not React** — no bundler/build step needed for a
+plain server-rendered static page; at ~600 rows, in-memory filtering and
+`innerHTML` re-rendering is fast enough that a framework wouldn't change
+the user experience, only the code size.
 
 - **Live search** across title/employer (client-side, instant).
 - **Filters**: experience level, city, employer, and priority-keyword
@@ -331,87 +349,70 @@ that a framework wouldn't change the user experience, only the code size.
   AND'd across facets / OR'd within one.
 - **Tabs**: All / Interested / Applied / Rejected / Closed, so marked
   roles are one click away instead of buried in a filtered search.
-- **User marks**: interested / applied / rejected / closed, persisted via
-  the `db` capability. No per-user scoping — the `user` capability isn't
-  available on this account, and this is a single-owner tool anyway (§12),
-  so `role_marks` is a flat shared collection.
+- **User marks**: interested / applied / rejected / closed, persisted in
+  the browser's `localStorage` — this is a single-user personal tool, so
+  there's no need for a shared backend just to remember your own marks.
+  Tradeoff: marks don't follow you across browsers/devices; see §6 for
+  why that's an acceptable default for now.
 - **Freshness indicator**: last-refresh relative time, active role count,
-  employer count, always visible at the top rather than buried in a footer.
-- Read-only with respect to scraping — the frontend never triggers a
-  scrape; it only renders what the last sync (§5.1) put into it.
-
-### 5.1 How data actually gets from `refresh.js` to the live page
-
-This turned out to be less automatic than the original plan assumed, and
-that's worth being explicit about rather than papering over:
-
-**There is no public API for a plain Node script to write into a
-published Artifact's database.** The `db` capability's write path exists
-for a live page-viewer (client-side `db.collection(...).set()` calls,
-which is exactly how user marks persist — that part *is* fully automatic)
-and for an interactive Claude Code session (the `write_db` tool action,
-used to seed the `roles` collection from a terminal). A `node refresh.js`
-run inside GitHub Actions is neither of those — it has no credentials or
-endpoint to push through.
-
-**Documents also cap at 256 KiB.** One doc holding all 586 roles was
-already at ~248 KiB — the next batch of Phase 2c employers would have
-broken it outright (`set()` rejecting `invalid_argument`). Roles are
-sharded instead: `lib/publisher.js` splits them into chunks of 150
-(comfortably ~55 KiB/shard) written to `roles/shard-0`, `roles/shard-1`,
-etc.; the page reads the whole `roles` collection and flattens the
-shards back together. The embedded HTML fallback (for a viewer with no
-`db` grant) has no such limit and just gets the full flattened array.
-
-So the real pipeline is:
-1. `refresh.js` runs the scrape → parse → sync steps as before, then
-   calls `lib/publisher.js`, which queries active roles out of SQLite and
-   writes `data/artifact-sync.json` as `{ shards: [[...], [...], ...],
-   updatedAt }`. This part *is* fully automated and runs on the existing
-   daily schedule (§6).
-2. Getting those shards into the live board's `roles` collection is a
-   **manual step from a Claude Code session** — one `write_db` call per
-   shard (currently 4). Not unattended.
-3. **Marks never need this step.** Once the page is open, saving/applying/
-   rejecting a role writes straight to `db` from the browser — that part
-   was live and automatic from the moment the page was published.
-
-One more thing worth naming plainly: the first version of this page was
-built against a remembered API shape rather than the actual type
-definitions, and shipped with two bugs that would have silently broken
-the live sync — a `.list()` call on a collection (no such method exists;
-it's `.limit(n).get()`) and treating `.data` as a property instead of
-the method it actually is (`.data()`). Reading `db.d.ts` before writing
-the page — not after something looked wrong — is what should happen
-next time a capability is used for the first time.
-
-Practically: the board's *role listings* go stale between manual syncs;
-the board's *your-marks* never do. If this manual step becomes annoying,
-the honest fixes are (a) do it on a personal cadence that matches how
-often you actually check the board, not the daily scrape cadence, or
-(b) revisit this once/if a public write API for Artifacts exists — not
-by building a workaround now.
+  employer coverage (fetched/tracked, with/without results this cycle),
+  always visible at the top.
+- **On-demand refresh**: a "Refresh now" button calls `POST /api/refresh`,
+  which spawns `node refresh.js` as a background child process (guarded
+  against overlapping runs) and polls `GET /api/refresh/status` until it
+  finishes, then reloads the data — see §6.
 
 ---
 
-## 6. Scheduling & Deployment
+## 6. Scheduling & Deployment (Phase 3b: local-first)
 
-**Refresh cadence: daily, 6:00 AM IST** — a deliberate change from the
-source spec's Monday/Thursday 8:00 AM cadence (decided 2026-09-13).
-Duration budget: ~45 minutes (scrape + parse + sync + publish, §1.3).
+**Deliberately local-first** (decided 2026-09-14): the board runs on your
+own machine, reachable from your own devices only, with a clear path to a
+private hosted URL later that needs no rearchitecture — just a different
+way of exposing the same unchanged server.
 
-Two redundant triggers, same target time:
+**`server.js`** is a long-running process that does two jobs:
+1. Serves `frontend/public/` + `GET /api/roles` (reads `data/roles.json`)
+   + `POST /api/refresh` (spawns `node refresh.js`, guarded against
+   overlapping runs) + `GET /api/refresh/status`.
+2. Schedules the same refresh **in-process** via `node-cron`
+   (`REFRESH_CRON` env var, default `0 6 * * *` in `TZ`, default
+   `Asia/Kolkata`) — no separate OS-level cron/launchd job needed.
 
-1. **Local cron** (MacBook) — `0 6 * * *` — convenient during development,
-   but only runs while the machine is awake and online. See `docs/SETUP.md`.
-2. **GitHub Actions** (`.github/workflows/refresh-schedule.yml`) — cron
-   `30 0 * * *` UTC (= 6:00 AM IST, no DST in India) — the durable schedule,
-   runs regardless of local machine state. Commits updated `data/` back to
-   the repo and uploads logs as a build artifact.
+Run it: `npm run serve` (binds `0.0.0.0` by default — already reachable
+from other devices on the same network, not just `localhost`).
 
-Both invoke the same `refresh.js`. A future cloud path (Postgres +
-Express API, per the source spec's optional future section) is out of
-scope while this stays a single-user, file-based tool.
+**Reaching it from your other devices — two tiers, same server:**
+
+1. **Same Wi-Fi / LAN**: open `http://<this-machine's-LAN-IP>:4000` from
+   your phone or another computer on the same network. Zero setup beyond
+   running the server.
+2. **From anywhere, still private to only your own devices**:
+   [Tailscale](https://tailscale.com) (free for personal use) — install it
+   on this machine and on each device that should reach the board; it
+   creates a private mesh network between just those devices (not a
+   public exposure of any kind), and the board becomes reachable at your
+   Tailscale hostname from anywhere with internet, not just the same Wi-Fi.
+
+**Later, if/when you want an unlisted URL others could use** (no
+Tailscale install required on their end): run
+[`cloudflared`](https://github.com/cloudflare/cloudflared) (free,
+open-source) pointed at the same local port —
+`cloudflared tunnel --url http://localhost:4000` — which hands back a
+public-but-unlisted HTTPS URL. This requires **zero changes to `server.js`
+or the frontend**; it's the same process, just reached a different way.
+That's the "minimal effort to go from local to private URL" property this
+architecture was chosen for.
+
+**GitHub Actions** (`.github/workflows/refresh-schedule.yml`) still exists
+in the repo but is not part of this local-first setup — it predates this
+model (references a Claude Artifact publish step that no longer applies)
+and is left as a starting point for a possible future fully-cloud-hosted
+phase, not something to enable now.
+
+**The original Claude Artifact** (`https://claude.ai/code/artifact/35691137-5630-4af7-a06c-72cd225e065c`)
+still exists as a secondary/historical mirror but is no longer kept in
+sync automatically or treated as the primary board.
 
 ---
 
@@ -464,8 +465,9 @@ robots.txt compliance hasn't drifted for any active employer.
 | **0 — Foundation** (this doc) | Architecture, config, scaffold | This file, `docs/SETUP.md`, `config/*.json`, `refresh.js` shell, logger, workflow, folder structure |
 | **1 — Database + generic scraper** ✅ | Prove the pipeline end-to-end on 3 pilot Workday employers (per spec §8) | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, `WorkdayScraper.js` configured for LPL Financial / Wells Fargo / Invesco — 106 real roles verified end-to-end |
 | **2 — ATS-specific scrapers** ✅ | Cover as many of the remaining employers as could be verified live | `OracleScraper`, `CustomScraper` (sitemap + JSON-LD/Microdata + `<title>`/URL fallbacks, optional Puppeteer render mode), `GreenhouseScraper`, 12 Workday employers found by direct verification. **21/33 employers active, 586 real India-based roles** as of 2026-09-14 (Phase 2b). See §8.1 for what didn't make it in and why. |
-| **3 — Frontend** ✅ | Job board UI (built vanilla JS, not React — see §5) | Search, filters, marks (live via `db`), `lib/publisher.js` prepares the sync payload — see §5.1 for the manual step still required |
-| **4 — Scheduling & hardening** | Make the daily run unattended-safe | CLI (`bin/cli.js`), consecutive-failure detection, Slack alerts tuned, GitHub Actions secrets configured, both schedules verified |
+| **3 — Frontend** ✅ | Job board UI (built vanilla JS, not React — see §5) | Search, filters, marks — originally live via Claude Artifact `db`; superseded by 3b |
+| **3b — Self-hosted, local-first** ✅ | Remove the Claude-session dependency from the runtime loop entirely — see §5/§6 | `server.js` (Express + in-process `node-cron`), `frontend/public/index.html` (fetches `/api/roles`, marks in `localStorage`), `lib/publisher.js` writes `data/roles.json`. Reachable from other devices via LAN or Tailscale now; `cloudflared` tunnel is a zero-code-change path to an unlisted URL later. |
+| **4 — Hardening** | Make the daily run more resilient | Consecutive-failure detection, notifications, GitHub Actions revisited only if/when a fully cloud-hosted phase is wanted |
 
 ### 8.1 Phase 2 / 2b notes: what verification actually found
 

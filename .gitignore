@@ -20,6 +20,7 @@ venv/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/roles.json
 data/artifact-sync.json
 frontend/job-board.built.html
 logs/*.log

@@ -3,13 +3,10 @@
  * refresh.js — main orchestrator for the BFSI job board.
  *
  * Pipeline: init db -> scrape employers -> parse roles -> sync to db
- *           -> publish to Claude Artifact -> update run metadata.
+ *           -> write data/roles.json for the local server to serve.
  *
- * Phase 1: only employers with a registered ScraperFactory entry (Workday,
- * for now — see lib/scrapers/ScraperFactory.js) actually scrape; the rest
- * fail per-employer with a caught, logged error until Phase 2 lands
- * Oracle/Taleo/Custom scrapers. lib/publisher.js (Claude Artifact publish)
- * is still Phase 3 — publishArtifact() no-ops without those env vars set.
+ * data/roles.json is read live by server.js's GET /api/roles — there is
+ * no separate publish/sync step. See docs/ARCHITECTURE.md §5.
  */
 import 'dotenv/config';
 import fs from 'fs';
@@ -92,14 +89,10 @@ async function syncToDatabase(runId, startTime, results) {
   logger.info('Sync complete');
 }
 
-async function publishArtifact() {
-  // Writes data/artifact-sync.json only — there's no public API for this
-  // script to push directly into the published Artifact's database.
-  // Syncing that file to the live board is a manual step from a Claude
-  // Code session; see docs/ARCHITECTURE.md §5.1.
+async function publishRoles() {
   const { publish } = await import('./lib/publisher.js');
-  const { rolesWritten, syncPath } = await publish();
-  logger.info(`Wrote ${rolesWritten} active roles to ${syncPath} — sync to the live board from a Claude Code session`);
+  const { rolesWritten, outputPath } = await publish();
+  logger.info(`Wrote ${rolesWritten} active roles to ${outputPath} — served live by server.js`);
 }
 
 async function main() {
@@ -120,7 +113,7 @@ async function main() {
   await initDatabase();
   const results = await scrapeEmployers(employers, filters);
   await syncToDatabase(runId, runStart.toISOString(), results);
-  await publishArtifact();
+  await publishRoles();
 
   const okCount = results.filter((r) => r.status === 'ok').length;
   const errCount = results.filter((r) => r.status === 'error').length;

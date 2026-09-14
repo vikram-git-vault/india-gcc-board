@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%A7%AD</text></svg>">
+<title>India GCC Board</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #EEEFE9; --surface: #FFFFFF; --surface-sunk: #E7E8E1; --border: #D7D8CE;
+    --text: #1B211F; --text-muted: #5C645F; --accent: #A8681F; --accent-soft: #F1E3CC;
+    --success: #3F8F5C; --success-soft: #DFEEE3; --critical: #B84B36; --critical-soft: #F5E1DC;
+    --info: #3D6E96; --info-soft: #DEE8EF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10151A; --surface: #171E23; --surface-sunk: #131A1E; --border: #2B353B;
+      --text: #E9EAE4; --text-muted: #93A09B; --accent: #D9A254; --accent-soft: #382C1B;
+      --success: #6FB988; --success-soft: #1B2A20; --critical: #DD8266; --critical-soft: #33201B;
+      --info: #7FAAD0; --info-soft: #1B2732;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10151A; --surface: #171E23; --surface-sunk: #131A1E; --border: #2B353B;
+    --text: #E9EAE4; --text-muted: #93A09B; --accent: #D9A254; --accent-soft: #382C1B;
+    --success: #6FB988; --success-soft: #1B2A20; --critical: #DD8266; --critical-soft: #33201B;
+    --info: #7FAAD0; --info-soft: #1B2732;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5; }
+  ::selection { background: var(--accent-soft); }
+  button { font-family: inherit; }
+
+  .page { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header.masthead { margin-bottom: 20px; }
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 6px; }
+  h1 { font-family: 'IBM Plex Serif', Georgia, serif; font-weight: 600; font-size: clamp(24px, 3.6vw, 30px); margin: 0 0 12px; text-wrap: balance; }
+
+  .freshbar {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--text-muted);
+    padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .freshbar strong { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .freshbar strong.pulse { animation: stat-pulse 0.7s ease-out; }
+  .freshbar-detail { color: var(--text-muted); }
+  .freshbar-link { margin-left: auto; color: var(--accent); text-decoration: none; }
+  .freshbar-link:hover { text-decoration: underline; }
+  .fresh-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); display: inline-block; margin-right: 6px; }
+  .fresh-dot.live { background: var(--success); animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.8); } }
+  @keyframes stat-pulse { 0% { color: var(--accent); } 100% { color: var(--text); } }
+
+  .refresh-btn {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); cursor: pointer;
+    transition: background 0.12s ease, transform 0.1s ease;
+  }
+  .refresh-btn:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
+  .refresh-btn:active:not(:disabled) { transform: scale(0.94); }
+  .refresh-btn:disabled { opacity: 0.6; cursor: default; }
+
+  .toolbar { margin: 20px 0 16px; display: flex; flex-direction: column; gap: 12px; }
+  .search-row { display: flex; gap: 10px; }
+  .search {
+    flex: 1; font-size: 14.5px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); color: var(--text);
+  }
+  .search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  select.sort {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text);
+  }
+
+  .facet-row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+  .facet-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--text-muted); margin-right: 4px; flex-shrink: 0;
+  }
+  .chip {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.1s ease;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip:active { transform: scale(0.94); }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chip.small { font-size: 10.5px; padding: 3px 9px; }
+  .clear-link {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); background: none; border: none;
+    cursor: pointer; text-decoration: underline; padding: 2px 4px;
+  }
+
+  .tabs { display: flex; gap: 4px; margin: 18px 0 4px; border-bottom: 1px solid var(--border); }
+  .tab {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 8px 14px; border: none; background: none;
+    color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .tab:active { transform: scale(0.97); }
+  .tab[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
+  .tab .n { font-variant-numeric: tabular-nums; }
+  .tab .n.pulse { animation: stat-pulse 0.7s ease-out; }
+
+  .results-meta { font-size: 12.5px; color: var(--text-muted); margin: 14px 0 12px; font-family: 'IBM Plex Mono', monospace; }
+
+  .cards { display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .card:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(27, 33, 31, 0.07); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+  }
+  :root[data-theme="dark"] .card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .card-title { font-weight: 600; font-size: 15px; line-height: 1.35; }
+  .level-badge {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;
+  }
+  .level-lead { background: var(--accent-soft); color: var(--accent); }
+  .level-senior { background: var(--info-soft); color: var(--info); }
+  .level-mid { background: var(--success-soft); color: var(--success); }
+  .level-entry { background: var(--surface-sunk); color: var(--text-muted); }
+  .card-meta { font-size: 13px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .card-meta .sep { opacity: 0.5; }
+  .card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+  a.apply-link {
+    font-size: 13px; font-weight: 500; color: var(--accent); text-decoration: none;
+    border: 1px solid var(--accent); padding: 6px 12px; border-radius: 6px;
+    display: inline-block; transition: background 0.12s ease, transform 0.1s ease;
+  }
+  a.apply-link:hover { background: var(--accent-soft); }
+  a.apply-link:active { transform: scale(0.96); }
+  .mark-group { display: flex; gap: 4px; margin-left: auto; }
+  .mark-btn {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 6px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.1s ease;
+  }
+  .mark-btn:hover { border-color: var(--accent); }
+  .mark-btn:active { transform: scale(0.94); }
+  .mark-btn[aria-pressed="true"].interested { background: var(--info-soft); border-color: var(--info); color: var(--info); }
+  .mark-btn[aria-pressed="true"].applied { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+  .mark-btn[aria-pressed="true"].rejected { background: var(--critical-soft); border-color: var(--critical); color: var(--critical); }
+  .mark-btn[aria-pressed="true"].closed { background: var(--surface-sunk); border-color: var(--text-muted); color: var(--text); }
+
+  .empty-state { padding: 48px 16px; text-align: center; color: var(--text-muted); font-size: 14px; }
+  .empty-state button { margin-top: 10px; }
+
+  footer.page-footer {
+    margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .page { animation: rise 0.35s ease-out; }
+    @keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+    ::view-transition-group(*) { animation-duration: 0.28s; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+    ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 0.2s; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fresh-dot.live { animation: none; }
+    ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Personal BFSI Leadership Board · India GCC hubs</p>
+    <h1>India GCC Board</h1>
+    <div class="freshbar" id="freshbar">
+      <span><span class="fresh-dot"></span><strong id="freshTime">—</strong></span>
+      <span><strong id="freshCount">—</strong> active roles</span>
+      <span><strong id="freshEmployers">—</strong> employers scraped<span class="freshbar-detail" id="freshEmployersDetail"></span></span>
+      <button class="refresh-btn" id="refreshBtn">Refresh now</button>
+      <a class="freshbar-link" href="https://github.com/vikram-git-vault/india-gcc-board/blob/main/docs/EMPLOYERS.md" target="_blank" rel="noopener noreferrer">full employer list ↗</a>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="search-row">
+      <input type="text" class="search" id="search" placeholder="Search title or employer…" aria-label="Search roles">
+      <select class="sort" id="sort" aria-label="Sort by">
+        <option value="date">Newest first</option>
+        <option value="employer">Employer A–Z</option>
+        <option value="title">Title A–Z</option>
+      </select>
+    </div>
+
+    <div class="facet-row" id="facetLevel">
+      <span class="facet-label">Level</span>
+    </div>
+    <div class="facet-row" id="facetLocation">
+      <span class="facet-label">City</span>
+    </div>
+    <div class="facet-row" id="facetEmployer">
+      <span class="facet-label">Employer</span>
+    </div>
+    <div class="facet-row" id="facetPriority">
+      <span class="facet-label">Focus area</span>
+    </div>
+    <div class="facet-row">
+      <button class="clear-link" id="clearFilters">Clear all filters</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab" data-tab="all" aria-pressed="true">All <span class="n" id="tabAllN"></span></button>
+    <button class="tab" data-tab="interested">Interested <span class="n" id="tabInterestedN"></span></button>
+    <button class="tab" data-tab="applied">Applied <span class="n" id="tabAppliedN"></span></button>
+    <button class="tab" data-tab="rejected">Rejected <span class="n" id="tabRejectedN"></span></button>
+    <button class="tab" data-tab="closed">Closed <span class="n" id="tabClosedN"></span></button>
+  </div>
+
+  <p class="results-meta" id="resultsMeta"></p>
+
+  <div class="cards" id="cards"></div>
+  <div class="empty-state" id="emptyState" style="display:none;">
+    No roles match your filters.
+    <div><button class="clear-link" id="emptyClear">Clear filters</button></div>
+  </div>
+
+  <footer class="page-footer">
+    <span id="syncStatus">Loading…</span>
+    <span id="refreshStatus"></span>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var MARKS_KEY = 'india-gcc-board:marks';
+
+  function loadMarks() {
+    try {
+      var raw = localStorage.getItem(MARKS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function saveMarks() {
+    try { localStorage.setItem(MARKS_KEY, JSON.stringify(state.marks)); } catch (e) {}
+  }
+
+  var state = {
+    roles: [],
+    meta: {},
+    coverage: { fetchedCount: 0, totalTracked: 0, manualCount: 0 },
+    marks: loadMarks(),   // roleId -> status, persisted in this browser only
+    query: '',
+    levels: new Set(),
+    locations: new Set(),
+    employers: new Set(),
+    priorities: new Set(),
+    sort: 'date',
+    tab: 'all',
+  };
+
+  var PRIORITY_KEYWORDS = ['Global Capability Center', 'GCC', 'Center of Excellence', 'Digital Transformation', 'Risk Management', 'Regulatory', 'Compliance', 'Technology', 'Data & Analytics', 'Operations'];
+  var LEVEL_ORDER = ['lead', 'senior', 'mid', 'entry'];
+  var LEVEL_LABEL = { lead: 'Lead', senior: 'Senior', mid: 'Mid', entry: 'Entry' };
+
+  function uniqueSorted(values) {
+    return Array.from(new Set(values.filter(Boolean))).sort();
+  }
+
+  function relativeTime(iso) {
+    if (!iso) return 'unknown';
+    var diffMs = Date.now() - new Date(iso).getTime();
+    var mins = Math.round(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    var hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    var days = Math.round(hrs / 24);
+    return days + 'd ago';
+  }
+
+  function buildFacetChips(containerId, values, activeSet, labelFn) {
+    var container = document.getElementById(containerId);
+    values.forEach(function (v) {
+      var btn = document.createElement('button');
+      btn.className = 'chip';
+      btn.textContent = labelFn ? labelFn(v) : v;
+      btn.setAttribute('aria-pressed', activeSet.has(v) ? 'true' : 'false');
+      btn.addEventListener('click', function () {
+        if (activeSet.has(v)) activeSet.delete(v); else activeSet.add(v);
+        btn.setAttribute('aria-pressed', activeSet.has(v) ? 'true' : 'false');
+        render();
+      });
+      container.appendChild(btn);
+    });
+  }
+
+  function initFacets() {
+    document.getElementById('facetLevel').innerHTML = '<span class="facet-label">Level</span>';
+    document.getElementById('facetLocation').innerHTML = '<span class="facet-label">City</span>';
+    document.getElementById('facetEmployer').innerHTML = '<span class="facet-label">Employer</span>';
+    document.getElementById('facetPriority').innerHTML = '<span class="facet-label">Focus area</span>';
+
+    buildFacetChips('facetLevel', LEVEL_ORDER.filter(function (l) { return state.roles.some(function (r) { return r.experience_level === l; }); }), state.levels, function (v) { return LEVEL_LABEL[v] || v; });
+    buildFacetChips('facetLocation', uniqueSorted(state.roles.map(function (r) { return r.location; })), state.locations);
+    buildFacetChips('facetEmployer', uniqueSorted(state.roles.map(function (r) { return r.employer; })), state.employers);
+    buildFacetChips('facetPriority', PRIORITY_KEYWORDS, state.priorities);
+  }
+
+  function matchesFacets(role) {
+    if (state.levels.size && !state.levels.has(role.experience_level)) return false;
+    if (state.locations.size && !state.locations.has(role.location)) return false;
+    if (state.employers.size && !state.employers.has(role.employer)) return false;
+    if (state.priorities.size) {
+      var hay = role.title.toLowerCase();
+      var hit = false;
+      state.priorities.forEach(function (p) { if (hay.indexOf(p.toLowerCase()) !== -1) hit = true; });
+      if (!hit) return false;
+    }
+    if (state.query) {
+      var q = state.query.toLowerCase();
+      if (role.title.toLowerCase().indexOf(q) === -1 && role.employer.toLowerCase().indexOf(q) === -1) return false;
+    }
+    return true;
+  }
+
+  function markOf(role) { return state.marks[String(role.id)] || null; }
+
+  function matchesTab(role) {
+    if (state.tab === 'all') return true;
+    return markOf(role) === state.tab;
+  }
+
+  function sortRoles(list) {
+    var copy = list.slice();
+    if (state.sort === 'date') copy.sort(function (a, b) { return (b.posted_date || '').localeCompare(a.posted_date || ''); });
+    else if (state.sort === 'employer') copy.sort(function (a, b) { return a.employer.localeCompare(b.employer); });
+    else if (state.sort === 'title') copy.sort(function (a, b) { return a.title.localeCompare(b.title); });
+    return copy;
+  }
+
+  function cardHtml(role) {
+    var mark = markOf(role);
+    var levelClass = 'level-' + (role.experience_level || 'entry');
+    var meta = [role.employer, role.location, role.department].filter(Boolean).join(' <span class="sep">·</span> ');
+    var posted = role.posted_date ? relativeTime(role.posted_date + 'T00:00:00Z') : 'date unknown';
+
+    function markBtn(value, label) {
+      var pressed = mark === value;
+      return '<button class="mark-btn ' + value + '" data-role-id="' + role.id + '" data-mark="' + value + '" aria-pressed="' + pressed + '">' + label + '</button>';
+    }
+
+    return '' +
+      '<div class="card" style="view-transition-name: role-' + role.id + '">' +
+        '<div class="card-top">' +
+          '<span class="card-title">' + escapeHtml(role.title) + '</span>' +
+          '<span class="level-badge ' + levelClass + '">' + (LEVEL_LABEL[role.experience_level] || role.experience_level || '') + '</span>' +
+        '</div>' +
+        '<div class="card-meta">' + meta + ' <span class="sep">·</span> ' + posted + '</div>' +
+        '<div class="card-actions">' +
+          '<a class="apply-link" href="' + role.job_url + '" target="_blank" rel="noopener noreferrer">View &amp; Apply ↗</a>' +
+          '<div class="mark-group">' +
+            markBtn('interested', 'Interested') +
+            markBtn('applied', 'Applied') +
+            markBtn('rejected', 'Rejected') +
+            markBtn('closed', 'Closed') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function flashStat(el, newValue) {
+    var next = String(newValue);
+    if (el.textContent === next) return;
+    el.textContent = next;
+    if (prefersReducedMotion) return;
+    el.classList.remove('pulse');
+    void el.offsetWidth;
+    el.classList.add('pulse');
+  }
+
+  function applyRender() {
+    var filtered = state.roles.filter(function (r) { return matchesFacets(r) && matchesTab(r); });
+    var sorted = sortRoles(filtered);
+
+    document.getElementById('cards').innerHTML = sorted.map(cardHtml).join('');
+    document.getElementById('emptyState').style.display = sorted.length === 0 ? 'block' : 'none';
+    document.getElementById('resultsMeta').textContent = sorted.length + ' of ' + state.roles.length + ' roles shown';
+
+    var counts = { interested: 0, applied: 0, rejected: 0, closed: 0 };
+    state.roles.forEach(function (r) {
+      var m = markOf(r);
+      if (m && counts.hasOwnProperty(m)) counts[m]++;
+    });
+    flashStat(document.getElementById('tabAllN'), state.roles.length);
+    flashStat(document.getElementById('tabInterestedN'), counts.interested);
+    flashStat(document.getElementById('tabAppliedN'), counts.applied);
+    flashStat(document.getElementById('tabRejectedN'), counts.rejected);
+    flashStat(document.getElementById('tabClosedN'), counts.closed);
+
+    Array.prototype.forEach.call(document.querySelectorAll('.mark-btn'), function (btn) {
+      btn.addEventListener('click', function () { toggleMark(btn.getAttribute('data-role-id'), btn.getAttribute('data-mark')); });
+    });
+  }
+
+  var activeTransition = null;
+
+  function render() {
+    if (prefersReducedMotion || !document.startViewTransition || activeTransition) {
+      applyRender();
+      return;
+    }
+    var transition = document.startViewTransition(applyRender);
+    activeTransition = transition;
+    transition.finished.catch(function () {}).then(function () {
+      if (activeTransition === transition) activeTransition = null;
+    });
+  }
+
+  function toggleMark(roleId, value) {
+    var current = state.marks[roleId];
+    var next = current === value ? null : value;
+    if (next) state.marks[roleId] = next; else delete state.marks[roleId];
+    saveMarks();
+    render();
+  }
+
+  function renderFreshbar() {
+    document.getElementById('freshTime').textContent = state.meta.last_refresh ? relativeTime(state.meta.last_refresh) : 'unknown';
+    flashStat(document.getElementById('freshCount'), state.roles.length);
+
+    var withResults = uniqueSorted(state.roles.map(function (r) { return r.employer; })).length;
+    var fetched = state.coverage.fetchedCount;
+    var total = state.coverage.totalTracked;
+    var noResults = Math.max(fetched - withResults, 0);
+
+    flashStat(document.getElementById('freshEmployers'), fetched + '/' + total);
+
+    var detail = withResults + ' with roles';
+    if (noResults > 0) detail += ', ' + noResults + ' empty this cycle';
+    detail += ' · ' + state.coverage.manualCount + ' tracked manually, not yet automated';
+    document.getElementById('freshEmployersDetail').textContent = ' (' + detail + ')';
+  }
+
+  document.getElementById('search').addEventListener('input', function (e) { state.query = e.target.value; render(); });
+  document.getElementById('sort').addEventListener('change', function (e) { state.sort = e.target.value; render(); });
+  document.getElementById('clearFilters').addEventListener('click', function () { resetFacets(); });
+  document.getElementById('emptyClear').addEventListener('click', function () { resetFacets(); });
+
+  function resetFacets() {
+    state.levels.clear(); state.locations.clear(); state.employers.clear(); state.priorities.clear();
+    state.query = ''; document.getElementById('search').value = '';
+    Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', 'false'); });
+    render();
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (tab) {
+    tab.addEventListener('click', function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) { t.setAttribute('aria-pressed', 'false'); });
+      tab.setAttribute('aria-pressed', 'true');
+      state.tab = tab.getAttribute('data-tab');
+      render();
+    });
+  });
+
+  // --- data: fetched from this server's own API, no external dependency ---
+  function loadRoles() {
+    fetch('/api/roles').then(function (r) {
+      if (!r.ok) return r.json().then(function (body) { throw new Error(body.error || 'failed to load'); });
+      return r.json();
+    }).then(function (payload) {
+      state.roles = payload.roles || [];
+      state.meta = payload.meta || {};
+      state.coverage = payload.coverage || state.coverage;
+      document.getElementById('syncStatus').textContent = 'Served locally by server.js.';
+      document.querySelector('.fresh-dot').classList.add('live');
+      initFacets();
+      renderFreshbar();
+      render();
+    }).catch(function (err) {
+      document.getElementById('syncStatus').textContent = err.message || 'No data yet — click Refresh to run the first scrape.';
+    });
+  }
+
+  // --- on-demand refresh, polling the same server ---
+  var refreshBtn = document.getElementById('refreshBtn');
+  var refreshStatusEl = document.getElementById('refreshStatus');
+  var pollTimer = null;
+  var wasRunning = false;
+
+  function pollRefreshStatus() {
+    fetch('/api/refresh/status').then(function (r) { return r.json(); }).then(function (s) {
+      if (s.running) {
+        wasRunning = true;
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = 'Refreshing…';
+        refreshStatusEl.textContent = 'A refresh is running (started ' + relativeTime(s.lastStartedAt) + ') — a full run over every employer can take 30–45 minutes.';
+        if (!pollTimer) pollTimer = setInterval(pollRefreshStatus, 15000);
+      } else {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = 'Refresh now';
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (wasRunning) { wasRunning = false; loadRoles(); }
+        refreshStatusEl.textContent = s.lastFinishedAt
+          ? 'Last refresh finished ' + relativeTime(s.lastFinishedAt) + (s.lastExitCode ? ' (exit code ' + s.lastExitCode + ')' : '.')
+          : '';
+      }
+    }).catch(function () {});
+  }
+
+  refreshBtn.addEventListener('click', function () {
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Starting…';
+    fetch('/api/refresh', { method: 'POST' }).then(function () { pollRefreshStatus(); });
+  });
+
+  pollRefreshStatus();
+  loadRoles();
+})();
+</script>
+</body>
+</html>

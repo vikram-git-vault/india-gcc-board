@@ -3,8 +3,7 @@
 ## Prerequisites
 
 - Node.js 18+
-- macOS/Linux shell access (for cron)
-- A GitHub repo with Actions enabled (already set up: `vikram-git-vault/india-gcc-board`)
+- macOS/Linux shell access
 
 ## 1. Install dependencies
 
@@ -18,89 +17,101 @@ npm install
 cp .env.example .env
 ```
 
-Fill in `.env`:
-- `CLAUDE_API_KEY` / `CLAUDE_ARTIFACT_ID` — only needed once Phase 3's
-  publisher exists; leave blank until then, `refresh.js` will skip
-  publishing with a warning if unset.
-- `CRAWL_DELAY_MS`, `TZ`, `DB_PATH` — sane defaults already in
-  `.env.example`, adjust if needed.
+Fill in `.env` — sane defaults already in `.env.example`:
+- `PORT` / `HOST` — where `server.js` listens (default `4000` / `0.0.0.0`;
+  `0.0.0.0` means it's already reachable from other devices on your
+  network, not just `localhost`).
+- `REFRESH_CRON` / `TZ` — when the server's built-in scheduler runs the
+  daily refresh (default 6 AM `Asia/Kolkata`).
+- `CRAWL_DELAY_MS`, `DB_PATH` — scraper behavior, rarely need changing.
 
-## 3. Initialize the database (Phase 1+)
+## 3. Initialize the database
 
 ```bash
 node refresh.js --init
 ```
 
-This creates `data/jobs.db` with the schema described in
-`docs/ARCHITECTURE.md` §3. It's a no-op until `lib/database.js` is
-implemented in Phase 1.
+Creates `data/jobs.db` with the schema described in `docs/ARCHITECTURE.md` §3.
 
-## 4. Run a manual refresh
+## 4. Run a first scrape
 
 ```bash
-npm start
-# equivalent to: node refresh.js
+node refresh.js
 ```
 
-Logs go to stdout and to `logs/combined.log` / `logs/error.log`.
+This scrapes all `active: true` employers in `config/employers.json`
+(currently 22), writes results to `data/jobs.db`, and publishes
+`data/roles.json` for the server to serve. A full run takes roughly
+30–45 minutes — most of that is deliberate per-employer crawl delay
+(politeness toward the employer sites, not a performance problem).
+Logs go to stdout and `logs/combined.log` / `logs/error.log`.
 
-## 5. Set up local cron (6 AM IST daily)
+## 5. Start the server
 
 ```bash
-crontab -e
+npm run serve
 ```
 
-Add this line (adjust the path if you move the repo):
+Open **http://localhost:4000** — that's the board. It also:
+- Re-runs the refresh automatically every day at the time set by
+  `REFRESH_CRON`, for as long as the process keeps running.
+- Exposes a **"Refresh now"** button in the UI for an on-demand run
+  (`POST /api/refresh`; a lock prevents two runs overlapping).
 
-```
-0 6 * * * cd ~/Projects/india-gcc-board && /usr/local/bin/node refresh.js >> logs/refresh.log 2>&1
-```
+Keep it running: for actual daily use, run it under something that
+survives terminal closes and machine sleep — e.g. `pm2 start server.js
+--name india-gcc-board`, a `launchd` agent on macOS, or just a spare
+terminal tab you leave open. Not scripted here since it's a one-time
+personal preference, not something the app needs to dictate.
 
-Notes:
-- Use `which node` to confirm the correct binary path for cron (cron's
-  `PATH` is minimal and often won't find `node` otherwise).
-- This only runs while the MacBook is on and awake — treat it as a
-  convenience for local development, not the durable schedule. The
-  GitHub Actions workflow (`.github/workflows/refresh-schedule.yml`) is
-  the schedule of record and runs regardless of local machine state.
-- Verify it's registered: `crontab -l`.
+## 6. Reach it from your other devices
 
-## 6. Configure GitHub Actions secrets
+**Same Wi-Fi (laptop, desktop, phone on the same network):** nothing
+extra to do — find this machine's LAN IP (`ipconfig getifaddr en0` on
+macOS Wi-Fi) and open `http://<that-ip>:4000` from the other device.
 
-In the repo's Settings → Secrets and variables → Actions, add:
+**From anywhere, still private to only your own devices** (e.g. phone on
+mobile data, not home Wi-Fi):
 
-| Secret | Required | Purpose |
-|---|---|---|
-| `CLAUDE_API_KEY` | Phase 3+ | publishing the frontend artifact |
-| `CLAUDE_ARTIFACT_ID` | Phase 3+ | which artifact to update |
-| `SLACK_WEBHOOK` | optional | failure notifications |
+1. Install [Tailscale](https://tailscale.com/download) on this machine
+   and sign in (free for personal use).
+2. Install Tailscale on each other device (phone, other laptop) and sign
+   into the **same account**.
+3. On this machine, note the Tailscale hostname/IP (`tailscale status` or
+   the Tailscale app).
+4. From another device, open `http://<tailscale-hostname>:4000`.
 
-`GITHUB_TOKEN` is provided automatically by Actions — no setup needed.
+This is a private mesh network between only your signed-in devices —
+nothing is exposed publicly.
 
-The workflow runs daily at 00:30 UTC (6:00 AM IST) and can also be
-triggered manually from the Actions tab (`workflow_dispatch`).
+## 7. Later: an unlisted URL, if you ever want to share it
 
-## 7. Verify the workflow
-
-After pushing, trigger it manually once to confirm the pipeline works
-end-to-end before relying on the schedule:
+No changes to this project needed — run
+[`cloudflared`](https://github.com/cloudflare/cloudflared) (free,
+open-source) alongside the already-running server:
 
 ```bash
-gh workflow run refresh-schedule.yml
-gh run watch
+cloudflared tunnel --url http://localhost:4000
 ```
 
-## Phase-by-phase build order
+This prints a public-but-unlisted `https://*.trycloudflare.com` URL that
+proxies to your local server for as long as the tunnel runs. Nobody finds
+it without the exact link. (A named, persistent tunnel with your own
+domain is also possible later via a free Cloudflare account, if the
+quick-tunnel URL changing on restart becomes annoying — not needed to
+start.)
 
-This scaffold (Phase 0) is complete. Building continues in order:
+## GitHub Actions (not used in this setup)
 
-1. **Phase 1** — `lib/database.js`, `lib/parser.js`,
-   `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, plus
-   one working scraper per ATS type (3 pilot employers) to prove the
-   pipeline end-to-end.
-2. **Phase 2** — remaining 31 employer scrapers.
-3. **Phase 3** — `frontend/`, `lib/publisher.js`.
-4. **Phase 4** — failure-alerting thresholds, secrets wired up, both
-   schedules verified in production.
+`.github/workflows/refresh-schedule.yml` exists in the repo from an
+earlier cloud-hosting attempt and currently references a publish step
+that no longer applies. It's left as a starting point for a possible
+future fully-cloud-hosted phase — leave it disabled (don't add its
+secrets) unless/until you deliberately revisit that path; see
+`docs/ARCHITECTURE.md` §6.
 
-Each phase should end with a commit and push, per `SCAFFOLD_MANIFEST.md`.
+## Where things stand
+
+All phases through **3b (self-hosted, local-first)** are done — see the
+status table in `README.md` and `docs/ARCHITECTURE.md` §8 for the full
+phase-by-phase history and what's still open (Phase 4: hardening).

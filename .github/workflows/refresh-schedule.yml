@@ -1,9 +1,17 @@
+# Not part of the current local-first setup (docs/ARCHITECTURE.md §6,
+# docs/SETUP.md) — the project runs via server.js's own in-process
+# node-cron scheduler instead. The `schedule` trigger below is
+# deliberately disabled (not just documented as unused) so this doesn't
+# silently fire daily scrapes against 22 external employer sites from
+# GitHub's runners with no one watching. Re-enable only if/when a fully
+# cloud-hosted phase is deliberately taken on — this predates and doesn't
+# match today's architecture (it still commits data/, which is gitignored).
 name: Daily BFSI Job Board Refresh
 
 on:
-  schedule:
-    # 00:30 UTC = 06:00 IST (Asia/Kolkata is UTC+5:30, no DST)
-    - cron: '30 0 * * *'
+  # schedule:
+  #   # 00:30 UTC = 06:00 IST (Asia/Kolkata is UTC+5:30, no DST)
+  #   - cron: '30 0 * * *'
   workflow_dispatch: {}
 
 jobs:
@@ -12,8 +20,6 @@ jobs:
     timeout-minutes: 90
     env:
       TZ: Asia/Kolkata
-      CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
-      CLAUDE_ARTIFACT_ID: ${{ secrets.CLAUDE_ARTIFACT_ID }}
       LOG_LEVEL: info
     steps:
       - name: Checkout
