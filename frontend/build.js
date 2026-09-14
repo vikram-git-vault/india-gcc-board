@@ -16,7 +16,11 @@ const TEMPLATE_PATH = path.join('frontend', 'job-board.html');
 const SYNC_PATH = path.join('data', 'artifact-sync.json');
 const OUTPUT_PATH = path.join('frontend', 'job-board.built.html');
 
-const { roles, updatedAt } = JSON.parse(fs.readFileSync(SYNC_PATH, 'utf-8'));
+const { shards, updatedAt } = JSON.parse(fs.readFileSync(SYNC_PATH, 'utf-8'));
+// lib/publisher.js shards roles for the live db (256 KiB/doc cap) — the
+// embedded fallback baked into this HTML has no such limit, so flatten
+// back into one array here.
+const roles = shards.flat();
 const meta = { last_refresh: updatedAt };
 
 let html = fs.readFileSync(TEMPLATE_PATH, 'utf-8');

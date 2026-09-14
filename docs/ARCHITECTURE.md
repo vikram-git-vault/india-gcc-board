@@ -350,22 +350,40 @@ published Artifact's database.** The `db` capability's write path exists
 for a live page-viewer (client-side `db.collection(...).set()` calls,
 which is exactly how user marks persist — that part *is* fully automatic)
 and for an interactive Claude Code session (the `write_db` tool action,
-used to seed `db.doc("roles/current")` from a terminal). A `node
-refresh.js` run inside GitHub Actions is neither of those — it has no
-credentials or endpoint to push through.
+used to seed the `roles` collection from a terminal). A `node refresh.js`
+run inside GitHub Actions is neither of those — it has no credentials or
+endpoint to push through.
+
+**Documents also cap at 256 KiB.** One doc holding all 586 roles was
+already at ~248 KiB — the next batch of Phase 2c employers would have
+broken it outright (`set()` rejecting `invalid_argument`). Roles are
+sharded instead: `lib/publisher.js` splits them into chunks of 150
+(comfortably ~55 KiB/shard) written to `roles/shard-0`, `roles/shard-1`,
+etc.; the page reads the whole `roles` collection and flattens the
+shards back together. The embedded HTML fallback (for a viewer with no
+`db` grant) has no such limit and just gets the full flattened array.
 
 So the real pipeline is:
 1. `refresh.js` runs the scrape → parse → sync steps as before, then
    calls `lib/publisher.js`, which queries active roles out of SQLite and
-   writes `data/artifact-sync.json` in the exact shape the page's `db`
-   doc expects (`{ roles: [...], updatedAt }`). This part *is* fully
-   automated and runs on the existing daily schedule (§6).
-2. Getting that file's contents into the live board's `db.doc("roles/current")`
-   is a **manual step from a Claude Code session** — reading the file and
-   issuing one `write_db` call. Not unattended.
+   writes `data/artifact-sync.json` as `{ shards: [[...], [...], ...],
+   updatedAt }`. This part *is* fully automated and runs on the existing
+   daily schedule (§6).
+2. Getting those shards into the live board's `roles` collection is a
+   **manual step from a Claude Code session** — one `write_db` call per
+   shard (currently 4). Not unattended.
 3. **Marks never need this step.** Once the page is open, saving/applying/
    rejecting a role writes straight to `db` from the browser — that part
    was live and automatic from the moment the page was published.
+
+One more thing worth naming plainly: the first version of this page was
+built against a remembered API shape rather than the actual type
+definitions, and shipped with two bugs that would have silently broken
+the live sync — a `.list()` call on a collection (no such method exists;
+it's `.limit(n).get()`) and treating `.data` as a property instead of
+the method it actually is (`.data()`). Reading `db.d.ts` before writing
+the page — not after something looked wrong — is what should happen
+next time a capability is used for the first time.
 
 Practically: the board's *role listings* go stale between manual syncs;
 the board's *your-marks* never do. If this manual step becomes annoying,

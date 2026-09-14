@@ -393,26 +393,43 @@
     }
     state.dbAvailable = true;
 
+    // Roles are sharded across multiple docs (db caps a document at
+    // 256 KiB; one doc for 586+ roles was already at 95% of that) —
+    // db.collection("roles").get() fetches every shard doc in the
+    // collection, then we flatten and sort them back together.
     Promise.all([
-      db.doc('roles/current').get(),
-      db.collection('role_marks').list({ limit: 1000 }),
+      db.collection('roles').limit(50).get(),
+      db.collection('role_marks').limit(1000).get(),
     ]).then(function (results) {
-      var rolesDoc = results[0];
-      var marksPage = results[1];
+      var rolesSnapshot = results[0];
+      var marksSnapshot = results[1];
 
-      if (rolesDoc && rolesDoc.data && Array.isArray(rolesDoc.data.roles)) {
-        state.roles = rolesDoc.data.roles;
-        state.meta = { last_refresh: rolesDoc.data.updatedAt };
-        document.getElementById('facetLevel').innerHTML = '<span class="facet-label">Level</span>';
-        document.getElementById('facetLocation').innerHTML = '<span class="facet-label">City</span>';
-        document.getElementById('facetEmployer').innerHTML = '<span class="facet-label">Employer</span>';
-        document.getElementById('facetPriority').innerHTML = '<span class="facet-label">Focus area</span>';
-        initFacets();
+      if (rolesSnapshot && rolesSnapshot.docs.length) {
+        var shardDocs = rolesSnapshot.docs
+          .filter(function (d) { return d.exists; })
+          .map(function (d) { return d.data(); });
+        var flattened = [];
+        var latestUpdate = null;
+        shardDocs.forEach(function (shard) {
+          if (Array.isArray(shard.roles)) flattened = flattened.concat(shard.roles);
+          if (shard.updatedAt && (!latestUpdate || shard.updatedAt > latestUpdate)) latestUpdate = shard.updatedAt;
+        });
+        if (flattened.length) {
+          state.roles = flattened;
+          state.meta = { last_refresh: latestUpdate };
+          document.getElementById('facetLevel').innerHTML = '<span class="facet-label">Level</span>';
+          document.getElementById('facetLocation').innerHTML = '<span class="facet-label">City</span>';
+          document.getElementById('facetEmployer').innerHTML = '<span class="facet-label">Employer</span>';
+          document.getElementById('facetPriority').innerHTML = '<span class="facet-label">Focus area</span>';
+          initFacets();
+        }
       }
 
-      if (marksPage && Array.isArray(marksPage.docs)) {
-        marksPage.docs.forEach(function (doc) {
-          if (doc.data && doc.data.status) state.marks[doc.id] = doc.data.status;
+      if (marksSnapshot && Array.isArray(marksSnapshot.docs)) {
+        marksSnapshot.docs.forEach(function (doc) {
+          if (!doc.exists) return;
+          var data = doc.data();
+          if (data && data.status) state.marks[doc.id] = data.status;
         });
       }
 
