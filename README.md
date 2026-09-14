@@ -7,6 +7,8 @@ searchable job board.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system
 design, including the ethical scraping policy this project operates under.
+See [`docs/EMPLOYERS.md`](docs/EMPLOYERS.md) for every employer tracked —
+automated or manual — with a direct link to each job board.
 
 ## Quick start
 
