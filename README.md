@@ -10,6 +10,8 @@ design, including the ethical scraping policy this project operates under.
 See [`docs/EMPLOYERS.md`](docs/EMPLOYERS.md) for every employer tracked —
 automated or manual — with a direct link to each job board.
 
+**The live board:** https://claude.ai/code/artifact/35691137-5630-4af7-a06c-72cd225e065c
+
 ## Quick start
 
 ```bash
@@ -24,14 +26,14 @@ Full setup, including the daily cron and GitHub Actions schedule, is in
 
 ## Status
 
-Currently: **Phase 2b done — 21/33 employers live, 586 real roles.**
+Currently: **Phase 3 done — live board published, 21/33 employers, 586 real roles.**
 
 | Phase | Status |
 |---|---|
 | 0 — Architecture, config, scaffold | ✅ done |
 | 1 — Database + generic scraper (3 pilot sites) | ✅ done |
 | 2 — ATS-specific scrapers | ✅ done — 21/33 employers active (12 Workday, 2 Oracle, 1 Greenhouse, 6 sitemap-based custom), 12 remain inactive (3 bot-protected, 1 needs bespoke scraping, 8 unidentified) — see `docs/ARCHITECTURE.md` §8.1 |
-| 3 — Frontend job board | ⬜ not started |
+| 3 — Frontend job board | ✅ done — search/filter/tabs/marks, built vanilla JS (Artifact CSP has no React CDN). Marks sync live; refreshing the *listings* needs a manual sync step — see `docs/ARCHITECTURE.md` §5.1 |
 | 4 — Scheduling & hardening | ⬜ not started |
 
 See [`SCAFFOLD_MANIFEST.md`](SCAFFOLD_MANIFEST.md) for the file-level
@@ -41,12 +43,12 @@ checklist.
 
 ```
 config/            employer list + filter rules
-lib/                database, parser, scrapers (Phase 1-2)
+lib/                database, parser, scrapers, publisher
 lib/scrapers/       ATS-specific scraper classes
-frontend/           React job board (Phase 3)
+frontend/           job board source (job-board.html) + build.js
 docs/               architecture & setup docs
 .github/workflows/  daily scheduled refresh
-data/               SQLite DB (gitignored)
+data/               SQLite DB + artifact-sync.json (gitignored)
 logs/               run logs (gitignored)
 ```
 

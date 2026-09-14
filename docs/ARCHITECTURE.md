@@ -314,29 +314,65 @@ sites, per the spec's phase-1 scope, to prove the pattern end-to-end) and
 
 ---
 
-## 5. Frontend Design (Phase 3)
+## 5. Frontend Design (Phase 3) ✅
 
-A single-page React app published as a Claude Artifact:
+Published as a Claude Artifact: **https://claude.ai/code/artifact/35691137-5630-4af7-a06c-72cd225e065c**
 
-```
-┌─ BFSI Global Job Board ────────────────────────────────────────┐
-│ Search: [_____________]   Filters: [Employer ▼] [Location ▼]   │
-│ Live Roles: N  |  Closing in 7 days: N  |  Employers: 34        │
-│ ┌─ Goldman Sachs — VP, Risk Analytics ──────────────────────┐  │
-│ │ Bangalore | Posted 2 days ago | Senior | Full-time          │  │
-│ │ [Interested] [View] [Applied]                                │  │
-│ └───────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-```
+**Built in vanilla JS, not React** — the spec's original plan. Artifacts run
+under a strict CSP that only permits Google Fonts as an external host;
+there's no CDN to load React from, and inlining a bundled React as a data
+URI for a page this size wasn't worth the payload. At 586 rows, plain DOM
+templating (filter in-memory, re-render via `innerHTML`) is fast enough
+that a framework wouldn't change the user experience, only the code size.
 
-- **Live search** across title/employer/department (client-side).
-- **Filters**: city, employer, `experience_level`, priority keyword tags.
+- **Live search** across title/employer (client-side, instant).
+- **Filters**: experience level, city, employer, and priority-keyword
+  focus area (from `config/filters.json`), all as toggleable chips,
+  AND'd across facets / OR'd within one.
+- **Tabs**: All / Interested / Applied / Rejected / Closed, so marked
+  roles are one click away instead of buried in a filtered search.
 - **User marks**: interested / applied / rejected / closed, persisted via
-  the artifact's shared database capability, keyed by device `user_id`.
-- **Freshness indicator**: `meta.last_refresh` and per-run health from
-  `scrape_runs`, so stale data is visible, not silent.
+  the `db` capability. No per-user scoping — the `user` capability isn't
+  available on this account, and this is a single-owner tool anyway (§12),
+  so `role_marks` is a flat shared collection.
+- **Freshness indicator**: last-refresh relative time, active role count,
+  employer count, always visible at the top rather than buried in a footer.
 - Read-only with respect to scraping — the frontend never triggers a
-  scrape; it only renders what `refresh.js` last published.
+  scrape; it only renders what the last sync (§5.1) put into it.
+
+### 5.1 How data actually gets from `refresh.js` to the live page
+
+This turned out to be less automatic than the original plan assumed, and
+that's worth being explicit about rather than papering over:
+
+**There is no public API for a plain Node script to write into a
+published Artifact's database.** The `db` capability's write path exists
+for a live page-viewer (client-side `db.collection(...).set()` calls,
+which is exactly how user marks persist — that part *is* fully automatic)
+and for an interactive Claude Code session (the `write_db` tool action,
+used to seed `db.doc("roles/current")` from a terminal). A `node
+refresh.js` run inside GitHub Actions is neither of those — it has no
+credentials or endpoint to push through.
+
+So the real pipeline is:
+1. `refresh.js` runs the scrape → parse → sync steps as before, then
+   calls `lib/publisher.js`, which queries active roles out of SQLite and
+   writes `data/artifact-sync.json` in the exact shape the page's `db`
+   doc expects (`{ roles: [...], updatedAt }`). This part *is* fully
+   automated and runs on the existing daily schedule (§6).
+2. Getting that file's contents into the live board's `db.doc("roles/current")`
+   is a **manual step from a Claude Code session** — reading the file and
+   issuing one `write_db` call. Not unattended.
+3. **Marks never need this step.** Once the page is open, saving/applying/
+   rejecting a role writes straight to `db` from the browser — that part
+   was live and automatic from the moment the page was published.
+
+Practically: the board's *role listings* go stale between manual syncs;
+the board's *your-marks* never do. If this manual step becomes annoying,
+the honest fixes are (a) do it on a personal cadence that matches how
+often you actually check the board, not the daily scrape cadence, or
+(b) revisit this once/if a public write API for Artifacts exists — not
+by building a workaround now.
 
 ---
 
@@ -410,7 +446,7 @@ robots.txt compliance hasn't drifted for any active employer.
 | **0 — Foundation** (this doc) | Architecture, config, scaffold | This file, `docs/SETUP.md`, `config/*.json`, `refresh.js` shell, logger, workflow, folder structure |
 | **1 — Database + generic scraper** ✅ | Prove the pipeline end-to-end on 3 pilot Workday employers (per spec §8) | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, `WorkdayScraper.js` configured for LPL Financial / Wells Fargo / Invesco — 106 real roles verified end-to-end |
 | **2 — ATS-specific scrapers** ✅ | Cover as many of the remaining employers as could be verified live | `OracleScraper`, `CustomScraper` (sitemap + JSON-LD/Microdata + `<title>`/URL fallbacks, optional Puppeteer render mode), `GreenhouseScraper`, 12 Workday employers found by direct verification. **21/33 employers active, 586 real India-based roles** as of 2026-09-14 (Phase 2b). See §8.1 for what didn't make it in and why. |
-| **3 — Frontend** | React job board UI | Search, filters, marks, Claude Artifact publish (`lib/publisher.js`) |
+| **3 — Frontend** ✅ | Job board UI (built vanilla JS, not React — see §5) | Search, filters, marks (live via `db`), `lib/publisher.js` prepares the sync payload — see §5.1 for the manual step still required |
 | **4 — Scheduling & hardening** | Make the daily run unattended-safe | CLI (`bin/cli.js`), consecutive-failure detection, Slack alerts tuned, GitHub Actions secrets configured, both schedules verified |
 
 ### 8.1 Phase 2 / 2b notes: what verification actually found

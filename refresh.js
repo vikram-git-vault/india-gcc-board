@@ -93,14 +93,13 @@ async function syncToDatabase(runId, startTime, results) {
 }
 
 async function publishArtifact() {
-  if (!process.env.CLAUDE_API_KEY || !process.env.CLAUDE_ARTIFACT_ID) {
-    logger.warn('CLAUDE_API_KEY / CLAUDE_ARTIFACT_ID not set — skipping artifact publish');
-    return;
-  }
+  // Writes data/artifact-sync.json only — there's no public API for this
+  // script to push directly into the published Artifact's database.
+  // Syncing that file to the live board is a manual step from a Claude
+  // Code session; see docs/ARCHITECTURE.md §5.1.
   const { publish } = await import('./lib/publisher.js');
-  logger.info('Publishing updated job board to Claude Artifact');
-  await publish();
-  logger.info('Artifact published');
+  const { rolesWritten, syncPath } = await publish();
+  logger.info(`Wrote ${rolesWritten} active roles to ${syncPath} — sync to the live board from a Claude Code session`);
 }
 
 async function main() {
