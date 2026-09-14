@@ -41,6 +41,9 @@
   }
   .freshbar strong { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
   .freshbar strong.pulse { animation: stat-pulse 0.7s ease-out; }
+  .freshbar-detail { color: var(--text-muted); }
+  .freshbar-link { margin-left: auto; color: var(--accent); text-decoration: none; }
+  .freshbar-link:hover { text-decoration: underline; }
   .fresh-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); display: inline-block; margin-right: 6px; }
   .fresh-dot.live { background: var(--success); animation: breathe 2.4s ease-in-out infinite; }
   @keyframes breathe { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.8); } }
@@ -165,7 +168,8 @@
     <div class="freshbar" id="freshbar">
       <span><span class="fresh-dot"></span><strong id="freshTime">—</strong></span>
       <span><strong id="freshCount">—</strong> active roles</span>
-      <span><strong id="freshEmployers">—</strong> employers</span>
+      <span><strong id="freshEmployers">—</strong> employers scraped<span class="freshbar-detail" id="freshEmployersDetail"></span></span>
+      <a class="freshbar-link" href="https://claude.ai/code/artifact/feda9848-2b8a-4d2a-b9dd-d5f2fb08ab94" target="_blank" rel="noopener noreferrer">full employer list ↗</a>
     </div>
   </header>
 
@@ -223,10 +227,12 @@
 (function () {
   var EMBEDDED_ROLES = __ROLES_JSON__;
   var EMBEDDED_META = __META_JSON__;
+  var EMBEDDED_COVERAGE = __COVERAGE_JSON__;
 
   var state = {
     roles: EMBEDDED_ROLES,
     meta: EMBEDDED_META,
+    coverage: EMBEDDED_COVERAGE,
     marks: {},           // roleId -> status
     query: '',
     levels: new Set(),
@@ -418,7 +424,18 @@
   function renderFreshbar() {
     document.getElementById('freshTime').textContent = state.meta.last_refresh ? relativeTime(state.meta.last_refresh) : 'unknown';
     flashStat(document.getElementById('freshCount'), state.roles.length);
-    flashStat(document.getElementById('freshEmployers'), uniqueSorted(state.roles.map(function (r) { return r.employer; })).length);
+
+    var withResults = uniqueSorted(state.roles.map(function (r) { return r.employer; })).length;
+    var fetched = state.coverage.fetchedCount;
+    var total = state.coverage.totalTracked;
+    var noResults = Math.max(fetched - withResults, 0);
+
+    flashStat(document.getElementById('freshEmployers'), fetched + '/' + total);
+
+    var detail = withResults + ' with roles';
+    if (noResults > 0) detail += ', ' + noResults + ' empty this cycle';
+    detail += ' · ' + state.coverage.manualCount + ' tracked manually, not yet automated';
+    document.getElementById('freshEmployersDetail').textContent = ' (' + detail + ')';
   }
 
   document.getElementById('search').addEventListener('input', function (e) { state.query = e.target.value; render(); });
