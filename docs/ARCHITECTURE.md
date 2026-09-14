@@ -480,6 +480,49 @@ still unidentified after repeated false-positive vendor-string matches
 
 ---
 
+### 8.2 Manually-tracked employers
+
+Not every employer that matters belongs in the automated pipeline. Two
+distinct reasons an employer ends up here instead of `active: true`:
+
+**Policy stop — will not be automated, by design (6):** the employer's own
+site says not to. Robots.txt disallowing everything, or a hard bot-wall,
+is a clear signal, and evading it (rotating IPs, spoofing headers, solving
+challenges) is exactly what §12 rules out. Checking these by hand — a
+human visiting a public page isn't what robots.txt governs — is the
+correct alternative, not a scraper workaround.
+
+| Employer | Reason | Job board (check manually) |
+|---|---|---|
+| Citigroup | robots.txt: `Disallow: /search-jobs/` | https://jobs.citi.com/search-jobs |
+| JPMorgan Chase | 403 authentication wall | https://www.jpmorganchase.com/careers |
+| Charles Schwab | robots.txt: `Disallow: /` for every user-agent | https://schwabjobs.com |
+| UBS | 403, confirmed bot-protected | https://jobs.ubs.com |
+| BNP Paribas | 403, confirmed bot-protected | https://group.bnpparibas/en/careers |
+| Blackstone | Cloudflare challenge page, confirmed even via headless browser | https://www.blackstone.com/careers |
+
+**Backlog — not yet automated, no policy blocker (9):** these employers
+don't forbid crawling; they just don't fit `CustomScraper`'s sitemap +
+structured-data convention yet, or their real platform hasn't been
+identified. Candidates for a future phase (dedicated CSS-selector
+scrapers per docs/ARCHITECTURE.md §4's "genuinely bespoke" carve-out),
+worth checking by hand in the meantime.
+
+| Employer | Status | Job board (check manually) |
+|---|---|---|
+| Deloitte USI | Avature confirmed; no job-listing sitemap exists at all | https://usijobs.deloitte.com/en_US/careersUSI |
+| Vanguard | Real content, no known ATS vendor — likely proprietary | https://www.vanguard.in/ |
+| Goldman Sachs | Real content, no known ATS vendor — likely proprietary | https://higher.gs.com/roles |
+| Morgan Stanley | Real content, no known ATS vendor — likely proprietary | https://www.morganstanley.com/careers/students-graduates/experienced-professionals |
+| Deutsche Bank | Real content, no known ATS vendor — likely proprietary | https://careers.db.com/search-results |
+| Citadel | Real content, no known ATS vendor — likely proprietary | https://www.citadel.com/careers/open-opportunities/ |
+| KPMG | Marketing site only; real ATS URL not found | https://www.kpmguscareers.com/ |
+| Zurich Insurance | Real URL not yet found; India ops may sit under a separate JV (Zurich Kotak) | https://www.zurich.com/careers |
+| ICE | Real platform not identified (two false-positive vendor matches so far) | https://careers.ice.com |
+
+See `config/employers.json`'s per-employer `note` field for the full,
+dated finding behind each row above.
+
 ## 9. Configuration File Templates
 
 `config/employers.json` — one entry per employer:
