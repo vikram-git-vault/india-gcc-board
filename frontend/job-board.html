@@ -393,12 +393,18 @@
   // position/size instead of hard-cutting the whole list on every
   // filter, sort, search keystroke, or mark. Falls back to an instant
   // swap where unsupported or when the viewer asked for less motion.
+  var activeTransition = null;
+
   function render() {
-    if (prefersReducedMotion || !document.startViewTransition) {
+    if (prefersReducedMotion || !document.startViewTransition || activeTransition) {
       applyRender();
       return;
     }
-    document.startViewTransition(applyRender);
+    var transition = document.startViewTransition(applyRender);
+    activeTransition = transition;
+    transition.finished.catch(function () {}).then(function () {
+      if (activeTransition === transition) activeTransition = null;
+    });
   }
 
   function toggleMark(roleId, value) {
