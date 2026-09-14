@@ -409,18 +409,21 @@ robots.txt compliance hasn't drifted for any active employer.
 |---|---|---|
 | **0 — Foundation** (this doc) | Architecture, config, scaffold | This file, `docs/SETUP.md`, `config/*.json`, `refresh.js` shell, logger, workflow, folder structure |
 | **1 — Database + generic scraper** ✅ | Prove the pipeline end-to-end on 3 pilot Workday employers (per spec §8) | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, `WorkdayScraper.js` configured for LPL Financial / Wells Fargo / Invesco — 106 real roles verified end-to-end |
-| **2 — ATS-specific scrapers** ✅ | Cover as many of the remaining employers as could be verified live | `OracleScraper` (Oracle Fusion Recruiting Cloud), `CustomScraper` (sitemap + schema.org JobPosting, JSON-LD or Microdata), 10 more Workday employers found by direct verification. 18/34 employers active, **558 real India-based roles** as of 2026-09-13. See §8.1 for what didn't make it in and why. |
+| **2 — ATS-specific scrapers** ✅ | Cover as many of the remaining employers as could be verified live | `OracleScraper`, `CustomScraper` (sitemap + JSON-LD/Microdata + `<title>`/URL fallbacks, optional Puppeteer render mode), `GreenhouseScraper`, 12 Workday employers found by direct verification. **21/33 employers active, 586 real India-based roles** as of 2026-09-14 (Phase 2b). See §8.1 for what didn't make it in and why. |
 | **3 — Frontend** | React job board UI | Search, filters, marks, Claude Artifact publish (`lib/publisher.js`) |
 | **4 — Scheduling & hardening** | Make the daily run unattended-safe | CLI (`bin/cli.js`), consecutive-failure detection, Slack alerts tuned, GitHub Actions secrets configured, both schedules verified |
 
-### 8.1 Phase 2 notes: what verification actually found
+### 8.1 Phase 2 / 2b notes: what verification actually found
 
-The source spec's Workday/Oracle/Taleo classification was wrong often enough
-(Franklin Templeton, PwC AC, EY GDS, KPMG's bucket, Bank of
+The source spec's Workday/Oracle/Taleo classification was wrong often
+enough (Franklin Templeton, PwC AC, EY GDS, Marsh & McLennan misfiled as
+Workday/Oracle when they're Phenom/SuccessFactors; Bank of
 America/Barclays/Visa/AIG/CME Group misfiled as "custom" when they're
-Workday) that **every employer's real platform was checked against its
-live site** rather than trusted — see `config/employers.json`'s per-employer
-`note` fields for what was found. Two design decisions came out of this:
+Workday; Bridgewater misfiled as "custom" when it's Greenhouse) that
+**every employer's real platform was checked against its live site**
+rather than trusted — see `config/employers.json`'s per-employer `note`
+fields for what was found, dated by which pass found it. Design decisions
+that came out of this:
 
 - **No dedicated Taleo/Phenom/SuccessFactors/iCIMS scraper classes.**
   "Oracle" in this codebase specifically means Oracle Fusion Recruiting
@@ -428,29 +431,52 @@ live site** rather than trusted — see `config/employers.json`'s per-employer
   API) — no employer was found running genuine legacy Taleo. Phenom,
   SuccessFactors, and unidentified platforms are all served by one
   `CustomScraper` via sitemap.xml + schema.org `JobPosting` structured
-  data (JSON-LD or Microdata — both are checked), because that convention
-  turned out to be shared across vendors, while each vendor's private
-  search API is not.
-- **Bugs only surfaced by testing against live sites, not sample data:**
-  a location pre-filter that hard-filtered to zero candidates for
+  data, because that convention turned out to be shared across vendors
+  while each vendor's private search API is not. **Greenhouse got its own
+  type** (`GreenhouseScraper`) despite the same reasoning, because its
+  `boards-api.greenhouse.io` is itself a clean, public, documented REST
+  API — closer in kind to Oracle Fusion than to the sitemap-scraping
+  vendors.
+- **`CustomScraper` grew a render mode and a fallback chain, both found
+  necessary by testing, not designed upfront.** `custom.render: true`
+  switches detail-page fetching to a headless browser (Puppeteer) for
+  tenants that render job content entirely client-side (Standard
+  Chartered's SuccessFactors instance — EY GDS's SuccessFactors instance,
+  by contrast, is server-rendered; same vendor, different deployment).
+  Separately, when structured data is present but incomplete — Standard
+  Chartered's Microdata tags only `description`, not title or location —
+  extraction falls back to the page's `<title>` tag for the title and a
+  known city name in the URL for location, in that order, only filling
+  gaps the stronger source left.
+- **Three bugs only surfaced by testing against live sites, not sample
+  data:** a location pre-filter that hard-filtered to zero candidates for
   platforms whose URL slugs don't embed a city name (fixed: rank instead
-  of filter, degrade to recency when no slug carries a location hint);
-  a JSON-LD-only extractor that silently found nothing on SuccessFactors
-  tenants using Microdata instead (fixed: try both); and an
-  `exclude_keywords`/location matcher using plain `.includes()`, which
-  matched "Intern" inside "international" and "Pune" losing to "India" in
-  a first-match scan — both silently dropped real, legitimate roles
-  (fixed: word-boundary regex matching, longest-match-first for location).
+  of filter); a JSON-LD-only extractor that silently found nothing on
+  Microdata tenants (fixed: try both); and `exclude_keywords`/location
+  matching via plain `.includes()`, which matched "Intern" inside
+  "international" and let "India" win over "Pune" in a first-match scan
+  (fixed: word-boundary regex, longest-match-first for location).
+- **A confirmed platform is not always a green light.** Charles Schwab
+  turned out to be iCIMS, but its robots.txt disallows crawling
+  *everything* (`Disallow: /` for `User-agent: *`), not just careers —
+  moved to `excluded` outright rather than left "pending," since building
+  a scraper for it would mean ignoring what its own robots.txt says.
+  Blackstone's apparent "Workday" signal was actually a Cloudflare
+  bot-challenge page mentioning the word incidentally, confirmed even via
+  a real headless browser — genuinely bot-protected, not a flaky static
+  fetch, so it's a stop per §12, not a "try harder" TODO.
 
-**Remaining inactive employers (16 of 34)** fall into categories, not one
-catch-all "not done yet": genuinely bot-protected (UBS, BNP Paribas,
-Citadel, Blackstone — per §12, not something to work around), confirmed
-platform but needs Puppeteer for a JS-rendered shell (Standard Chartered,
-Vanguard, Goldman Sachs), confirmed platform but the sitemap route doesn't
-work (Charles Schwab's iCIMS 403s on sitemap.xml, Deloitte USI's Avature
-sitemap is a dead stub), or genuinely not yet verified (KPMG, Deutsche
-Bank, Marsh & McLennan, Zurich, Bridgewater, ICE, Morgan Stanley). Each
-has a dated `note` in config explaining which.
+**Remaining inactive employers (12 of 33)**: confirmed bot-protected (UBS,
+BNP Paribas, Blackstone — not something to work around); confirmed
+platform but the sitemap route itself doesn't exist, not just a wrong URL
+(Deloitte USI's Avature robots.txt declares sitemaps for every internal
+HR-workflow portal *except* the public job search — needs bespoke
+selector scraping, a genuinely different build, not a config fix); and
+platforms that render real content even under a full headless browser but
+match no known ATS vendor, so are presumed proprietary in-house builds
+(Vanguard, Goldman Sachs, Morgan Stanley, Deutsche Bank, Citadel) or are
+still unidentified after repeated false-positive vendor-string matches
+(KPMG, Zurich, ICE). Each has a dated `note` in config explaining which.
 
 ---
 
