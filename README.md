@@ -26,13 +26,13 @@ Full setup, including the daily cron and GitHub Actions schedule, is in
 
 ## Status
 
-Currently: **Phase 3 done — live board published, 21/33 employers, 586 real roles.**
+Currently: **Phase 3 done — live board published, 22/33 employers, 593 real roles.**
 
 | Phase | Status |
 |---|---|
 | 0 — Architecture, config, scaffold | ✅ done |
 | 1 — Database + generic scraper (3 pilot sites) | ✅ done |
-| 2 — ATS-specific scrapers | ✅ done — 21/33 employers active (12 Workday, 2 Oracle, 1 Greenhouse, 6 sitemap-based custom), 12 remain inactive (3 bot-protected, 1 needs bespoke scraping, 8 unidentified) — see `docs/ARCHITECTURE.md` §8.1 |
+| 2 — ATS-specific scrapers | ✅ done — 22/33 employers active (12 Workday, 2 Oracle, 1 Greenhouse, 1 Avature, 6 sitemap-based custom), 11 remain inactive (3 bot-protected, 8 unidentified/proprietary) — see `docs/ARCHITECTURE.md` §8.1 |
 | 3 — Frontend job board | ✅ done — search/filter/tabs/marks, built vanilla JS (Artifact CSP has no React CDN). Marks sync live; refreshing the *listings* needs a manual sync step — see `docs/ARCHITECTURE.md` §5.1 |
 | 4 — Scheduling & hardening | ⬜ not started |
 

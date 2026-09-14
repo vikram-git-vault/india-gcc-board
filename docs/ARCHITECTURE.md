@@ -520,17 +520,40 @@ that came out of this:
   a real headless browser — genuinely bot-protected, not a flaky static
   fetch, so it's a stop per §12, not a "try harder" TODO.
 
-**Remaining inactive employers (12 of 33)**: confirmed bot-protected (UBS,
-BNP Paribas, Blackstone — not something to work around); confirmed
-platform but the sitemap route itself doesn't exist, not just a wrong URL
-(Deloitte USI's Avature robots.txt declares sitemaps for every internal
-HR-workflow portal *except* the public job search — needs bespoke
-selector scraping, a genuinely different build, not a config fix); and
-platforms that render real content even under a full headless browser but
-match no known ATS vendor, so are presumed proprietary in-house builds
-(Vanguard, Goldman Sachs, Morgan Stanley, Deutsche Bank, Citadel) or are
-still unidentified after repeated false-positive vendor-string matches
-(KPMG, Zurich, ICE). Each has a dated `note` in config explaining which.
+**Remaining inactive employers (11 of 33)**: confirmed bot-protected (UBS,
+BNP Paribas, Blackstone — not something to work around); and platforms
+that render real content even under a full headless browser but match no
+known ATS vendor, so are presumed proprietary in-house builds (Vanguard,
+Goldman Sachs, Morgan Stanley, Deutsche Bank, Citadel) or are still
+unidentified after repeated false-positive vendor-string matches (KPMG,
+Zurich, ICE). Each has a dated `note` in config explaining which.
+
+### 8.1.1 Phase 2c: Deloitte USI, and a robots.txt parser bug
+
+Deloitte USI's own real career site turned out to be
+`usijobs.deloitte.com/en_US/careersUSI` — a distinctly-branded hostname on
+the same Avature tenant as `deloitteus.avature.net`, not a separate
+platform. It genuinely has no job-search sitemap (its generic
+`sitemap.xml` is a one-entry favicon stub), so a new `AvatureScraper`
+class was built around the only real enumeration surface: the
+server-rendered, paginated search-results HTML
+(`?jobRecordsPerPage=10&jobOffset=N`). Detail pages do carry schema.org
+`JobPosting` JSON-LD, but multi-location postings — the norm on this
+tenant — leave `jobLocation` empty; the real per-city list lives in a
+separate `.article__header--locations` HTML block that JSON-LD doesn't
+cover, so the scraper reads that directly rather than trusting JSON-LD
+location.
+
+Wiring this up surfaced a real bug in `BaseScraper`'s robots.txt parser:
+it matched rules with plain `pathToCheck.startsWith(rule)`, treating `*`
+as a literal character instead of the wildcard the robots.txt spec
+defines it as. Deloitte's robots.txt allows every locale-prefixed careers
+path via `Allow: /*/careers`, but the literal-string check never matched
+it, so the file's catch-all `Disallow: /` silently won and every such
+path read as blocked when it wasn't. Fixed by compiling each rule to a
+real regex (`*` → `.*`, trailing `$` → an end anchor) — verified against
+Deloitte USI (now correctly `allowed: true`) and re-checked against every
+other active employer's robots.txt to confirm none flipped the other way.
 
 ---
 
@@ -555,16 +578,17 @@ correct alternative, not a scraper workaround.
 | BNP Paribas | 403, confirmed bot-protected | https://group.bnpparibas/en/careers |
 | Blackstone | Cloudflare challenge page, confirmed even via headless browser | https://www.blackstone.com/careers |
 
-**Backlog — not yet automated, no policy blocker (9):** these employers
+**Backlog — not yet automated, no policy blocker (8):** these employers
 don't forbid crawling; they just don't fit `CustomScraper`'s sitemap +
 structured-data convention yet, or their real platform hasn't been
 identified. Candidates for a future phase (dedicated CSS-selector
 scrapers per docs/ARCHITECTURE.md §4's "genuinely bespoke" carve-out),
-worth checking by hand in the meantime.
+worth checking by hand in the meantime. (Deloitte USI was in this table
+until 2026-09-14 — see §8.1.1 for the `AvatureScraper` that moved it to
+active.)
 
 | Employer | Status | Job board (check manually) |
 |---|---|---|
-| Deloitte USI | Avature confirmed; no job-listing sitemap exists at all | https://usijobs.deloitte.com/en_US/careersUSI |
 | Vanguard | Real content, no known ATS vendor — likely proprietary | https://www.vanguard.in/ |
 | Goldman Sachs | Real content, no known ATS vendor — likely proprietary | https://higher.gs.com/roles |
 | Morgan Stanley | Real content, no known ATS vendor — likely proprietary | https://www.morganstanley.com/careers/students-graduates/experienced-professionals |

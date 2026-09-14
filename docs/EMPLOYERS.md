@@ -1,7 +1,7 @@
 # Employer Directory
 
 All 36 employers ever considered for the board, and how each is tracked.
-21 are scraped automatically every day; the other 15 are tracked manually
+22 are scraped automatically every day; the other 14 are tracked manually
 — either because the employer's own site says not to crawl it, or because
 nobody's built a scraper for it yet. See `docs/ARCHITECTURE.md` §8.1–8.2
 for the full verification history behind every row, and
@@ -9,7 +9,7 @@ for the full verification history behind every row, and
 
 *Last reviewed: 2026-09-14. Every job board link opens in a new tab.*
 
-## Automated (21)
+## Automated (22)
 
 Scraped daily via `refresh.js`. Platform is the ATS actually confirmed
 live against the real site, not assumed from the original spec.
@@ -37,6 +37,7 @@ live against the real site, not assumed from the original spec.
 | Mastercard | Phenom | <a href="https://careers.mastercard.com" target="_blank" rel="noopener noreferrer">careers.mastercard.com</a> |
 | Marsh & McLennan | Phenom | <a href="https://careers.marsh.com" target="_blank" rel="noopener noreferrer">careers.marsh.com</a> |
 | Bridgewater Associates | Greenhouse | <a href="https://www.bridgewater.com/careers" target="_blank" rel="noopener noreferrer">bridgewater.com/careers</a> |
+| Deloitte USI | Avature | <a href="https://usijobs.deloitte.com/en_US/careersUSI" target="_blank" rel="noopener noreferrer">usijobs.deloitte.com/en_US/careersUSI</a> |
 
 ## Manual — policy stop (6)
 
@@ -54,7 +55,7 @@ scraping. Check these yourself if they matter to you.
 | BNP Paribas | 403, confirmed bot-protected | <a href="https://group.bnpparibas/en/careers" target="_blank" rel="noopener noreferrer">group.bnpparibas/en/careers</a> |
 | Blackstone | Cloudflare challenge, confirmed via headless browser | <a href="https://www.blackstone.com/careers" target="_blank" rel="noopener noreferrer">blackstone.com/careers</a> |
 
-## Manual — backlog (9)
+## Manual — backlog (8)
 
 No policy blocker — just not automated yet. Either a genuinely
 proprietary platform (would need dedicated CSS-selector scraping, not
@@ -63,7 +64,6 @@ the real ATS hasn't been identified.
 
 | Employer | Status | Job board |
 |---|---|---|
-| Deloitte USI | Avature confirmed; no job-listing sitemap exists at all | <a href="https://usijobs.deloitte.com/en_US/careersUSI" target="_blank" rel="noopener noreferrer">usijobs.deloitte.com/en_US/careersUSI</a> |
 | Vanguard | Real content, no known ATS vendor — likely proprietary | <a href="https://www.vanguard.in/" target="_blank" rel="noopener noreferrer">vanguard.in</a> |
 | Goldman Sachs | Real content, no known ATS vendor — likely proprietary | <a href="https://higher.gs.com/roles" target="_blank" rel="noopener noreferrer">higher.gs.com/roles</a> |
 | Morgan Stanley | Real content, no known ATS vendor — likely proprietary | <a href="https://www.morganstanley.com/careers/students-graduates/experienced-professionals" target="_blank" rel="noopener noreferrer">morganstanley.com/careers</a> |
