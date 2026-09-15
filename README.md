@@ -9,7 +9,10 @@ needed to keep it running day to day.
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system
 design, including the ethical scraping policy this project operates under.
 See [`docs/EMPLOYERS.md`](docs/EMPLOYERS.md) for every employer tracked —
-automated or manual — with a direct link to each job board.
+automated or manual — with a direct link to each job board. See
+[`docs/BUILD_LOG.md`](docs/BUILD_LOG.md) for a framework-by-framework,
+concept-by-concept debrief of how this was built — useful reference if
+you want to talk through the project (interview, write-up, etc.).
 
 ## Quick start
 
