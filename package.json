@@ -1,6 +1,6 @@
 {
   "name": "india-gcc-board",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "BFSI global job board scraper - 34 employer career sites",
   "main": "refresh.js",
   "type": "module",
