@@ -1,33 +1,90 @@
 {
-  "_comment": "Title-based targeting rules (lib/targeting.js). Patterns are case-insensitive regex source strings, tested against the role title only. Grades are checked in order; the first match wins. Then: hard exclusions; soft exclusions (skipped when the title also names a technology function); the product-leadership override; the hands-on exclusion; families in order (first match wins). Grade tokens use (^|[^a-z]) instead of \\b because titles like 'AVP_ Data Products' put an underscore (a regex word character) next to the grade.",
-
+  "_comment": "Title-based targeting rules (lib/targeting.js). Patterns are case-insensitive regex source strings, tested against the role title only. Grades are checked in order; the first match wins. Then: hard exclusions; soft exclusions (skipped when the title also names a technology function); the product-leadership override; the hands-on exclusion; families in order (first match wins). Employers that do not put a bank grade in the title (Visa, Invesco, Mastercard, Barclays for some roles) still have senior lead roles: a product owner / product manager / program manager / engineering, development or delivery manager / engineering lead / chapter, squad or tribe lead title with no grade is a target unless it carries a below-AVP marker (Specialist, Associate, Analyst...). leadership_override: these people-leader titles skip the hands-on exclusion (e.g. 'Chapter Lead - Data Engineer'). Grade tokens use (^|[^a-z]) instead of \\b because titles like 'AVP_ Data Products' put an underscore (a regex word character) next to the grade. exclude_support (application/infrastructure support, operations, service desk) excludes a support title unless it is a leader role: it has a support_leader word (manager, head, lead, leader) or a support_leader grade (SVP, Director, Associate Director, Head). User decision 2026-10-13: include engineering leader roles even when they are support roles.",
   "exception_min_fit_score": 75,
-
   "grades": [
-    { "grade": "Managing Director", "tier": "excluded", "pattern": "\\bmanaging director\\b" },
-    { "grade": "EVP / C-level", "tier": "excluded", "pattern": "\\bexecutive vice president\\b|(^|[^a-z])EVP([^a-z]|$)|\\bchief\\b.*\\bofficer\\b|(^|[^a-z])C[TIDO]O([^a-z]|$)" },
-    { "grade": "SVP", "tier": "target", "pattern": "\\bsenior vice president\\b|(^|[^a-z])SVP([^a-z]|$)" },
-    { "grade": "Associate Director", "tier": "target", "pattern": "\\bassociate director\\b" },
-    { "grade": "Director", "tier": "target", "pattern": "\\b(senior|executive|group)?\\s*director\\b" },
-    { "grade": "AVP", "tier": "exception", "pattern": "\\b(senior\\s+)?(assistant|associate) vice president\\b|(^|[^a-z])AVP([^a-z]|$)" },
-    { "grade": "VP", "tier": "target", "pattern": "\\bvice president\\b|(^|[^a-z])VP([^a-z]|$)" },
-    { "grade": "Senior Manager", "tier": "exception", "pattern": "\\b(senior|sr\\.?)\\s*manager\\b" },
-    { "grade": "Head", "tier": "target", "pattern": "\\bhead of\\b|\\bhead\\s+[-–—,:]|\\bhead,|\\bhead\\s*$|\\b(india|global|regional) head\\b" },
-    { "grade": "Manager (ungraded)", "tier": "exception", "pattern": "\\b(senior|sr\\.?|lead|principal|group)\\b.*\\b(product manager|engineering manager|program manager|delivery manager)\\b|\\bsoftware (senior )?engineering manager\\b" }
+    {
+      "grade": "Managing Director",
+      "tier": "excluded",
+      "pattern": "\\bmanaging director\\b"
+    },
+    {
+      "grade": "EVP / C-level",
+      "tier": "excluded",
+      "pattern": "\\bexecutive vice president\\b|(^|[^a-z])EVP([^a-z]|$)|\\bchief\\b.*\\bofficer\\b|(^|[^a-z])C[TIDO]O([^a-z]|$)"
+    },
+    {
+      "grade": "SVP",
+      "tier": "target",
+      "pattern": "\\bsenior vice president\\b|(^|[^a-z])SVP([^a-z]|$)"
+    },
+    {
+      "grade": "Associate Director",
+      "tier": "target",
+      "pattern": "\\bassociate director\\b"
+    },
+    {
+      "grade": "Director",
+      "tier": "target",
+      "pattern": "\\b(senior|executive|group)?\\s*director\\b"
+    },
+    {
+      "grade": "AVP",
+      "tier": "exception",
+      "pattern": "\\b(senior\\s+)?(assistant|associate) vice president\\b|(^|[^a-z])AVP([^a-z]|$)"
+    },
+    {
+      "grade": "VP",
+      "tier": "target",
+      "pattern": "\\bvice president\\b|(^|[^a-z])VP([^a-z]|$)"
+    },
+    {
+      "grade": "Senior Manager",
+      "tier": "exception",
+      "pattern": "\\b(senior|sr\\.?)\\s*manager\\b"
+    },
+    {
+      "grade": "Head",
+      "tier": "target",
+      "pattern": "\\bhead of\\b|\\bhead\\s+[-–—,:]|\\bhead,|\\bhead\\s*$|\\b(india|global|regional) head\\b"
+    },
+    {
+      "grade": "Lead role (ungraded)",
+      "tier": "target",
+      "pattern": "^(?!.*\\b(specialist|associate|analyst|junior|assistant|intern|trainee|apprentice)\\b).*\\b(product owner|product manager|program(me)? manager|product (management )?lead(er)?|delivery lead(er)?|manager,? (software )?engineering|engineer(ing)? manager|development manager|delivery manager|engineering lead(er)?|(chapter|squad|tribe) lead(er)?)\\b"
+    }
   ],
-
-  "exclude_hard": "\\b(legal|audit|accounting|accountant|tax|benefits|talent acquisition|recruit\\w*|private banker|affluent|coverage|liabilities|quant\\w*|sourcing|procurement|deal management|consulting|advisory|marketing|balance sheet|content operations|security|cyber|CISO)\\b",
-
+  "exclude_hard": "\\b(business development|account development|legal|audit|accounting|accountant|tax|benefits|talent acquisition|recruit\\w*|private banker|affluent|coverage|liabilities|quant\\w*|sourcing|procurement|deal management|consulting|advisory|marketing|balance sheet|content operations|security|cyber|CISO)\\b",
   "exclude_soft": "\\b(compliance|risk|finance|financial planning|FP&A|treasury|ALM|people|HR|human resources|sales|relationship|research|growth|fraud)\\b",
-
   "technology_override": "\\b(technology|engineering|platforms?|IT|product management|program management|software|data)\\b",
-
-  "exclude_hands_on": "\\b(engineer|developer|architect|scientist|analyst|specialist|consultant|designer|administrator|SDET)\\b(?!\\s+manager)|\\bengineer in test\\b|\\bproduct design\\b|\\buser interface\\b|\\b(application|infrastructure) support\\b|\\binfrastructure operations\\b|\\bservice desk\\b|\\bsupport engineering\\b",
-
+  "exclude_hands_on": "\\b(engineer|developer|architect|scientist|analyst|specialist|consultant|designer|administrator|SDET)\\b(?!\\s+manager)|\\bengineer in test\\b|\\bproduct design\\b|\\buser interface\\b",
+  "exclude_support": "\\b(application|infrastructure) support\\b|\\binfrastructure operations\\b|\\bservice desk\\b|\\bsupport engineering\\b",
+  "support_leader": {
+    "pattern": "\\b(manager|head|lead|leader)\\b",
+    "grades": [
+      "SVP",
+      "Director",
+      "Associate Director",
+      "Head"
+    ]
+  },
+  "leadership_override": "\\b(engineer(ing)? manager|development manager|delivery manager|engineering lead(er)?|manager,? (software )?engineering|(chapter|squad|tribe) lead(er)?)\\b",
   "families": [
-    { "family": "Product", "overrides_hands_on": true, "pattern": "\\bproduct (management|manager|owner|lead|leader|head)\\b|\\btechnical product (management|manager|owner|lead)\\b|\\bdata products?\\b(?!\\s+(engineer|analyst|developer|architect))" },
-    { "family": "AI / Data leadership", "pattern": "(^|[^a-z])AI([^a-z]|$)|(^|[^a-z])ML([^a-z]|$)|artificial intelligence|machine learning|gen ?AI|mlops|\\bdata\\b|\\banalytics\\b|\\binnovation\\b" },
-    { "family": "Engineering leadership", "pattern": "\\bengineering\\b|\\bengineer manager\\b|\\btechnology\\b|(^|[^a-z])IT([^a-z]|$)|\\bsoftware\\b|\\btechnical manager\\b|\\bdevelopment\\b|\\bcloud\\b|\\bdevops\\b|\\bdevsecops\\b|(^|[^a-z])SRE([^a-z]|$)|\\bsite reliability\\b|\\bmiddleware\\b|\\bmoderni[sz]ation\\b|\\bdigital\\b|\\binfrastructure\\b" },
-    { "family": "Delivery / Program / Transformation", "pattern": "\\bdelivery\\b|\\bprogram(me)?\\b|\\bproject\\b|\\btransformation\\b|\\bimplementation\\b|\\bplatforms?\\b|\\boperating model\\b|\\bportfolio\\b|\\bchange\\b|\\bagile\\b|\\bscrum\\b|\\brelease\\b" }
+    {
+      "family": "Product",
+      "overrides_hands_on": true,
+      "pattern": "\\bproduct (management|manager|owner|lead|leader|head)\\b|\\btechnical product (management|manager|owner|lead)\\b|\\bdata products?\\b(?!\\s+(engineer|analyst|developer|architect))|\\bhead\\s*(of|[-–—,:])\\s*product\\b"
+    },
+    {
+      "family": "AI / Data leadership",
+      "pattern": "(^|[^a-z])AI([^a-z]|$)|(^|[^a-z])ML([^a-z]|$)|artificial intelligence|machine learning|gen ?AI|mlops|\\bdata\\b|\\banalytics\\b|\\binnovation\\b"
+    },
+    {
+      "family": "Engineering leadership",
+      "pattern": "\\b(chapter|squad|tribe) lead(er)?\\b|\\bengineering lead(er)?\\b|\\bdevelopment manager\\b|\\bengineering\\b|\\bengineer manager\\b|\\btechnology\\b|(^|[^a-z])IT([^a-z]|$)|\\bsoftware\\b|\\btechnical manager\\b|\\bdevelopment\\b|\\bcloud\\b|\\bdevops\\b|\\bdevsecops\\b|(^|[^a-z])SRE([^a-z]|$)|\\bsite reliability\\b|\\bmiddleware\\b|\\bmoderni[sz]ation\\b|\\bdigital\\b|\\binfrastructure\\b"
+    },
+    {
+      "family": "Delivery / Program / Transformation",
+      "pattern": "\\bdelivery\\b|\\bprogram(me)?\\b|\\bproject\\b|\\btransformation\\b|\\bimplementation\\b|\\bplatforms?\\b|\\boperating model\\b|\\bportfolio\\b|\\bchange\\b|\\bagile\\b|\\bscrum\\b|\\brelease\\b"
+    }
   ]
 }
