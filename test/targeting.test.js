@@ -1,4 +1,4 @@
-import { classifyRole } from '../lib/targeting.js';
+import { classifyRole, nonItReason } from '../lib/targeting.js';
 import { detectLevel } from '../lib/parser.js';
 
 // Real titles from the scraped data (2026-09-14 snapshot).
@@ -146,5 +146,24 @@ describe('detectLevel (title only)', () => {
   });
   test('grade words still map to lead', () => {
     expect(detectLevel('Vice President, POM Product Owner')).toBe('lead');
+  });
+});
+
+describe('nonItReason (job description check)', () => {
+  const pad = (s) => `${s} `.repeat(Math.ceil(600 / (s.length + 1)));
+  test('hotel facilities engineering is not IT', () => {
+    expect(nonItReason(pad('Manages the physical plant, HVAC, plumbing and refrigeration for the hotel.'))).toMatch(/Not an IT role/);
+  });
+  test('power grid engineering is not IT', () => {
+    expect(nonItReason(pad('Lead HVDC substation EPC projects, power system studies and STATCOM sizing for our engineering teams and systems.'))).toMatch(/Not an IT role/);
+  });
+  test('a software leadership role passes', () => {
+    expect(nonItReason(pad('Lead engineering teams building cloud platforms, APIs and microservices on AWS with agile delivery, CI/CD and automation.'))).toBeNull();
+  });
+  test('one clinical mention in a software role passes', () => {
+    expect(nonItReason(pad('Lead software engineering teams for clinical platforms on AWS cloud with agile delivery, APIs, CI/CD, automation and data pipelines.'))).toBeNull();
+  });
+  test('short descriptions are not judged', () => {
+    expect(nonItReason('HVAC plumbing')).toBeNull();
   });
 });

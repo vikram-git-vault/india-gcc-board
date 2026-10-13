@@ -68,6 +68,12 @@
     ]
   },
   "leadership_override": "\\b(engineer(ing)? manager|development manager|delivery manager|engineering lead(er)?|manager,? (software )?engineering|(chapter|squad|tribe) lead(er)?)\\b",
+  "description_check": {
+    "_comment": "Applied to the full job description (when it has 500+ characters). A role is excluded as non-IT when it has 3+ distinct non-IT signals, or 2+ with fewer than 8 IT signals, or fewer than 2 IT signals. User decision 2026-10-13: remove non-IT jobs from all employers.",
+    "min_chars": 500,
+    "it_signals": "\\b(software|applications?|platforms?|cloud|aws|azure|gcp|data (?:platform|engineering|products?|pipelines?)|apis?|microservices|devops|ci/cd|agile|scrum|digital|technology|technical|engineering teams?|systems?|automation|ai|machine learning|genai|generative ai|llm|saas|integration|architecture|product (?:management|owner|manager|roadmap)|backlog|sdlc|it|infrastructure|cybersecurity|database)\\b",
+    "non_it_signals": "\\b(hvac|plumbing|physical plant|refrigeration|substation|hvdc|statcom|power system studies|epc|transmission|insulation coordination|construction management|clinical|cdisc|adam|biostatistic\\w*|pharmaceutical selling|hcp|oncologist|field sales|sales quota|credit risk model\\w*|pd, lgd|ifrs ?9|stress testing|derivatives pricing|value at risk)\\b"
+  },
   "families": [
     {
       "family": "Product",

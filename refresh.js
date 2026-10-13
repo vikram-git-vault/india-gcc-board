@@ -144,6 +144,15 @@ async function fetchDescriptions(employers) {
   return counts;
 }
 
+// Title rules plus the description check (config/targets.json). Runs after
+// descriptions are fetched, so the description check sees the full text.
+async function reclassify() {
+  const { reclassifyRoles } = await import('./lib/database.js');
+  const { classifyRole, nonItReason } = await import('./lib/targeting.js');
+  const { detectLevel } = await import('./lib/parser.js');
+  return reclassifyRoles(classifyRole, detectLevel, nonItReason);
+}
+
 async function publishRoles() {
   const { publish } = await import('./lib/publisher.js');
   const { rolesWritten, outputPath } = await publish();
@@ -165,16 +174,14 @@ async function main() {
   if (args.includes('--descriptions')) {
     await initDatabase();
     await fetchDescriptions(loadJson(EMPLOYERS_CONFIG).employers);
+    await reclassify();
     await publishRoles();
     return;
   }
 
   if (args.includes('--reclassify')) {
     await initDatabase();
-    const { reclassifyRoles } = await import('./lib/database.js');
-    const { classifyRole } = await import('./lib/targeting.js');
-    const { detectLevel } = await import('./lib/parser.js');
-    const counts = await reclassifyRoles(classifyRole, detectLevel);
+    const counts = await reclassify();
     logger.info(`Reclassified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
     await publishRoles();
     return;
@@ -193,6 +200,8 @@ async function main() {
   const results = await scrapeEmployers(toScrape, filters);
   await syncToDatabase(runId, runStart.toISOString(), results);
   await fetchDescriptions(employers);
+  const counts = await reclassify();
+  logger.info(`Classified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
   await publishRoles();
 
   const okCount = results.filter((r) => r.status === 'ok').length;
