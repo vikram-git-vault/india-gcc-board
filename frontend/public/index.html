@@ -138,6 +138,36 @@
     .card-top { flex-direction: column; gap: 6px; }
     .badges { order: -1; justify-content: flex-start; }
   }
+  .score-row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+  .score {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 3px 9px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-sunk); color: var(--text-muted);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .score strong { font-weight: 600; font-size: 13px; margin-left: 3px; }
+  .score.high { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+  .score.mid { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .score.low { background: var(--surface-sunk); color: var(--text-muted); }
+  .score.pending { border-style: dashed; }
+  .resume-chip { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--info); }
+  .confidence-low { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--critical); }
+  details.why { font-size: 13px; }
+  details.why summary {
+    cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--accent);
+    width: fit-content; list-style: none;
+  }
+  details.why summary::-webkit-details-marker { display: none; }
+  details.why summary::before { content: '▸ '; }
+  details.why[open] summary::before { content: '▾ '; }
+  .why-body { margin-top: 8px; padding: 10px 12px; background: var(--surface-sunk); border-radius: 8px; display: grid; gap: 8px; }
+  .why-body p { margin: 0; }
+  .why-label { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+  .kw-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .kw { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+  .gap-list { margin: 0; padding-left: 18px; }
+  .variant-table { font-family: 'IBM Plex Mono', monospace; font-size: 12px; border-collapse: collapse; }
+  .variant-table td, .variant-table th { padding: 2px 12px 2px 0; text-align: left; font-weight: 400; }
+  .variant-table th { color: var(--text-muted); }
   .card-meta { font-size: 13px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 4px 8px; }
   .card-meta .sep { opacity: 0.5; }
   .card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
@@ -193,6 +223,7 @@
     <div class="freshbar" id="freshbar">
       <span><span class="fresh-dot"></span><strong id="freshTime">—</strong></span>
       <span><strong id="freshCount">—</strong> shortlisted<span class="freshbar-detail" id="freshTargetDetail"></span></span>
+      <span id="freshScoring"></span>
       <span><strong id="freshEmployers">—</strong> employers scraped<span class="freshbar-detail" id="freshEmployersDetail"></span></span>
       <button class="refresh-btn" id="refreshBtn">Refresh now</button>
       <a class="freshbar-link" href="https://github.com/vikram-git-vault/india-gcc-board/blob/main/docs/EMPLOYERS.md" target="_blank" rel="noopener noreferrer">full employer list ↗</a>
@@ -203,12 +234,17 @@
     <div class="search-row">
       <input type="text" class="search" id="search" placeholder="Search title or employer…" aria-label="Search roles">
       <select class="sort" id="sort" aria-label="Sort by">
+        <option value="fit">Best fit first</option>
+        <option value="ats">Best ATS first</option>
         <option value="date">Newest first</option>
         <option value="employer">Employer A–Z</option>
         <option value="title">Title A–Z</option>
       </select>
     </div>
 
+    <div class="facet-row" id="facetScore">
+      <span class="facet-label">Fit</span>
+    </div>
     <div class="facet-row" id="facetGrade">
       <span class="facet-label">Grade</span>
     </div>
@@ -274,13 +310,24 @@
     families: new Set(),
     locations: new Set(),
     employers: new Set(),
-    sort: 'date',
+    sort: 'fit',
+    scoreBands: new Set(),
     tab: 'all',
   };
 
   // Grade order mirrors config/targets.json: target grades first, then exceptions.
   var GRADE_ORDER = ['SVP', 'Director', 'Head', 'Associate Director', 'VP', 'AVP', 'Senior Manager', 'Manager (ungraded)'];
   var FAMILY_ORDER = ['Product', 'Engineering leadership', 'AI / Data leadership', 'Delivery / Program / Transformation'];
+
+  var SCORE_BANDS = [
+    { id: 'fit75', label: 'Fit ≥ 75', test: function (r) { return r.score && r.score.fit >= 75; } },
+    { id: 'fit50', label: 'Fit 50–74', test: function (r) { return r.score && r.score.fit >= 50 && r.score.fit < 75; } },
+    { id: 'fitlow', label: 'Fit < 50', test: function (r) { return r.score && r.score.fit < 50; } },
+    { id: 'unscored', label: 'Not scored', test: function (r) { return !r.score; } },
+  ];
+  var RESUME_LABEL = { PO: 'Product Owner resume', EM: 'Engineering Leader resume' };
+
+  function band(n) { return n >= 75 ? 'high' : n >= 50 ? 'mid' : 'low'; }
 
   function orderedPresent(order, values) {
     var present = uniqueSorted(values);
@@ -321,6 +368,10 @@
   }
 
   function initFacets() {
+    document.getElementById('facetScore').innerHTML = '<span class="facet-label">Fit</span>';
+    var bandLabel = {};
+    SCORE_BANDS.forEach(function (b) { bandLabel[b.id] = b.label; });
+    buildFacetChips('facetScore', SCORE_BANDS.filter(function (b) { return state.roles.some(b.test); }).map(function (b) { return b.id; }), state.scoreBands, function (id) { return bandLabel[id]; });
     document.getElementById('facetGrade').innerHTML = '<span class="facet-label">Grade</span>';
     document.getElementById('facetFamily').innerHTML = '<span class="facet-label">Family</span>';
     document.getElementById('facetLocation').innerHTML = '<span class="facet-label">City</span>';
@@ -333,6 +384,7 @@
   }
 
   function matchesFacets(role) {
+    if (state.scoreBands.size && !SCORE_BANDS.some(function (b) { return state.scoreBands.has(b.id) && b.test(role); })) return false;
     if (state.grades.size && !state.grades.has(role.grade)) return false;
     if (state.families.size && !state.families.has(role.family)) return false;
     if (state.locations.size && !state.locations.has(role.location)) return false;
@@ -353,7 +405,10 @@
 
   function sortRoles(list) {
     var copy = list.slice();
-    if (state.sort === 'date') copy.sort(function (a, b) { return (b.posted_date || '').localeCompare(a.posted_date || ''); });
+    function scoreKey(r, key) { return r.score ? r.score[key] : -1; }
+    if (state.sort === 'fit') copy.sort(function (a, b) { return scoreKey(b, 'fit') - scoreKey(a, 'fit') || scoreKey(b, 'ats') - scoreKey(a, 'ats'); });
+    else if (state.sort === 'ats') copy.sort(function (a, b) { return scoreKey(b, 'ats') - scoreKey(a, 'ats') || scoreKey(b, 'fit') - scoreKey(a, 'fit'); });
+    else if (state.sort === 'date') copy.sort(function (a, b) { return (b.posted_date || '').localeCompare(a.posted_date || ''); });
     else if (state.sort === 'employer') copy.sort(function (a, b) { return a.employer.localeCompare(b.employer); });
     else if (state.sort === 'title') copy.sort(function (a, b) { return a.title.localeCompare(b.title); });
     return copy;
@@ -381,6 +436,7 @@
           '<span class="badges">' + exceptionBadge + '<span class="level-badge ' + gradeClass + '">' + escapeHtml(role.grade || '') + '</span></span>' +
         '</div>' +
         '<div class="card-meta">' + meta + ' <span class="sep">·</span> ' + posted + '</div>' +
+        scoreHtml(role) +
         '<div class="card-actions">' +
           '<a class="apply-link" href="' + escapeHtml(safeUrl(role.job_url)) + '" target="_blank" rel="noopener noreferrer">View &amp; Apply ↗</a>' +
           '<div class="mark-group">' +
@@ -391,6 +447,43 @@
           '</div>' +
         '</div>' +
       '</div>';
+  }
+
+  function scoreHtml(role) {
+    var sc = role.score;
+    if (!sc) {
+      var why = role.description_status === 'gone' ? 'posting closed' : 'waiting for a score';
+      return '<div class="score-row">' +
+        '<span class="score pending" title="ATS match of your resume text to this description">ATS <strong>—</strong></span>' +
+        '<span class="score pending" title="How a recruiter would rate your fit">Fit <strong>—</strong></span>' +
+        '<span class="resume-chip">' + why + '</span></div>';
+    }
+    var staleNote = sc.stale
+      ? '<span class="confidence-low" title="The job description or the rubric changed after this score. Score the role again.">score out of date</span>'
+      : '';
+    var lowConf = sc.confidence === 'low'
+      ? '<span class="confidence-low" title="Scored from the title only; no full job description was available">title only</span>'
+      : '';
+    var kw = (sc.matched_keywords || []).map(function (k) { return '<span class="kw">' + escapeHtml(k) + '</span>'; }).join('');
+    var gaps = (sc.gaps || []).map(function (g) { return '<li>' + escapeHtml(g) + '</li>'; }).join('');
+    var v = sc.variants || {};
+    function variantRow(key) {
+      var x = v[key] || {};
+      return '<tr><td>' + key + (key === sc.recommended ? ' ✓' : '') + '</td><td>' + x.ats + '</td><td>' + x.fit + '</td></tr>';
+    }
+    return '' +
+      '<div class="score-row">' +
+        '<span class="score ' + band(sc.ats) + '" title="ATS: how well your resume text matches this job description (0–100)">ATS <strong>' + sc.ats + '</strong></span>' +
+        '<span class="score ' + band(sc.fit) + '" title="Fit: how a recruiter would rate your experience for this role (0–100)">Fit <strong>' + sc.fit + '</strong></span>' +
+        '<span class="resume-chip">Send: ' + escapeHtml(RESUME_LABEL[sc.recommended] || sc.recommended) + '</span>' +
+        lowConf + staleNote +
+      '</div>' +
+      '<details class="why" data-role-id="' + role.id + '"' + (openWhy[role.id] ? ' open' : '') + '><summary>Why this score</summary><div class="why-body">' +
+        '<p>' + escapeHtml(sc.reason) + '</p>' +
+        (kw ? '<div><div class="why-label">Matched in your resume</div><div class="kw-list">' + kw + '</div></div>' : '') +
+        (gaps ? '<div><div class="why-label">Gaps to address</div><ul class="gap-list">' + gaps + '</ul></div>' : '') +
+        '<div><div class="why-label">Both resumes</div><table class="variant-table"><tr><th>Resume</th><th>ATS</th><th>Fit</th></tr>' + variantRow('PO') + variantRow('EM') + '</table></div>' +
+      '</div></details>';
   }
 
   function safeUrl(url) {
@@ -414,6 +507,16 @@
     void el.offsetWidth;
     el.classList.add('pulse');
   }
+
+  // Open "Why this score" panels survive re-renders (e.g. clicking a mark).
+  var openWhy = {};
+  document.addEventListener('toggle', function (e) {
+    var el = e.target;
+    if (el.classList && el.classList.contains('why')) {
+      var id = el.getAttribute('data-role-id');
+      if (el.open) openWhy[id] = true; else delete openWhy[id];
+    }
+  }, true);
 
   function applyRender() {
     var filtered = state.roles.filter(function (r) { return matchesFacets(r) && matchesTab(r); });
@@ -465,8 +568,17 @@
     document.getElementById('freshTime').textContent = state.meta.last_refresh ? relativeTime(state.meta.last_refresh) : 'unknown';
     flashStat(document.getElementById('freshCount'), state.roles.length);
     var t = state.targeting;
+    var scoringEl = document.getElementById('freshScoring');
+    if (t && t.scored != null) {
+      var parts = ['<strong>' + t.scored + '</strong> scored'];
+      if (t.unscored) parts.push(t.unscored + ' waiting for a score');
+      if (t.exceptions_hidden) parts.push(t.exceptions_hidden + ' exception roles hidden (fit &lt; ' + t.exception_min_fit + ')');
+      scoringEl.innerHTML = parts.join(' · ');
+    } else {
+      scoringEl.textContent = '';
+    }
     document.getElementById('freshTargetDetail').textContent = t
-      ? ' (' + t.target + ' target, ' + t.exception + ' exception, of ' + t.scanned + ' scanned)'
+      ? ' (' + t.target + ' target, ' + (t.exception_shown != null ? t.exception_shown : t.exception) + ' exception, of ' + t.scanned + ' scanned)'
       : '';
 
     // Count employers over every scraped role, not just the shortlist.
@@ -491,7 +603,7 @@
   document.getElementById('emptyClear').addEventListener('click', function () { resetFacets(); });
 
   function resetFacets() {
-    state.grades.clear(); state.families.clear(); state.locations.clear(); state.employers.clear();
+    state.scoreBands.clear(); state.grades.clear(); state.families.clear(); state.locations.clear(); state.employers.clear();
     state.query = ''; document.getElementById('search').value = '';
     Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', 'false'); });
     render();
