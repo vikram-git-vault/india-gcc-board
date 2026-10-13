@@ -24,7 +24,7 @@ data/roles.json
 data/artifact-sync.json
 data/schedule.json
 frontend/job-board.built.html
-logs/*.log
+logs/
 
 # Cache
 .cache/
