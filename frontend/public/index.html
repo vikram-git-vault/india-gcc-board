@@ -262,7 +262,7 @@
     </div>
 
     <ul class="stats" id="freshbar">
-      <li><span class="fresh-dot"></span>Updated <strong id="freshTime">—</strong></li>
+      <li><span class="fresh-dot"></span>Updated <strong id="freshTime">—</strong><span id="freshTimeExact"></span></li>
       <li><strong id="freshCount">—</strong>roles on your board<span id="freshTargetDetail"></span></li>
       <li id="freshScoring"></li>
       <li><strong id="freshEmployers">—</strong>employers scraped<span id="freshEmployersDetail"></span></li>
@@ -383,6 +383,18 @@
     if (hrs < 24) return hrs + (hrs === 1 ? ' hour ago' : ' hours ago');
     var days = Math.round(hrs / 24);
     return days + (days === 1 ? ' day ago' : ' days ago');
+  }
+
+  // "13 Oct 2026, 6:42 PM IST" in the viewer's own time zone.
+  function exactTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    try {
+      return d.toLocaleString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+      });
+    } catch (e) { return d.toString(); }
   }
 
   function buildFacetChips(containerId, values, activeSet, labelFn) {
@@ -604,6 +616,9 @@
 
   function renderFreshbar() {
     document.getElementById('freshTime').textContent = state.meta.last_refresh ? relativeTime(state.meta.last_refresh) : 'unknown';
+    document.getElementById('freshTimeExact').textContent = state.meta.last_refresh
+      ? ' (' + exactTime(state.meta.last_refresh) + ')'
+      : '';
     flashStat(document.getElementById('freshCount'), state.roles.length);
     var t = state.targeting;
     var scoringEl = document.getElementById('freshScoring');
