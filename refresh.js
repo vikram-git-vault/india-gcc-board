@@ -107,6 +107,17 @@ async function main() {
     return;
   }
 
+  if (args.includes('--reclassify')) {
+    await initDatabase();
+    const { reclassifyRoles } = await import('./lib/database.js');
+    const { classifyRole } = await import('./lib/targeting.js');
+    const { detectLevel } = await import('./lib/parser.js');
+    const counts = await reclassifyRoles(classifyRole, detectLevel);
+    logger.info(`Reclassified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
+    await publishRoles();
+    return;
+  }
+
   const employers = loadJson(EMPLOYERS_CONFIG).employers;
   const filters = loadJson(FILTERS_CONFIG);
 

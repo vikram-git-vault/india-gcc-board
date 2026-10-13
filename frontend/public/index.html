@@ -97,7 +97,7 @@
     cursor: pointer; text-decoration: underline; padding: 2px 4px;
   }
 
-  .tabs { display: flex; gap: 4px; margin: 18px 0 4px; border-bottom: 1px solid var(--border); }
+  .tabs { display: flex; gap: 4px; margin: 18px 0 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .tab {
     font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 8px 14px; border: none; background: none;
     color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
@@ -127,10 +127,17 @@
     font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
     padding: 3px 8px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;
   }
-  .level-lead { background: var(--accent-soft); color: var(--accent); }
-  .level-senior { background: var(--info-soft); color: var(--info); }
-  .level-mid { background: var(--success-soft); color: var(--success); }
-  .level-entry { background: var(--surface-sunk); color: var(--text-muted); }
+  .grade-target { background: var(--accent-soft); color: var(--accent); }
+  .grade-exception { background: var(--surface-sunk); color: var(--text-muted); }
+  .badges { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .exception-badge {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 4px; white-space: nowrap; border: 1px dashed var(--text-muted); color: var(--text-muted);
+  }
+  @media (max-width: 520px) {
+    .card-top { flex-direction: column; gap: 6px; }
+    .badges { order: -1; justify-content: flex-start; }
+  }
   .card-meta { font-size: 13px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 4px 8px; }
   .card-meta .sep { opacity: 0.5; }
   .card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
@@ -185,7 +192,7 @@
     <h1>India GCC Board</h1>
     <div class="freshbar" id="freshbar">
       <span><span class="fresh-dot"></span><strong id="freshTime">—</strong></span>
-      <span><strong id="freshCount">—</strong> active roles</span>
+      <span><strong id="freshCount">—</strong> shortlisted<span class="freshbar-detail" id="freshTargetDetail"></span></span>
       <span><strong id="freshEmployers">—</strong> employers scraped<span class="freshbar-detail" id="freshEmployersDetail"></span></span>
       <button class="refresh-btn" id="refreshBtn">Refresh now</button>
       <a class="freshbar-link" href="https://github.com/vikram-git-vault/india-gcc-board/blob/main/docs/EMPLOYERS.md" target="_blank" rel="noopener noreferrer">full employer list ↗</a>
@@ -202,17 +209,17 @@
       </select>
     </div>
 
-    <div class="facet-row" id="facetLevel">
-      <span class="facet-label">Level</span>
+    <div class="facet-row" id="facetGrade">
+      <span class="facet-label">Grade</span>
+    </div>
+    <div class="facet-row" id="facetFamily">
+      <span class="facet-label">Family</span>
     </div>
     <div class="facet-row" id="facetLocation">
       <span class="facet-label">City</span>
     </div>
     <div class="facet-row" id="facetEmployer">
       <span class="facet-label">Employer</span>
-    </div>
-    <div class="facet-row" id="facetPriority">
-      <span class="facet-label">Focus area</span>
     </div>
     <div class="facet-row">
       <button class="clear-link" id="clearFilters">Clear all filters</button>
@@ -260,19 +267,26 @@
     roles: [],
     meta: {},
     coverage: { fetchedCount: 0, totalTracked: 0, manualCount: 0 },
+    targeting: null,
     marks: loadMarks(),   // roleId -> status, persisted in this browser only
     query: '',
-    levels: new Set(),
+    grades: new Set(),
+    families: new Set(),
     locations: new Set(),
     employers: new Set(),
-    priorities: new Set(),
     sort: 'date',
     tab: 'all',
   };
 
-  var PRIORITY_KEYWORDS = ['Global Capability Center', 'GCC', 'Center of Excellence', 'Digital Transformation', 'Risk Management', 'Regulatory', 'Compliance', 'Technology', 'Data & Analytics', 'Operations'];
-  var LEVEL_ORDER = ['lead', 'senior', 'mid', 'entry'];
-  var LEVEL_LABEL = { lead: 'Lead', senior: 'Senior', mid: 'Mid', entry: 'Entry' };
+  // Grade order mirrors config/targets.json: target grades first, then exceptions.
+  var GRADE_ORDER = ['SVP', 'Director', 'Head', 'Associate Director', 'VP', 'AVP', 'Senior Manager', 'Manager (ungraded)'];
+  var FAMILY_ORDER = ['Product', 'Engineering leadership', 'AI / Data leadership', 'Delivery / Program / Transformation'];
+
+  function orderedPresent(order, values) {
+    var present = uniqueSorted(values);
+    return order.filter(function (v) { return present.indexOf(v) !== -1; })
+      .concat(present.filter(function (v) { return order.indexOf(v) === -1; }));
+  }
 
   function uniqueSorted(values) {
     return Array.from(new Set(values.filter(Boolean))).sort();
@@ -307,27 +321,22 @@
   }
 
   function initFacets() {
-    document.getElementById('facetLevel').innerHTML = '<span class="facet-label">Level</span>';
+    document.getElementById('facetGrade').innerHTML = '<span class="facet-label">Grade</span>';
+    document.getElementById('facetFamily').innerHTML = '<span class="facet-label">Family</span>';
     document.getElementById('facetLocation').innerHTML = '<span class="facet-label">City</span>';
     document.getElementById('facetEmployer').innerHTML = '<span class="facet-label">Employer</span>';
-    document.getElementById('facetPriority').innerHTML = '<span class="facet-label">Focus area</span>';
 
-    buildFacetChips('facetLevel', LEVEL_ORDER.filter(function (l) { return state.roles.some(function (r) { return r.experience_level === l; }); }), state.levels, function (v) { return LEVEL_LABEL[v] || v; });
+    buildFacetChips('facetGrade', orderedPresent(GRADE_ORDER, state.roles.map(function (r) { return r.grade; })), state.grades);
+    buildFacetChips('facetFamily', orderedPresent(FAMILY_ORDER, state.roles.map(function (r) { return r.family; })), state.families);
     buildFacetChips('facetLocation', uniqueSorted(state.roles.map(function (r) { return r.location; })), state.locations);
     buildFacetChips('facetEmployer', uniqueSorted(state.roles.map(function (r) { return r.employer; })), state.employers);
-    buildFacetChips('facetPriority', PRIORITY_KEYWORDS, state.priorities);
   }
 
   function matchesFacets(role) {
-    if (state.levels.size && !state.levels.has(role.experience_level)) return false;
+    if (state.grades.size && !state.grades.has(role.grade)) return false;
+    if (state.families.size && !state.families.has(role.family)) return false;
     if (state.locations.size && !state.locations.has(role.location)) return false;
     if (state.employers.size && !state.employers.has(role.employer)) return false;
-    if (state.priorities.size) {
-      var hay = role.title.toLowerCase();
-      var hit = false;
-      state.priorities.forEach(function (p) { if (hay.indexOf(p.toLowerCase()) !== -1) hit = true; });
-      if (!hit) return false;
-    }
     if (state.query) {
       var q = state.query.toLowerCase();
       if (role.title.toLowerCase().indexOf(q) === -1 && role.employer.toLowerCase().indexOf(q) === -1) return false;
@@ -352,8 +361,12 @@
 
   function cardHtml(role) {
     var mark = markOf(role);
-    var levelClass = 'level-' + (role.experience_level || 'entry');
-    var meta = [role.employer, role.location, role.department].filter(Boolean).join(' <span class="sep">·</span> ');
+    var gradeClass = role.tier === 'exception' ? 'grade-exception' : 'grade-target';
+    var department = role.department && role.department !== role.employer ? role.department : null;
+    var meta = [role.employer, role.location, role.family, department].filter(Boolean).map(escapeHtml).join(' <span class="sep">·</span> ');
+    var exceptionBadge = role.tier === 'exception'
+      ? '<span class="exception-badge" title="Exception grade (AVP / Senior Manager): kept on the board only when its AI fit score is 75 or more">Exception</span>'
+      : '';
     var posted = role.posted_date ? relativeTime(role.posted_date + 'T00:00:00Z') : 'date unknown';
 
     function markBtn(value, label) {
@@ -365,11 +378,11 @@
       '<div class="card" style="view-transition-name: role-' + role.id + '">' +
         '<div class="card-top">' +
           '<span class="card-title">' + escapeHtml(role.title) + '</span>' +
-          '<span class="level-badge ' + levelClass + '">' + (LEVEL_LABEL[role.experience_level] || role.experience_level || '') + '</span>' +
+          '<span class="badges">' + exceptionBadge + '<span class="level-badge ' + gradeClass + '">' + escapeHtml(role.grade || '') + '</span></span>' +
         '</div>' +
         '<div class="card-meta">' + meta + ' <span class="sep">·</span> ' + posted + '</div>' +
         '<div class="card-actions">' +
-          '<a class="apply-link" href="' + role.job_url + '" target="_blank" rel="noopener noreferrer">View &amp; Apply ↗</a>' +
+          '<a class="apply-link" href="' + escapeHtml(safeUrl(role.job_url)) + '" target="_blank" rel="noopener noreferrer">View &amp; Apply ↗</a>' +
           '<div class="mark-group">' +
             markBtn('interested', 'Interested') +
             markBtn('applied', 'Applied') +
@@ -378,6 +391,10 @@
           '</div>' +
         '</div>' +
       '</div>';
+  }
+
+  function safeUrl(url) {
+    return /^https?:\/\//i.test(url || '') ? url : '#';
   }
 
   function escapeHtml(s) {
@@ -447,8 +464,15 @@
   function renderFreshbar() {
     document.getElementById('freshTime').textContent = state.meta.last_refresh ? relativeTime(state.meta.last_refresh) : 'unknown';
     flashStat(document.getElementById('freshCount'), state.roles.length);
+    var t = state.targeting;
+    document.getElementById('freshTargetDetail').textContent = t
+      ? ' (' + t.target + ' target, ' + t.exception + ' exception, of ' + t.scanned + ' scanned)'
+      : '';
 
-    var withResults = uniqueSorted(state.roles.map(function (r) { return r.employer; })).length;
+    // Count employers over every scraped role, not just the shortlist.
+    var withResults = state.coverage.withRoles != null
+      ? state.coverage.withRoles
+      : uniqueSorted(state.roles.map(function (r) { return r.employer; })).length;
     var fetched = state.coverage.fetchedCount;
     var total = state.coverage.totalTracked;
     var noResults = Math.max(fetched - withResults, 0);
@@ -467,7 +491,7 @@
   document.getElementById('emptyClear').addEventListener('click', function () { resetFacets(); });
 
   function resetFacets() {
-    state.levels.clear(); state.locations.clear(); state.employers.clear(); state.priorities.clear();
+    state.grades.clear(); state.families.clear(); state.locations.clear(); state.employers.clear();
     state.query = ''; document.getElementById('search').value = '';
     Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', 'false'); });
     render();
@@ -491,6 +515,7 @@
       state.roles = payload.roles || [];
       state.meta = payload.meta || {};
       state.coverage = payload.coverage || state.coverage;
+      state.targeting = payload.targeting || null;
       document.getElementById('syncStatus').textContent = 'Served locally by server.js.';
       document.querySelector('.fresh-dot').classList.add('live');
       initFacets();
