@@ -110,6 +110,25 @@ The change has an effect immediately. You do not have to restart the server.
 The server keeps the setting in `data/schedule.json`. Git ignores this file.
 If the file does not exist, the server uses `REFRESH_CRON` in `.env` as the daily time.
 
+### 5.2 Missed refreshes (the computer was asleep)
+
+If the computer sleeps at the daily time, the refresh does not start at that time.
+The server checks every 5 minutes, and 30 seconds after it starts. If a daily refresh was due and no refresh started after that time, the server starts the refresh immediately.
+For example, when you open the computer at 08:30, the refresh starts within approximately 5 minutes.
+The server makes only one catch-up attempt for each due time. The check does nothing in the **On demand only** mode.
+
+> **NOTE:** To refresh before you start work, you can also wake the computer before the daily time. On macOS, run `sudo pmset repeat wakeorpoweron MTWRFSU 05:55:00`. A MacBook with a closed lid on battery power can stay asleep.
+
+### 5.3 Keep the server running with pm2
+
+1. Install pm2: `npm install -g pm2`.
+2. Start the server: `pm2 start server.js --name india-gcc-board`.
+3. Run `pm2 startup` and run the command that it shows.
+4. Run `pm2 save`.
+5. After a change to the code, run `pm2 restart india-gcc-board`.
+
+To see the server messages, run `pm2 logs india-gcc-board`.
+
 > **NOTE:** The daily refresh occurs only while the server runs. To keep the server running after you close the shell, use a process manager. For example: `pm2 start server.js --name india-gcc-board`, or a `launchd` agent on macOS.
 
 ## 6. Score the roles

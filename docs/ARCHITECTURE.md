@@ -364,6 +364,7 @@ The board runs on your own computer. Only your own devices can open it. This was
    - `GET /api/schedule` gives the current schedule.
    - `PUT /api/schedule` changes the schedule. `lib/schedule.js` validates the data. The server saves it in `data/schedule.json` and replaces the cron job immediately.
    - When `data/schedule.json` does not exist, `REFRESH_CRON` gives the daily time (default `0 6 * * *`). `TZ` sets the time zone (default `Asia/Kolkata`).
+3. It catches up a missed daily refresh. `node-cron` does not run a missed time again after the computer wakes. Thus the server checks every 5 minutes and 30 seconds after it starts. `isRefreshMissed()` in `lib/schedule.js` compares the most recent due time with the latest refresh time. If the refresh is missed, the server starts it. The server makes one attempt for each due time.
 
 To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:
 

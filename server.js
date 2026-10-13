@@ -15,7 +15,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
-import { validateSchedule, defaultSchedule, timeToCron } from './lib/schedule.js';
+import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
 
 const logger = createLogger('server');
 
@@ -84,6 +84,36 @@ function applySchedule() {
 }
 
 applySchedule();
+
+// Catch-up: a Mac asleep at the scheduled time misses the cron tick, and
+// node-cron does not replay it. Every few minutes (and soon after start),
+// run the refresh if one was due and none has run since. One attempt for
+// each due time, so a failing refresh does not repeat every check.
+const CATCH_UP_EVERY_MS = 5 * 60 * 1000;
+let catchUpTriedFor = null;
+
+function lastRefreshAt() {
+  const times = [refreshState.lastStartedAt];
+  try {
+    const meta = JSON.parse(fs.readFileSync(ROLES_PATH, 'utf-8')).meta || {};
+    times.push(meta.last_refresh);
+  } catch (err) { /* no data yet */ }
+  const valid = times.filter(Boolean).map((t) => new Date(t)).filter((d) => !Number.isNaN(d.getTime()));
+  return valid.length ? new Date(Math.max(...valid)).toISOString() : null;
+}
+
+function catchUpIfMissed() {
+  const now = new Date();
+  if (refreshState.running || !isRefreshMissed(schedule, lastRefreshAt(), now, REFRESH_TIMEZONE)) return;
+  const due = lastScheduledTime(now, schedule.time, REFRESH_TIMEZONE).toISOString();
+  if (catchUpTriedFor === due) return;
+  catchUpTriedFor = due;
+  logger.info(`Missed the refresh due at ${due} (computer asleep or server off); starting it now`);
+  runRefresh('catch-up');
+}
+
+setTimeout(catchUpIfMissed, 30 * 1000);
+setInterval(catchUpIfMissed, CATCH_UP_EVERY_MS);
 
 const app = express();
 
