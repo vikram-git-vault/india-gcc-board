@@ -2,15 +2,15 @@
 
 This document lists all 149 employers and the method that tracks each employer.
 
-- The refresh scrapes 57 employers automatically.
-- You must check 89 employers manually. A scraper for their career site does not exist yet, or their site does not show India roles.
+- The refresh scrapes 56 employers automatically.
+- You must check 90 employers manually. A scraper for their career site does not exist yet, or their site does not show India roles.
 - 3 employers are excluded because their site does not permit crawlers.
 
 A script makes this document from `config/employers.json`. Do not edit the tables by hand. For the dated finding for each employer, refer to the `note` field in `config/employers.json`.
 
 *Last update: 2026-10-13. Each career site link opens in a new tab.*
 
-## Automated (57)
+## Automated (56)
 
 The refresh scrapes these employers. The platform column gives the ATS that a test on the live site confirmed.
 
@@ -47,7 +47,6 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | Invesco | BFSI | Workday | <a href="https://invesco.wd1.myworkdayjobs.com/IVZ" target="_blank" rel="noopener noreferrer">invesco.wd1.myworkdayjobs.com/IVZ</a> |
 | LPL Financial | BFSI | Workday | <a href="https://lplfinancial.wd1.myworkdayjobs.com/India_Ext" target="_blank" rel="noopener noreferrer">lplfinancial.wd1.myworkdayjobs.com/India_Ext</a> |
 | LSEG | BFSI | Workday | <a href="https://lseg.wd3.myworkdayjobs.com/Careers" target="_blank" rel="noopener noreferrer">lseg.wd3.myworkdayjobs.com/Careers</a> |
-| Marriott (Tech Accelerator) | Other industry | Oracle Fusion | <a href="https://careers.marriott.com/" target="_blank" rel="noopener noreferrer">careers.marriott.com</a> |
 | Marsh & McLennan | BFSI | Custom (sitemap) | <a href="https://careers.marsh.com" target="_blank" rel="noopener noreferrer">careers.marsh.com</a> |
 | Mastercard | BFSI | Custom (sitemap) | <a href="https://careers.mastercard.com" target="_blank" rel="noopener noreferrer">careers.mastercard.com</a> |
 | Medtronic | Other industry | Workday | <a href="https://medtronic.wd1.myworkdayjobs.com/MedtronicCareers" target="_blank" rel="noopener noreferrer">medtronic.wd1.myworkdayjobs.com/MedtronicCareers</a> |
@@ -74,7 +73,7 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | ZEISS | Other industry | Workday | <a href="https://zeissgroup.wd3.myworkdayjobs.com/External" target="_blank" rel="noopener noreferrer">zeissgroup.wd3.myworkdayjobs.com/External</a> |
 | Zinnia | BFSI | Greenhouse | <a href="https://www.zinnia.com/careers/" target="_blank" rel="noopener noreferrer">www.zinnia.com/careers</a> |
 
-## Manual (89)
+## Manual (90)
 
 Check these career sites yourself. The reason column tells why the refresh does not scrape the employer.
 
@@ -132,6 +131,7 @@ Check these career sites yourself. The reason column tells why the refresh does 
 | Lonza | Other industry | Not known | ATS not detected. | <a href="https://www.lonza.com/careers" target="_blank" rel="noopener noreferrer">www.lonza.com/careers</a> |
 | lululemon | Other industry | Not known | Careers page timed out. | <a href="https://careers.lululemon.com/" target="_blank" rel="noopener noreferrer">careers.lululemon.com</a> |
 | Macquarie | BFSI | Workday | Workday site guess mq/wd3/CareersatMQ returns 0 India roles. | <a href="https://mq.wd3.myworkdayjobs.com/CareersatMQ" target="_blank" rel="noopener noreferrer">mq.wd3.myworkdayjobs.com/CareersatMQ</a> |
+| Marriott (Tech Accelerator) | Other industry | Oracle Fusion | Oracle CE API returns 1526 India roles (mostly hotel jobs; targeting keeps the Hyderabad tech accelerator leadership roles). | <a href="https://careers.marriott.com/" target="_blank" rel="noopener noreferrer">careers.marriott.com</a> |
 | McDonald's (India GCC) | Other industry | Not known | ATS not detected. | <a href="https://careers.mcdonalds.com/" target="_blank" rel="noopener noreferrer">careers.mcdonalds.com</a> |
 | MetLife | BFSI | Avature | Avature; needs search_url and selector check. | <a href="https://www.metlifecareers.com/" target="_blank" rel="noopener noreferrer">www.metlifecareers.com</a> |
 | Microchip | Other industry | Not known | ATS not detected. | <a href="https://careers.microchip.com/" target="_blank" rel="noopener noreferrer">careers.microchip.com</a> |

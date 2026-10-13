@@ -562,9 +562,16 @@ The classifier does these steps in this sequence:
    A support or operations title (`exclude_support`) is excluded only when it is not a leader role. A leader role has a leader word (manager, head, lead, leader) or the grade SVP, Director, Associate Director or Head. For example, "Engineering Manager - Application Support" is a target. The classifier excludes "VP, Production Services Application Support".
 5. **Family.** The first family pattern that matches: Product; AI / Data leadership; Engineering leadership; Delivery / Program / Transformation. The classifier excludes a role that has no family.
 
+6. **Description check.** After the refresh gets the job descriptions, it checks the full text of each target role and exception role (`description_check` in `config/targets.json`). The check counts distinct IT signals, for example software, cloud, platform, API and agile. It also counts distinct non-IT signals, for example HVAC, HVDC, substation, clinical and CDISC. The check excludes the role in these conditions:
+   - The description has 3 or more non-IT signals.
+   - The description has 2 or more non-IT signals and fewer than 8 IT signals.
+   - The description has fewer than 2 IT signals.
+
+   The check does not judge a description with fewer than 500 characters.
+
 The grade patterns use `(^|[^a-z])AVP([^a-z]|$)` and not `\bAVP\b`. Some titles put an underscore next to the grade (for example "AVP_ Data Products"), and an underscore is a word character in a regular expression.
 
-The database keeps all roles, also the excluded roles. Only target roles and exception roles go to `data/roles.json`.
+The database keeps all roles, also the excluded roles. Only target roles and exception roles of active employers go to `data/roles.json`.
 `test/targeting.test.js` has 111 real and constructed titles.
 
 ---
