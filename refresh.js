@@ -3,6 +3,7 @@
  * refresh.js — main orchestrator for the BFSI job board.
  *
  * Pipeline: init db -> scrape employers -> parse roles -> sync to db
+ *           (--only=id1,id2 limits the scrape to those employers)
  *           -> write data/roles.json for the local server to serve.
  *
  * data/roles.json is read live by server.js's GET /api/roles — there is
@@ -182,8 +183,14 @@ async function main() {
   const employers = loadJson(EMPLOYERS_CONFIG).employers;
   const filters = loadJson(FILTERS_CONFIG);
 
+  // --only id1,id2: scrape just these employers (e.g. newly added ones).
+  const onlyArg = args.find((a) => a.startsWith('--only='));
+  const only = onlyArg ? new Set(onlyArg.slice('--only='.length).split(',').filter(Boolean)) : null;
+  const toScrape = only ? employers.filter((e) => only.has(e.id)) : employers;
+  if (only) logger.info(`Scraping only: ${toScrape.map((e) => e.id).join(', ')}`);
+
   await initDatabase();
-  const results = await scrapeEmployers(employers, filters);
+  const results = await scrapeEmployers(toScrape, filters);
   await syncToDatabase(runId, runStart.toISOString(), results);
   await fetchDescriptions(employers);
   await publishRoles();
