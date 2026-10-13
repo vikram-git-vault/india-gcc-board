@@ -89,6 +89,60 @@ async function syncToDatabase(runId, startTime, results) {
   logger.info('Sync complete');
 }
 
+// Detail requests for shortlisted roles only (lib/descriptions.js), one
+// employer at a time with that employer's crawl delay between requests.
+async function fetchDescriptions(employers) {
+  const { getRolesNeedingDescription, saveDescriptionResult } = await import('./lib/database.js');
+  const { fetchDescription, MIN_FULL_DESCRIPTION_CHARS } = await import('./lib/descriptions.js');
+  const bySlug = new Map(employers.map((e) => [e.id, e]));
+
+  const roles = await getRolesNeedingDescription(MIN_FULL_DESCRIPTION_CHARS);
+  logger.info(`Fetching descriptions for ${roles.length} shortlisted roles`);
+  const counts = { ok: 0, gone: 0, error: 0, skipped: 0 };
+
+  // Group by employer so a suspicious wave of closures can be held back:
+  // if most of one employer's roles come back 'gone', the detail API more
+  // likely changed than the roles all closed, so record an error instead.
+  const groups = new Map();
+  roles.forEach((role) => {
+    if (!groups.has(role.employer_slug)) groups.set(role.employer_slug, []);
+    groups.get(role.employer_slug).push(role);
+  });
+
+  for (const [slug, group] of groups) {
+    const employer = bySlug.get(slug);
+    const results = [];
+    for (const role of group) {
+      const result = employer
+        ? await fetchDescription(role, employer)
+        : { status: 'skipped', message: `employer ${slug} not in config` };
+      results.push([role, result]);
+      if (result.status !== 'skipped') {
+        const delayMs = ((employer && employer.crawl_delay_seconds) || 5) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    const goneCount = results.filter(([, r]) => r.status === 'gone').length;
+    const suspicious = group.length >= 4 && goneCount / group.length > 0.5;
+    if (suspicious) logger.warn(`  ${slug}: ${goneCount}/${group.length} roles reported closed; not deactivating, check the detail API`);
+    const errorCount = results.filter(([, r]) => r.status === 'error').length;
+    if (errorCount === group.length) logger.warn(`  ${slug}: every description fetch failed; check the detail API`);
+
+    for (const [role, raw] of results) {
+      const result = suspicious && raw.status === 'gone'
+        ? { status: 'error', message: 'closure not trusted: most roles of this employer reported closed' }
+        : raw;
+      await saveDescriptionResult(role.id, result);
+      counts[result.status] += 1;
+      if (result.status === 'error') logger.warn(`  description error, role ${role.id} (${role.title}): ${result.message}`);
+    }
+  }
+
+  logger.info(`Descriptions: ${counts.ok} fetched, ${counts.gone} closed postings, ${counts.error} errors, ${counts.skipped} skipped`);
+  return counts;
+}
+
 async function publishRoles() {
   const { publish } = await import('./lib/publisher.js');
   const { rolesWritten, outputPath } = await publish();
@@ -104,6 +158,13 @@ async function main() {
   if (args.includes('--init')) {
     await initDatabase();
     logger.info('Database initialization complete. Exiting (--init).');
+    return;
+  }
+
+  if (args.includes('--descriptions')) {
+    await initDatabase();
+    await fetchDescriptions(loadJson(EMPLOYERS_CONFIG).employers);
+    await publishRoles();
     return;
   }
 
@@ -124,6 +185,7 @@ async function main() {
   await initDatabase();
   const results = await scrapeEmployers(employers, filters);
   await syncToDatabase(runId, runStart.toISOString(), results);
+  await fetchDescriptions(employers);
   await publishRoles();
 
   const okCount = results.filter((r) => r.status === 'ok').length;
