@@ -15,6 +15,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
+import { validateSchedule, defaultSchedule, timeToCron } from './lib/schedule.js';
 
 const logger = createLogger('server');
 
@@ -22,8 +23,10 @@ const PORT = process.env.PORT || 4000;
 const HOST = process.env.HOST || '0.0.0.0';
 const ROLES_PATH = path.join('data', 'roles.json');
 const REFRESH_LOG_PATH = path.join('logs', 'refresh.log');
-const REFRESH_SCHEDULE = process.env.REFRESH_CRON || '0 6 * * *'; // 6 AM daily
 const REFRESH_TIMEZONE = process.env.TZ || 'Asia/Kolkata';
+// The board can change the schedule (daily at a time, or on demand only);
+// the choice is saved here. REFRESH_CRON in .env is only the first default.
+const SCHEDULE_PATH = path.join('data', 'schedule.json');
 
 const refreshState = {
   running: false,
@@ -56,7 +59,31 @@ function runRefresh(trigger) {
   return { started: true };
 }
 
-cron.schedule(REFRESH_SCHEDULE, () => runRefresh('cron'), { timezone: REFRESH_TIMEZONE });
+function loadSchedule() {
+  try {
+    const result = validateSchedule(JSON.parse(fs.readFileSync(SCHEDULE_PATH, 'utf-8')));
+    if (result.ok) return result.value;
+    logger.warn(`Ignoring ${SCHEDULE_PATH}: ${result.error}`);
+  } catch (err) {
+    if (err.code !== 'ENOENT') logger.warn(`Ignoring ${SCHEDULE_PATH}: ${err.message}`);
+  }
+  return defaultSchedule(process.env.REFRESH_CRON);
+}
+
+let schedule = loadSchedule();
+let cronTask = null;
+
+function applySchedule() {
+  if (cronTask) { cronTask.stop(); cronTask = null; }
+  if (schedule.mode === 'daily') {
+    cronTask = cron.schedule(timeToCron(schedule.time), () => runRefresh('cron'), { timezone: REFRESH_TIMEZONE });
+    logger.info(`Refresh schedule: daily at ${schedule.time} (${REFRESH_TIMEZONE})`);
+  } else {
+    logger.info('Refresh schedule: on demand only (Refresh now button)');
+  }
+}
+
+applySchedule();
 
 const app = express();
 
@@ -77,9 +104,25 @@ app.post('/api/refresh', express.json(), (_req, res) => {
   res.status(result.started ? 202 : 409).json({ ...result, ...refreshState });
 });
 
+app.get('/api/schedule', (_req, res) => {
+  res.json({ ...schedule, timezone: REFRESH_TIMEZONE });
+});
+
+app.put('/api/schedule', express.json(), (req, res) => {
+  const result = validateSchedule(req.body);
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  schedule = result.value;
+  fs.mkdirSync(path.dirname(SCHEDULE_PATH), { recursive: true });
+  fs.writeFileSync(SCHEDULE_PATH, JSON.stringify(schedule, null, 2));
+  applySchedule();
+  res.json({ ...schedule, timezone: REFRESH_TIMEZONE });
+});
+
 app.use(express.static(path.join('frontend', 'public')));
 
 app.listen(PORT, HOST, () => {
   logger.info(`India GCC Board serving on http://${HOST}:${PORT} (open http://localhost:${PORT} locally)`);
-  logger.info(`Daily refresh scheduled: '${REFRESH_SCHEDULE}' (${REFRESH_TIMEZONE})`);
 });

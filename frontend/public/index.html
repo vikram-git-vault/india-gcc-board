@@ -5,285 +5,319 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%A7%AD</text></svg>">
 <title>India GCC Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-
   :root {
-    --bg: #EEEFE9; --surface: #FFFFFF; --surface-sunk: #E7E8E1; --border: #D7D8CE;
-    --text: #1B211F; --text-muted: #5C645F; --accent: #A8681F; --accent-soft: #F1E3CC;
-    --success: #3F8F5C; --success-soft: #DFEEE3; --critical: #B84B36; --critical-soft: #F5E1DC;
-    --info: #3D6E96; --info-soft: #DEE8EF;
+    --ink: #11284B;          /* header band, headings */
+    --ink-soft: #1C3A66;
+    --canvas: #F3F6FB;
+    --surface: #FFFFFF;
+    --surface-alt: #EDF1F8;
+    --line: #D9E0EC;
+    --text: #172033;
+    --text-muted: #5A6578;
+    --cobalt: #2D5BE3;       /* actions, selected filters */
+    --cobalt-soft: #E6EDFD;
+    --high: #0E9F6E;         /* fit 75+ */
+    --high-soft: #DDF4EA;
+    --mid: #C9821C;          /* fit 50-74 (saffron, darkened for text contrast) */
+    --mid-fill: #E39B2D;
+    --mid-soft: #FBEEDA;
+    --low: #6B7587;          /* fit below 50 */
+    --low-soft: #E9ECF1;
+    --critical: #C4402F;
+    --critical-soft: #FBE5E1;
+    --on-ink: #FFFFFF;
+    --on-ink-muted: #B9C6DC;
+    color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #10151A; --surface: #171E23; --surface-sunk: #131A1E; --border: #2B353B;
-      --text: #E9EAE4; --text-muted: #93A09B; --accent: #D9A254; --accent-soft: #382C1B;
-      --success: #6FB988; --success-soft: #1B2A20; --critical: #DD8266; --critical-soft: #33201B;
-      --info: #7FAAD0; --info-soft: #1B2732;
+      --ink: #0B1A31; --ink-soft: #16294A; --canvas: #0F1726; --surface: #172235; --surface-alt: #1D2A40;
+      --line: #2A3A55; --text: #E7ECF5; --text-muted: #9AA7BD; --cobalt: #7FA0FF; --cobalt-soft: #1E2C4F;
+      --high: #4CC99B; --high-soft: #143A2E; --mid: #F0B357; --mid-fill: #E39B2D; --mid-soft: #3A2C14;
+      --low: #A3ADBF; --low-soft: #243045; --critical: #F08A7B; --critical-soft: #3D211D;
+      --on-ink: #FFFFFF; --on-ink-muted: #9FB0CC;
+      color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #10151A; --surface: #171E23; --surface-sunk: #131A1E; --border: #2B353B;
-    --text: #E9EAE4; --text-muted: #93A09B; --accent: #D9A254; --accent-soft: #382C1B;
-    --success: #6FB988; --success-soft: #1B2A20; --critical: #DD8266; --critical-soft: #33201B;
-    --info: #7FAAD0; --info-soft: #1B2732;
+    --ink: #0B1A31; --ink-soft: #16294A; --canvas: #0F1726; --surface: #172235; --surface-alt: #1D2A40;
+    --line: #2A3A55; --text: #E7ECF5; --text-muted: #9AA7BD; --cobalt: #7FA0FF; --cobalt-soft: #1E2C4F;
+    --high: #4CC99B; --high-soft: #143A2E; --mid: #F0B357; --mid-fill: #E39B2D; --mid-soft: #3A2C14;
+    --low: #A3ADBF; --low-soft: #243045; --critical: #F08A7B; --critical-soft: #3D211D;
+    --on-ink: #FFFFFF; --on-ink-muted: #9FB0CC;
+    color-scheme: dark;
   }
 
   * { box-sizing: border-box; }
-  html { background: var(--bg); }
-  body { margin: 0; background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5; }
-  ::selection { background: var(--accent-soft); }
-  button { font-family: inherit; }
-
-  .page { max-width: 1040px; margin: 0 auto; padding: 32px 20px 80px; }
-
-  header.masthead { margin-bottom: 20px; }
-  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 6px; }
-  h1 { font-family: 'IBM Plex Serif', Georgia, serif; font-weight: 600; font-size: clamp(24px, 3.6vw, 30px); margin: 0 0 12px; text-wrap: balance; }
-
-  .freshbar {
-    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
-    font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--text-muted);
-    padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  html { background: var(--canvas); }
+  body {
+    margin: 0; background: var(--canvas); color: var(--text);
+    font-family: 'Source Sans 3', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 17px; line-height: 1.5; font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
   }
-  .freshbar strong { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
-  .freshbar strong.pulse { animation: stat-pulse 0.7s ease-out; }
-  .freshbar-detail { color: var(--text-muted); }
-  .freshbar-link { margin-left: auto; color: var(--accent); text-decoration: none; }
-  .freshbar-link:hover { text-decoration: underline; }
-  .fresh-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); display: inline-block; margin-right: 6px; }
-  .fresh-dot.live { background: var(--success); animation: breathe 2.4s ease-in-out infinite; }
-  @keyframes breathe { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.8); } }
-  @keyframes stat-pulse { 0% { color: var(--accent); } 100% { color: var(--text); } }
+  button, input, select { font-family: inherit; font-size: inherit; }
+  :focus-visible { outline: 3px solid var(--cobalt); outline-offset: 2px; }
+  .wrap { max-width: 1440px; margin: 0 auto; padding-inline: clamp(16px, 3vw, 40px); }
 
+  /* ---------- header band ---------- */
+  .masthead { background: var(--ink); color: var(--on-ink); padding-block: 28px 30px; }
+  .masthead-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 24px; }
+  h1 { margin: 0; font-size: clamp(28px, 3.2vw, 38px); font-weight: 700; letter-spacing: -0.01em; }
+  .subtitle { margin: 4px 0 0; color: var(--on-ink-muted); font-size: 17px; }
+  .header-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
   .refresh-btn {
-    font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; padding: 5px 11px; border-radius: 999px;
-    border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); cursor: pointer;
-    transition: background 0.12s ease, transform 0.1s ease;
+    font-weight: 600; font-size: 16px; padding: 9px 18px; border-radius: 8px; cursor: pointer;
+    background: #FFFFFF; color: #11284B; border: 0;
   }
-  .refresh-btn:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
-  .refresh-btn:active:not(:disabled) { transform: scale(0.94); }
-  .refresh-btn:disabled { opacity: 0.6; cursor: default; }
+  .refresh-btn:hover:not(:disabled) { background: #E6EDFD; }
+  .refresh-btn:disabled { opacity: 0.7; cursor: default; }
+  .header-link { color: var(--on-ink-muted); font-size: 16px; }
+  .schedule { display: flex; align-items: center; gap: 8px; color: var(--on-ink-muted); font-size: 16px; }
+  .schedule select, .schedule input {
+    font-size: 15px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--ink-soft);
+    background: var(--ink-soft); color: var(--on-ink);
+  }
+  .schedule input { width: 7.5em; color-scheme: dark; }
+  .schedule-note { font-size: 14px; color: var(--on-ink-muted); min-width: 3em; }
+  .header-link:hover { color: var(--on-ink); }
 
-  .toolbar { margin: 20px 0 16px; display: flex; flex-direction: column; gap: 12px; }
-  .search-row { display: flex; gap: 10px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 10px 36px; margin: 22px 0 22px; padding: 0; list-style: none; }
+  .stats li { color: var(--on-ink-muted); font-size: 16px; }
+  .stats strong { color: var(--on-ink); font-size: 22px; font-weight: 700; margin-right: 6px; }
+  .stats strong.pulse { animation: stat-pulse 0.7s ease-out; }
+  .fresh-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--on-ink-muted); display: inline-block; margin-right: 8px; vertical-align: middle; }
+  .fresh-dot.live { background: var(--high); }
+  @keyframes stat-pulse { 0% { color: var(--mid-fill); } 100% { color: var(--on-ink); } }
+
+  .search-row { display: flex; gap: 12px; flex-wrap: wrap; }
   .search {
-    flex: 1; font-size: 14.5px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
-    background: var(--surface); color: var(--text);
+    flex: 1 1 320px; min-width: 0; padding: 13px 16px; font-size: 17px; border-radius: 10px;
+    border: 1px solid transparent; background: var(--surface); color: var(--text);
   }
-  .search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .search::placeholder { color: var(--text-muted); }
   select.sort {
-    font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; padding: 10px 12px;
-    border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text);
+    padding: 13px 14px; font-size: 16px; border-radius: 10px; border: 1px solid transparent;
+    background: var(--surface); color: var(--text); cursor: pointer;
   }
 
-  .facet-row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
-  .facet-label {
-    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase;
-    color: var(--text-muted); margin-right: 4px; flex-shrink: 0;
+  /* ---------- body layout ---------- */
+  .layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 36px; padding-block: 28px 64px; align-items: start; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; gap: 20px; } }
+
+  .filters { position: sticky; top: 20px; }
+  @media (max-width: 960px) { .filters { position: static; } }
+  .filters > summary {
+    display: none; cursor: pointer; font-weight: 600; padding: 12px 16px; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--line); list-style: none;
   }
+  .filters > summary::-webkit-details-marker { display: none; }
+  @media (max-width: 960px) { .filters > summary { display: block; } }
+  .filter-panel { display: flex; flex-direction: column; gap: 22px; }
+  @media (max-width: 960px) { .filter-panel { margin-top: 14px; } }
+  .facet h2 { margin: 0 0 10px; font-size: 16px; font-weight: 700; color: var(--ink); }
+  :root[data-theme="dark"] .facet h2 { color: var(--text); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .facet h2 { color: var(--text); } }
+  .facet-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
-    font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; padding: 5px 11px; border-radius: 999px;
-    border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer;
-    transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.1s ease;
+    font-size: 15px; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text);
   }
-  .chip:hover { border-color: var(--accent); }
-  .chip:active { transform: scale(0.94); }
-  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
-  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .chip.small { font-size: 10.5px; padding: 3px 9px; }
-  .clear-link {
-    font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); background: none; border: none;
-    cursor: pointer; text-decoration: underline; padding: 2px 4px;
-  }
+  .chip:hover { border-color: var(--cobalt); }
+  .chip[aria-pressed="true"] { background: var(--cobalt); border-color: var(--cobalt); color: #fff; font-weight: 600; }
+  :root[data-theme="dark"] .chip[aria-pressed="true"] { color: #0B1A31; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip[aria-pressed="true"] { color: #0B1A31; } }
+  .text-btn { background: none; border: 0; padding: 4px 0; color: var(--cobalt); cursor: pointer; font-weight: 600; font-size: 16px; text-align: left; }
+  .text-btn:hover { text-decoration: underline; }
 
-  .tabs { display: flex; gap: 4px; margin: 18px 0 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  /* ---------- tabs and results ---------- */
+  .results-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; }
   .tab {
-    font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 8px 14px; border: none; background: none;
-    color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
-    transition: color 0.15s ease, border-color 0.15s ease;
+    font-size: 17px; padding: 10px 14px; border: 0; background: none; color: var(--text-muted); cursor: pointer;
+    border-bottom: 3px solid transparent; margin-bottom: -1px;
   }
-  .tab:active { transform: scale(0.97); }
-  .tab[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
-  .tab .n { font-variant-numeric: tabular-nums; }
+  .tab:hover { color: var(--text); }
+  .tab[aria-pressed="true"] { color: var(--text); font-weight: 700; border-bottom-color: var(--cobalt); }
+  .tab .n { color: var(--text-muted); font-weight: 400; margin-left: 4px; }
   .tab .n.pulse { animation: stat-pulse 0.7s ease-out; }
+  .results-meta { color: var(--text-muted); font-size: 16px; margin: 0; padding-bottom: 8px; }
 
-  .results-meta { font-size: 12.5px; color: var(--text-muted); margin: 14px 0 12px; font-family: 'IBM Plex Mono', monospace; }
+  .cards { display: grid; grid-template-columns: 1fr; gap: 16px; }
 
-  .cards { display: flex; flex-direction: column; gap: 10px; }
   .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
-    display: flex; flex-direction: column; gap: 8px;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 24px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px 18px 20px;
   }
-  .card:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(27, 33, 31, 0.07); }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+  .card:hover { border-color: var(--cobalt); }
+  @media (max-width: 640px) { .card { grid-template-columns: 1fr; gap: 14px; padding: 16px; } }
+
+  /* the one bold element: the fit score */
+  .scores { display: flex; gap: 10px; align-self: start; }
+  .score-box {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    width: 104px; height: 96px; border-radius: 14px; background: var(--low-soft); color: var(--low);
   }
-  :root[data-theme="dark"] .card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
-  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-  .card-title { font-weight: 600; font-size: 15px; line-height: 1.35; }
-  .level-badge {
-    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
-    padding: 3px 8px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;
-  }
-  .grade-target { background: var(--accent-soft); color: var(--accent); }
-  .grade-exception { background: var(--surface-sunk); color: var(--text-muted); }
+  .score-box .num { font-size: 36px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+  .score-box .lbl { font-size: 14px; font-weight: 600; margin-top: 6px; line-height: 1.2; }
+  .score-box.high { background: var(--high-soft); color: var(--high); }
+  .score-box.mid { background: var(--mid-soft); color: var(--mid); }
+  .score-box.pending { background: var(--surface-alt); color: var(--text-muted); border: 2px dashed var(--line); }
+  @media (max-width: 640px) { .score-box { width: auto; flex: 1; height: 76px; } .score-box .num { font-size: 30px; } }
+
+  .card-body { min-width: 0; display: flex; flex-direction: column; }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .card-title { margin: 0; font-size: 19px; font-weight: 700; line-height: 1.3; color: var(--text); }
   .badges { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
-  .exception-badge {
-    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
-    padding: 2px 7px; border-radius: 4px; white-space: nowrap; border: 1px dashed var(--text-muted); color: var(--text-muted);
-  }
-  @media (max-width: 520px) {
-    .card-top { flex-direction: column; gap: 6px; }
-    .badges { order: -1; justify-content: flex-start; }
-  }
-  .score-row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
-  .score {
-    font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 3px 9px; border-radius: 6px;
-    border: 1px solid var(--border); background: var(--surface-sunk); color: var(--text-muted);
-    font-variant-numeric: tabular-nums; white-space: nowrap;
-  }
-  .score strong { font-weight: 600; font-size: 13px; margin-left: 3px; }
-  .score.high { background: var(--success-soft); border-color: var(--success); color: var(--success); }
-  .score.mid { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-  .score.low { background: var(--surface-sunk); color: var(--text-muted); }
-  .score.pending { border-style: dashed; }
-  .resume-chip { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--info); }
-  .confidence-low { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--critical); }
-  details.why { font-size: 13px; }
-  details.why summary {
-    cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--accent);
-    width: fit-content; list-style: none;
-  }
-  details.why summary::-webkit-details-marker { display: none; }
-  details.why summary::before { content: '▸ '; }
-  details.why[open] summary::before { content: '▾ '; }
-  .why-body { margin-top: 8px; padding: 10px 12px; background: var(--surface-sunk); border-radius: 8px; display: grid; gap: 8px; }
-  .why-body p { margin: 0; }
-  .why-label { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
-  .kw-list { display: flex; flex-wrap: wrap; gap: 4px; }
-  .kw { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
-  .gap-list { margin: 0; padding-left: 18px; }
-  .variant-table { font-family: 'IBM Plex Mono', monospace; font-size: 12px; border-collapse: collapse; }
-  .variant-table td, .variant-table th { padding: 2px 12px 2px 0; text-align: left; font-weight: 400; }
-  .variant-table th { color: var(--text-muted); }
-  .card-meta { font-size: 13px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 4px 8px; }
-  .card-meta .sep { opacity: 0.5; }
-  .card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+  .badge { font-size: 14px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; background: var(--cobalt-soft); color: var(--cobalt); }
+  .badge.exception { background: transparent; color: var(--mid); box-shadow: inset 0 0 0 1.5px var(--mid); }
+  @media (max-width: 640px) { .card-head { flex-direction: column; gap: 6px; } .badges { justify-content: flex-start; } }
+
+  .card-meta { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 6px 0 0; font-size: 16px; color: var(--text-muted); }
+  .card-meta .employer { color: var(--text); font-weight: 600; }
+
+  .score-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 12px; font-size: 16px; }
+  .ats { font-weight: 600; }
+  .ats .val { font-size: 18px; font-weight: 700; margin-left: 4px; }
+  .ats.high .val { color: var(--high); } .ats.mid .val { color: var(--mid); } .ats.low .val { color: var(--low); }
+  .send { color: var(--text); }
+  .send strong { color: var(--cobalt); font-weight: 700; }
+  .flag { font-size: 14px; font-weight: 600; color: var(--critical); background: var(--critical-soft); padding: 2px 8px; border-radius: 999px; }
+
+  details.why { margin-top: 10px; font-size: 16px; }
+  details.why summary { cursor: pointer; color: var(--cobalt); font-weight: 600; width: fit-content; }
+  .why-body { margin-top: 10px; padding: 14px 16px; background: var(--surface-alt); border-radius: 10px; display: grid; gap: 12px; }
+  .why-body p { margin: 0; max-width: 72ch; }
+  .why-body h3 { margin: 0 0 6px; font-size: 15px; font-weight: 700; color: var(--text-muted); }
+  .kw-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .kw { font-size: 15px; padding: 3px 10px; border-radius: 999px; background: var(--high-soft); color: var(--high); font-weight: 600; }
+  .gap-list { margin: 0; padding-left: 20px; }
+  .gap-list li { margin: 2px 0; }
+  .variant-table { border-collapse: collapse; font-size: 16px; }
+  .variant-table th, .variant-table td { padding: 3px 18px 3px 0; text-align: left; }
+  .variant-table th { color: var(--text-muted); font-weight: 600; }
+  .variant-table tr.chosen td { font-weight: 700; }
+
+  .card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: auto; padding-top: 16px; }
   a.apply-link {
-    font-size: 13px; font-weight: 500; color: var(--accent); text-decoration: none;
-    border: 1px solid var(--accent); padding: 6px 12px; border-radius: 6px;
-    display: inline-block; transition: background 0.12s ease, transform 0.1s ease;
+    font-weight: 600; font-size: 16px; color: #fff; background: var(--cobalt); text-decoration: none;
+    padding: 8px 16px; border-radius: 8px;
   }
-  a.apply-link:hover { background: var(--accent-soft); }
-  a.apply-link:active { transform: scale(0.96); }
-  .mark-group { display: flex; gap: 4px; margin-left: auto; }
+  :root[data-theme="dark"] a.apply-link { color: #0B1A31; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) a.apply-link { color: #0B1A31; } }
+  a.apply-link:hover { filter: brightness(1.08); }
+  .mark-group { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
   .mark-btn {
-    font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 6px 10px; border-radius: 6px;
-    border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer;
-    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.1s ease;
+    font-size: 15px; padding: 6px 11px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text-muted);
   }
-  .mark-btn:hover { border-color: var(--accent); }
-  .mark-btn:active { transform: scale(0.94); }
-  .mark-btn[aria-pressed="true"].interested { background: var(--info-soft); border-color: var(--info); color: var(--info); }
-  .mark-btn[aria-pressed="true"].applied { background: var(--success-soft); border-color: var(--success); color: var(--success); }
-  .mark-btn[aria-pressed="true"].rejected { background: var(--critical-soft); border-color: var(--critical); color: var(--critical); }
-  .mark-btn[aria-pressed="true"].closed { background: var(--surface-sunk); border-color: var(--text-muted); color: var(--text); }
+  .mark-btn:hover { border-color: var(--cobalt); color: var(--text); }
+  .mark-btn[aria-pressed="true"].interested { background: var(--cobalt-soft); border-color: var(--cobalt); color: var(--cobalt); font-weight: 600; }
+  .mark-btn[aria-pressed="true"].applied { background: var(--high-soft); border-color: var(--high); color: var(--high); font-weight: 600; }
+  .mark-btn[aria-pressed="true"].rejected { background: var(--critical-soft); border-color: var(--critical); color: var(--critical); font-weight: 600; }
+  .mark-btn[aria-pressed="true"].closed { background: var(--low-soft); border-color: var(--low); color: var(--text); font-weight: 600; }
+  @media (max-width: 640px) { .mark-group { margin-left: 0; } }
 
-  .empty-state { padding: 48px 16px; text-align: center; color: var(--text-muted); font-size: 14px; }
-  .empty-state button { margin-top: 10px; }
+  .empty-state { padding: 56px 16px; text-align: center; color: var(--text-muted); font-size: 18px; background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; }
+  .empty-state .text-btn { margin-top: 8px; }
 
-  footer.page-footer {
-    margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border);
-    font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-    font-family: 'IBM Plex Mono', monospace;
-  }
+  footer.page-footer { border-top: 1px solid var(--line); padding-block: 18px 32px; color: var(--text-muted); font-size: 15px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
 
   @media (prefers-reduced-motion: no-preference) {
-    .page { animation: rise 0.35s ease-out; }
-    @keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-
-    ::view-transition-group(*) { animation-duration: 0.28s; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
-    ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 0.2s; }
+    ::view-transition-group(*) { animation-duration: 0.26s; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+    ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 0.18s; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .fresh-dot.live { animation: none; }
     ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+    .stats strong.pulse, .tab .n.pulse { animation: none; }
   }
 </style>
 </head>
 <body>
 
-<div class="page">
-
-  <header class="masthead">
-    <p class="eyebrow">Personal BFSI Leadership Board · India GCC hubs</p>
-    <h1>India GCC Board</h1>
-    <div class="freshbar" id="freshbar">
-      <span><span class="fresh-dot"></span><strong id="freshTime">—</strong></span>
-      <span><strong id="freshCount">—</strong> shortlisted<span class="freshbar-detail" id="freshTargetDetail"></span></span>
-      <span id="freshScoring"></span>
-      <span><strong id="freshEmployers">—</strong> employers scraped<span class="freshbar-detail" id="freshEmployersDetail"></span></span>
-      <button class="refresh-btn" id="refreshBtn">Refresh now</button>
-      <a class="freshbar-link" href="https://github.com/vikram-git-vault/india-gcc-board/blob/main/docs/EMPLOYERS.md" target="_blank" rel="noopener noreferrer">full employer list ↗</a>
+<header class="masthead">
+  <div class="wrap">
+    <div class="masthead-top">
+      <div>
+        <h1>India GCC Board</h1>
+        <p class="subtitle">Leadership roles at India capability centres, scored against your resumes</p>
+      </div>
+      <div class="header-actions">
+        <div class="schedule">
+          <label for="scheduleMode">Auto refresh</label>
+          <select id="scheduleMode" aria-describedby="scheduleNote">
+            <option value="daily">Daily at</option>
+            <option value="manual">On demand only</option>
+          </select>
+          <input type="time" id="scheduleTime" aria-label="Daily refresh time" step="60">
+          <span class="schedule-note" id="scheduleNote" role="status"></span>
+        </div>
+        <button class="refresh-btn" id="refreshBtn">Refresh now</button>
+        <a class="header-link" href="https://github.com/vikram-git-vault/india-gcc-board/blob/main/docs/EMPLOYERS.md" target="_blank" rel="noopener noreferrer">Employer list</a>
+      </div>
     </div>
-  </header>
 
-  <div class="toolbar">
+    <ul class="stats" id="freshbar">
+      <li><span class="fresh-dot"></span>Updated <strong id="freshTime">—</strong></li>
+      <li><strong id="freshCount">—</strong>roles on your board<span id="freshTargetDetail"></span></li>
+      <li id="freshScoring"></li>
+      <li><strong id="freshEmployers">—</strong>employers scraped<span id="freshEmployersDetail"></span></li>
+    </ul>
+
     <div class="search-row">
-      <input type="text" class="search" id="search" placeholder="Search title or employer…" aria-label="Search roles">
+      <input type="search" class="search" id="search" placeholder="Search by title or employer" aria-label="Search roles">
       <select class="sort" id="sort" aria-label="Sort by">
-        <option value="fit">Best fit first</option>
-        <option value="ats">Best ATS first</option>
+        <option value="fit">Best RM score first</option>
+        <option value="ats">Best ATS score first</option>
         <option value="date">Newest first</option>
         <option value="employer">Employer A–Z</option>
         <option value="title">Title A–Z</option>
       </select>
     </div>
-
-    <div class="facet-row" id="facetScore">
-      <span class="facet-label">Fit</span>
-    </div>
-    <div class="facet-row" id="facetGrade">
-      <span class="facet-label">Grade</span>
-    </div>
-    <div class="facet-row" id="facetFamily">
-      <span class="facet-label">Family</span>
-    </div>
-    <div class="facet-row" id="facetLocation">
-      <span class="facet-label">City</span>
-    </div>
-    <div class="facet-row" id="facetEmployer">
-      <span class="facet-label">Employer</span>
-    </div>
-    <div class="facet-row">
-      <button class="clear-link" id="clearFilters">Clear all filters</button>
-    </div>
   </div>
+</header>
 
-  <div class="tabs" id="tabs">
-    <button class="tab" data-tab="all" aria-pressed="true">All <span class="n" id="tabAllN"></span></button>
-    <button class="tab" data-tab="interested">Interested <span class="n" id="tabInterestedN"></span></button>
-    <button class="tab" data-tab="applied">Applied <span class="n" id="tabAppliedN"></span></button>
-    <button class="tab" data-tab="rejected">Rejected <span class="n" id="tabRejectedN"></span></button>
-    <button class="tab" data-tab="closed">Closed <span class="n" id="tabClosedN"></span></button>
-  </div>
+<div class="wrap layout">
+  <details class="filters" id="filters" open>
+    <summary>Filters</summary>
+    <div class="filter-panel">
+      <section class="facet"><h2>RM score</h2><div class="facet-row" id="facetScore"></div></section>
+      <section class="facet"><h2>Grade</h2><div class="facet-row" id="facetGrade"></div></section>
+      <section class="facet"><h2>Role family</h2><div class="facet-row" id="facetFamily"></div></section>
+      <section class="facet"><h2>City</h2><div class="facet-row" id="facetLocation"></div></section>
+      <section class="facet"><h2>Employer</h2><div class="facet-row" id="facetEmployer"></div></section>
+      <button class="text-btn" id="clearFilters">Clear all filters</button>
+    </div>
+  </details>
 
-  <p class="results-meta" id="resultsMeta"></p>
+  <main>
+    <div class="results-head">
+      <div class="tabs" id="tabs">
+        <button class="tab" data-tab="all" aria-pressed="true">All<span class="n" id="tabAllN"></span></button>
+        <button class="tab" data-tab="interested">Interested<span class="n" id="tabInterestedN"></span></button>
+        <button class="tab" data-tab="applied">Applied<span class="n" id="tabAppliedN"></span></button>
+        <button class="tab" data-tab="rejected">Rejected<span class="n" id="tabRejectedN"></span></button>
+        <button class="tab" data-tab="closed">Closed<span class="n" id="tabClosedN"></span></button>
+      </div>
+      <p class="results-meta" id="resultsMeta"></p>
+    </div>
 
-  <div class="cards" id="cards"></div>
-  <div class="empty-state" id="emptyState" style="display:none;">
-    No roles match your filters.
-    <div><button class="clear-link" id="emptyClear">Clear filters</button></div>
-  </div>
-
-  <footer class="page-footer">
-    <span id="syncStatus">Loading…</span>
-    <span id="refreshStatus"></span>
-  </footer>
-
+    <div class="cards" id="cards"></div>
+    <div class="empty-state" id="emptyState" hidden>
+      No roles match these filters.
+      <div><button class="text-btn" id="emptyClear">Clear all filters</button></div>
+    </div>
+  </main>
 </div>
+
+<footer class="wrap page-footer">
+  <span id="syncStatus">Loading roles…</span>
+  <span id="refreshStatus"></span>
+</footer>
 
 <script>
 (function () {
@@ -316,16 +350,16 @@
   };
 
   // Grade order mirrors config/targets.json: target grades first, then exceptions.
-  var GRADE_ORDER = ['SVP', 'Director', 'Head', 'Associate Director', 'VP', 'AVP', 'Senior Manager', 'Manager (ungraded)'];
+  var GRADE_ORDER = ['SVP', 'Director', 'Head', 'Associate Director', 'VP', 'Lead role (ungraded)', 'AVP', 'Senior Manager'];
   var FAMILY_ORDER = ['Product', 'Engineering leadership', 'AI / Data leadership', 'Delivery / Program / Transformation'];
 
   var SCORE_BANDS = [
-    { id: 'fit75', label: 'Fit ≥ 75', test: function (r) { return r.score && r.score.fit >= 75; } },
-    { id: 'fit50', label: 'Fit 50–74', test: function (r) { return r.score && r.score.fit >= 50 && r.score.fit < 75; } },
-    { id: 'fitlow', label: 'Fit < 50', test: function (r) { return r.score && r.score.fit < 50; } },
+    { id: 'fit75', label: '75 and above', test: function (r) { return r.score && r.score.fit >= 75; } },
+    { id: 'fit50', label: '50 to 74', test: function (r) { return r.score && r.score.fit >= 50 && r.score.fit < 75; } },
+    { id: 'fitlow', label: 'Below 50', test: function (r) { return r.score && r.score.fit < 50; } },
     { id: 'unscored', label: 'Not scored', test: function (r) { return !r.score; } },
   ];
-  var RESUME_LABEL = { PO: 'Product Owner resume', EM: 'Engineering Leader resume' };
+  var RESUME_LABEL = { PO: 'Product Owner', EM: 'Engineering Leader' };
 
   function band(n) { return n >= 75 ? 'high' : n >= 50 ? 'mid' : 'low'; }
 
@@ -344,15 +378,16 @@
     var diffMs = Date.now() - new Date(iso).getTime();
     var mins = Math.round(diffMs / 60000);
     if (mins < 1) return 'just now';
-    if (mins < 60) return mins + 'm ago';
+    if (mins < 60) return mins + ' min ago';
     var hrs = Math.round(mins / 60);
-    if (hrs < 24) return hrs + 'h ago';
+    if (hrs < 24) return hrs + (hrs === 1 ? ' hour ago' : ' hours ago');
     var days = Math.round(hrs / 24);
-    return days + 'd ago';
+    return days + (days === 1 ? ' day ago' : ' days ago');
   }
 
   function buildFacetChips(containerId, values, activeSet, labelFn) {
     var container = document.getElementById(containerId);
+    container.innerHTML = '';
     values.forEach(function (v) {
       var btn = document.createElement('button');
       btn.className = 'chip';
@@ -368,15 +403,9 @@
   }
 
   function initFacets() {
-    document.getElementById('facetScore').innerHTML = '<span class="facet-label">Fit</span>';
     var bandLabel = {};
     SCORE_BANDS.forEach(function (b) { bandLabel[b.id] = b.label; });
     buildFacetChips('facetScore', SCORE_BANDS.filter(function (b) { return state.roles.some(b.test); }).map(function (b) { return b.id; }), state.scoreBands, function (id) { return bandLabel[id]; });
-    document.getElementById('facetGrade').innerHTML = '<span class="facet-label">Grade</span>';
-    document.getElementById('facetFamily').innerHTML = '<span class="facet-label">Family</span>';
-    document.getElementById('facetLocation').innerHTML = '<span class="facet-label">City</span>';
-    document.getElementById('facetEmployer').innerHTML = '<span class="facet-label">Employer</span>';
-
     buildFacetChips('facetGrade', orderedPresent(GRADE_ORDER, state.roles.map(function (r) { return r.grade; })), state.grades);
     buildFacetChips('facetFamily', orderedPresent(FAMILY_ORDER, state.roles.map(function (r) { return r.family; })), state.families);
     buildFacetChips('facetLocation', uniqueSorted(state.roles.map(function (r) { return r.location; })), state.locations);
@@ -416,13 +445,26 @@
 
   function cardHtml(role) {
     var mark = markOf(role);
-    var gradeClass = role.tier === 'exception' ? 'grade-exception' : 'grade-target';
+    var sc = role.score;
     var department = role.department && role.department !== role.employer ? role.department : null;
-    var meta = [role.employer, role.location, role.family, department].filter(Boolean).map(escapeHtml).join(' <span class="sep">·</span> ');
+    var posted = role.posted_date ? 'Posted ' + relativeTime(role.posted_date + 'T00:00:00Z') : 'Posting date unknown';
+
+    var metaParts = ['<span class="employer">' + escapeHtml(role.employer) + '</span>'];
+    [role.location, role.family, department].filter(Boolean).forEach(function (m) { metaParts.push('<span>' + escapeHtml(m) + '</span>'); });
+    metaParts.push('<span>' + posted + '</span>');
+
     var exceptionBadge = role.tier === 'exception'
-      ? '<span class="exception-badge" title="Exception grade (AVP / Senior Manager): kept on the board only when its AI fit score is 75 or more">Exception</span>'
+      ? '<span class="badge exception" title="AVP or Senior Manager grade. The board keeps it only when the RM score is 75 or more.">Exception</span>'
       : '';
-    var posted = role.posted_date ? relativeTime(role.posted_date + 'T00:00:00Z') : 'date unknown';
+
+    var ATS_TIP = 'ATS score: how well your resume text matches this job description, as an applicant tracking system reads it (0 to 100)';
+    var RM_TIP = 'RM score (recruiter match): how a recruiter would rate your experience for this role (0 to 100)';
+    var fitBlock = '<div class="scores">' + (sc
+      ? '<div class="score-box ' + band(sc.ats) + '" title="' + ATS_TIP + '"><span class="num">' + sc.ats + '</span><span class="lbl">ATS score</span></div>' +
+        '<div class="score-box ' + band(sc.fit) + '" title="' + RM_TIP + '"><span class="num">' + sc.fit + '</span><span class="lbl">RM score</span></div>'
+      : '<div class="score-box pending" title="' + ATS_TIP + '"><span class="num">–</span><span class="lbl">ATS score</span></div>' +
+        '<div class="score-box pending" title="' + RM_TIP + '"><span class="num">–</span><span class="lbl">RM score</span></div>') +
+      '</div>';
 
     function markBtn(value, label) {
       var pressed = mark === value;
@@ -430,59 +472,55 @@
     }
 
     return '' +
-      '<div class="card" style="view-transition-name: role-' + role.id + '">' +
-        '<div class="card-top">' +
-          '<span class="card-title">' + escapeHtml(role.title) + '</span>' +
-          '<span class="badges">' + exceptionBadge + '<span class="level-badge ' + gradeClass + '">' + escapeHtml(role.grade || '') + '</span></span>' +
+      '<article class="card" style="view-transition-name: role-' + role.id + '">' +
+        fitBlock +
+        '<div class="card-body">' +
+        '<div class="card-head">' +
+          '<h3 class="card-title">' + escapeHtml(role.title) + '</h3>' +
+          '<span class="badges">' + exceptionBadge + '<span class="badge">' + escapeHtml(role.grade || '') + '</span></span>' +
         '</div>' +
-        '<div class="card-meta">' + meta + ' <span class="sep">·</span> ' + posted + '</div>' +
+        '<div class="card-meta">' + metaParts.join('') + '</div>' +
         scoreHtml(role) +
         '<div class="card-actions">' +
-          '<a class="apply-link" href="' + escapeHtml(safeUrl(role.job_url)) + '" target="_blank" rel="noopener noreferrer">View &amp; Apply ↗</a>' +
-          '<div class="mark-group">' +
+          '<a class="apply-link" href="' + escapeHtml(safeUrl(role.job_url)) + '" target="_blank" rel="noopener noreferrer">Open the posting</a>' +
+          '<div class="mark-group" role="group" aria-label="Mark this role">' +
             markBtn('interested', 'Interested') +
             markBtn('applied', 'Applied') +
             markBtn('rejected', 'Rejected') +
             markBtn('closed', 'Closed') +
           '</div>' +
         '</div>' +
-      '</div>';
+        '</div>' +
+      '</article>';
   }
 
   function scoreHtml(role) {
     var sc = role.score;
     if (!sc) {
-      var why = role.description_status === 'gone' ? 'posting closed' : 'waiting for a score';
-      return '<div class="score-row">' +
-        '<span class="score pending" title="ATS match of your resume text to this description">ATS <strong>—</strong></span>' +
-        '<span class="score pending" title="How a recruiter would rate your fit">Fit <strong>—</strong></span>' +
-        '<span class="resume-chip">' + why + '</span></div>';
+      var why = role.description_status === 'gone' ? 'The posting is closed.' : 'This role is waiting for a score.';
+      return '<div class="score-line"><span class="send">' + why + '</span></div>';
     }
-    var staleNote = sc.stale
-      ? '<span class="confidence-low" title="The job description or the rubric changed after this score. Score the role again.">score out of date</span>'
-      : '';
-    var lowConf = sc.confidence === 'low'
-      ? '<span class="confidence-low" title="Scored from the title only; no full job description was available">title only</span>'
-      : '';
+    var flags = '';
+    if (sc.stale) flags += '<span class="flag" title="The job description or the rubric changed after this score. Score the role again.">Score out of date</span>';
+    if (sc.confidence === 'low') flags += '<span class="flag" title="Scored from the title only. No full job description was available.">Title only</span>';
+
     var kw = (sc.matched_keywords || []).map(function (k) { return '<span class="kw">' + escapeHtml(k) + '</span>'; }).join('');
     var gaps = (sc.gaps || []).map(function (g) { return '<li>' + escapeHtml(g) + '</li>'; }).join('');
     var v = sc.variants || {};
     function variantRow(key) {
       var x = v[key] || {};
-      return '<tr><td>' + key + (key === sc.recommended ? ' ✓' : '') + '</td><td>' + x.ats + '</td><td>' + x.fit + '</td></tr>';
+      return '<tr' + (key === sc.recommended ? ' class="chosen"' : '') + '><td>' + escapeHtml(RESUME_LABEL[key] || key) + (key === sc.recommended ? ' (send this)' : '') + '</td><td>' + x.ats + '</td><td>' + x.fit + '</td></tr>';
     }
     return '' +
-      '<div class="score-row">' +
-        '<span class="score ' + band(sc.ats) + '" title="ATS: how well your resume text matches this job description (0–100)">ATS <strong>' + sc.ats + '</strong></span>' +
-        '<span class="score ' + band(sc.fit) + '" title="Fit: how a recruiter would rate your experience for this role (0–100)">Fit <strong>' + sc.fit + '</strong></span>' +
-        '<span class="resume-chip">Send: ' + escapeHtml(RESUME_LABEL[sc.recommended] || sc.recommended) + '</span>' +
-        lowConf + staleNote +
+      '<div class="score-line">' +
+        '<span class="send">Send the <strong>' + escapeHtml(RESUME_LABEL[sc.recommended] || sc.recommended) + '</strong> resume</span>' +
+        flags +
       '</div>' +
       '<details class="why" data-role-id="' + role.id + '"' + (openWhy[role.id] ? ' open' : '') + '><summary>Why this score</summary><div class="why-body">' +
         '<p>' + escapeHtml(sc.reason) + '</p>' +
-        (kw ? '<div><div class="why-label">Matched in your resume</div><div class="kw-list">' + kw + '</div></div>' : '') +
-        (gaps ? '<div><div class="why-label">Gaps to address</div><ul class="gap-list">' + gaps + '</ul></div>' : '') +
-        '<div><div class="why-label">Both resumes</div><table class="variant-table"><tr><th>Resume</th><th>ATS</th><th>Fit</th></tr>' + variantRow('PO') + variantRow('EM') + '</table></div>' +
+        (kw ? '<div><h3>Found in your resume</h3><div class="kw-list">' + kw + '</div></div>' : '') +
+        (gaps ? '<div><h3>Gaps to address</h3><ul class="gap-list">' + gaps + '</ul></div>' : '') +
+        '<div><h3>Both resumes</h3><table class="variant-table"><tr><th>Resume</th><th>ATS score</th><th>RM score</th></tr>' + variantRow('PO') + variantRow('EM') + '</table></div>' +
       '</div></details>';
   }
 
@@ -523,8 +561,8 @@
     var sorted = sortRoles(filtered);
 
     document.getElementById('cards').innerHTML = sorted.map(cardHtml).join('');
-    document.getElementById('emptyState').style.display = sorted.length === 0 ? 'block' : 'none';
-    document.getElementById('resultsMeta').textContent = sorted.length + ' of ' + state.roles.length + ' roles shown';
+    document.getElementById('emptyState').hidden = sorted.length !== 0;
+    document.getElementById('resultsMeta').textContent = 'Showing ' + sorted.length + ' of ' + state.roles.length;
 
     var counts = { interested: 0, applied: 0, rejected: 0, closed: 0 };
     state.roles.forEach(function (r) {
@@ -570,15 +608,17 @@
     var t = state.targeting;
     var scoringEl = document.getElementById('freshScoring');
     if (t && t.scored != null) {
-      var parts = ['<strong>' + t.scored + '</strong> scored'];
-      if (t.unscored) parts.push(t.unscored + ' waiting for a score');
-      if (t.exceptions_hidden) parts.push(t.exceptions_hidden + ' exception roles hidden (fit &lt; ' + t.exception_min_fit + ')');
-      scoringEl.innerHTML = parts.join(' · ');
+      var text = '<strong>' + t.scored + '</strong>scored';
+      var notes = [];
+      if (t.unscored) notes.push(t.unscored + ' waiting for a score');
+      if (t.exceptions_hidden) notes.push(t.exceptions_hidden + ' AVP or Senior Manager roles hidden (RM score below ' + t.exception_min_fit + ')');
+      if (notes.length) text += ', ' + notes.join(', ');
+      scoringEl.innerHTML = text;
     } else {
       scoringEl.textContent = '';
     }
     document.getElementById('freshTargetDetail').textContent = t
-      ? ' (' + t.target + ' target, ' + (t.exception_shown != null ? t.exception_shown : t.exception) + ' exception, of ' + t.scanned + ' scanned)'
+      ? ' (' + t.target + ' target, ' + (t.exception_shown != null ? t.exception_shown : t.exception) + ' exception, from ' + t.scanned + ' open roles)'
       : '';
 
     // Count employers over every scraped role, not just the shortlist.
@@ -589,11 +629,11 @@
     var total = state.coverage.totalTracked;
     var noResults = Math.max(fetched - withResults, 0);
 
-    flashStat(document.getElementById('freshEmployers'), fetched + '/' + total);
+    flashStat(document.getElementById('freshEmployers'), fetched + ' of ' + total);
 
     var detail = withResults + ' with roles';
-    if (noResults > 0) detail += ', ' + noResults + ' empty this cycle';
-    detail += ' · ' + state.coverage.manualCount + ' tracked manually, not yet automated';
+    if (noResults > 0) detail += ', ' + noResults + ' with none this time';
+    detail += ', ' + state.coverage.manualCount + ' checked by hand';
     document.getElementById('freshEmployersDetail').textContent = ' (' + detail + ')';
   }
 
@@ -618,23 +658,30 @@
     });
   });
 
+  // The filter panel is a disclosure on narrow screens; keep it open on wide ones.
+  var filtersEl = document.getElementById('filters');
+  var wide = window.matchMedia('(min-width: 961px)');
+  function syncFilters() { if (wide.matches) filtersEl.open = true; else filtersEl.open = false; }
+  syncFilters();
+  if (wide.addEventListener) wide.addEventListener('change', syncFilters);
+
   // --- data: fetched from this server's own API, no external dependency ---
   function loadRoles() {
     fetch('/api/roles').then(function (r) {
-      if (!r.ok) return r.json().then(function (body) { throw new Error(body.error || 'failed to load'); });
+      if (!r.ok) return r.json().then(function (body) { throw new Error(body.error || 'The board could not load the roles.'); });
       return r.json();
     }).then(function (payload) {
       state.roles = payload.roles || [];
       state.meta = payload.meta || {};
       state.coverage = payload.coverage || state.coverage;
       state.targeting = payload.targeting || null;
-      document.getElementById('syncStatus').textContent = 'Served locally by server.js.';
+      document.getElementById('syncStatus').textContent = 'Served from this computer by server.js.';
       document.querySelector('.fresh-dot').classList.add('live');
       initFacets();
       renderFreshbar();
       render();
     }).catch(function (err) {
-      document.getElementById('syncStatus').textContent = err.message || 'No data yet — click Refresh to run the first scrape.';
+      document.getElementById('syncStatus').textContent = err.message || 'No roles yet. Click Refresh now to collect them.';
     });
   }
 
@@ -650,7 +697,7 @@
         wasRunning = true;
         refreshBtn.disabled = true;
         refreshBtn.textContent = 'Refreshing…';
-        refreshStatusEl.textContent = 'A refresh is running (started ' + relativeTime(s.lastStartedAt) + ') — a full run over every employer can take 30–45 minutes.';
+        refreshStatusEl.textContent = 'A refresh started ' + relativeTime(s.lastStartedAt) + '. A full refresh takes 30 to 45 minutes.';
         if (!pollTimer) pollTimer = setInterval(pollRefreshStatus, 15000);
       } else {
         refreshBtn.disabled = false;
@@ -658,7 +705,7 @@
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         if (wasRunning) { wasRunning = false; loadRoles(); }
         refreshStatusEl.textContent = s.lastFinishedAt
-          ? 'Last refresh finished ' + relativeTime(s.lastFinishedAt) + (s.lastExitCode ? ' (exit code ' + s.lastExitCode + ')' : '.')
+          ? 'Last refresh finished ' + relativeTime(s.lastFinishedAt) + (s.lastExitCode ? ' with exit code ' + s.lastExitCode + '.' : '.')
           : '';
       }
     }).catch(function () {});
@@ -669,6 +716,44 @@
     refreshBtn.textContent = 'Starting…';
     fetch('/api/refresh', { method: 'POST' }).then(function () { pollRefreshStatus(); });
   });
+
+  // --- refresh schedule: daily at a time, or on demand only ---
+  var scheduleMode = document.getElementById('scheduleMode');
+  var scheduleTime = document.getElementById('scheduleTime');
+  var scheduleNote = document.getElementById('scheduleNote');
+
+  function showSchedule(s) {
+    scheduleMode.value = s.mode;
+    scheduleTime.value = s.time;
+    scheduleTime.hidden = s.mode !== 'daily';
+    scheduleNote.textContent = s.mode === 'daily' ? '(' + s.timezone + ')' : '';
+  }
+
+  var saveSeq = 0;
+  function saveSchedule() {
+    var seq = ++saveSeq;
+    scheduleTime.hidden = scheduleMode.value !== 'daily';
+    scheduleNote.textContent = 'Saving…';
+    fetch('/api/schedule', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: scheduleMode.value, time: scheduleTime.value || '06:00' }),
+    }).then(function (r) {
+      return r.json().then(function (body) { if (!r.ok) throw new Error(body.error || 'The schedule was not saved.'); return body; });
+    }).then(function (s) {
+      if (seq !== saveSeq) return; // a newer change is on its way
+      showSchedule(s);
+      scheduleNote.textContent = 'Saved';
+      // Only the note changes back; never redraw an older setting.
+      setTimeout(function () { if (seq === saveSeq) showSchedule(s); }, 1500);
+    }).catch(function (err) { if (seq === saveSeq) scheduleNote.textContent = err.message; });
+  }
+
+  fetch('/api/schedule').then(function (r) { return r.json(); }).then(showSchedule).catch(function () {
+    scheduleNote.textContent = 'Schedule not available';
+  });
+  scheduleMode.addEventListener('change', saveSchedule);
+  scheduleTime.addEventListener('change', saveSchedule);
 
   pollRefreshStatus();
   loadRoles();

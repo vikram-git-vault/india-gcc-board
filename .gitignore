@@ -22,6 +22,7 @@ data/*.sqlite
 data/*.sqlite3
 data/roles.json
 data/artifact-sync.json
+data/schedule.json
 frontend/job-board.built.html
 logs/*.log
 
