@@ -104,6 +104,21 @@ app.post('/api/refresh', express.json(), (_req, res) => {
   res.status(result.started ? 202 : 409).json({ ...result, ...refreshState });
 });
 
+// Employer directory for the board (config/employers.json holds no personal
+// data). The GitHub copy of docs/EMPLOYERS.md is not reachable when the
+// repository is private.
+app.get('/api/employers', (_req, res) => {
+  const cfg = JSON.parse(fs.readFileSync(path.join('config', 'employers.json'), 'utf-8'));
+  const pick = (e) => ({
+    id: e.id, name: e.name, careers_url: e.careers_url, ats_type: e.ats_type,
+    active: !!e.active, sector: /Non-BFSI/.test(e.note || '') ? 'Other industry' : 'BFSI', note: e.note || '',
+  });
+  res.json({
+    employers: cfg.employers.map(pick),
+    excluded: cfg.excluded.map((e) => ({ name: e.name || e.id, reason: e.reason || '' })),
+  });
+});
+
 app.get('/api/schedule', (_req, res) => {
   res.json({ ...schedule, timezone: REFRESH_TIMEZONE });
 });

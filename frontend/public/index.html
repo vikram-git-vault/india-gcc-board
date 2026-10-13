@@ -77,7 +77,7 @@
   .refresh-btn:hover:not(:disabled) { background: #E6EDFD; }
   .refresh-btn:disabled { opacity: 0.7; cursor: default; }
   .header-link { color: var(--on-ink-muted); font-size: 16px; }
-  .schedule { display: flex; align-items: center; gap: 8px; color: var(--on-ink-muted); font-size: 16px; }
+  .schedule { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--on-ink-muted); font-size: 16px; min-width: 0; }
   .schedule select, .schedule input {
     font-size: 15px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--ink-soft);
     background: var(--ink-soft); color: var(--on-ink);
@@ -109,8 +109,13 @@
   .layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 36px; padding-block: 28px 64px; align-items: start; }
   @media (max-width: 960px) { .layout { grid-template-columns: 1fr; gap: 20px; } }
 
-  .filters { position: sticky; top: 20px; }
-  @media (max-width: 960px) { .filters { position: static; } }
+  /* Sticky, but never taller than the window: the filter list scrolls on its
+     own, so the last employers stay reachable. */
+  .filters {
+    position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto;
+    overscroll-behavior: contain; padding-right: 6px; scrollbar-gutter: stable;
+  }
+  @media (max-width: 960px) { .filters { position: static; max-height: none; overflow: visible; padding-right: 0; } }
   .filters > summary {
     display: none; cursor: pointer; font-weight: 600; padding: 12px 16px; border-radius: 10px;
     background: var(--surface); border: 1px solid var(--line); list-style: none;
@@ -257,7 +262,7 @@
           <span class="schedule-note" id="scheduleNote" role="status"></span>
         </div>
         <button class="refresh-btn" id="refreshBtn">Refresh now</button>
-        <a class="header-link" href="https://github.com/vikram-git-vault/india-gcc-board/blob/main/docs/EMPLOYERS.md" target="_blank" rel="noopener noreferrer">Employer list</a>
+        <a class="header-link" href="/employers.html">Employer list</a>
       </div>
     </div>
 
