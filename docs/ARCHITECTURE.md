@@ -1,210 +1,233 @@
-# BFSI Global Job Board — Architecture
+# India GCC Board: architecture
 
-**Status:** Phase 0 (scaffold) &nbsp;|&nbsp; **Owner:** the repository owner &nbsp;|&nbsp; **Last updated:** 2026-09-13
+**Status:** Phases 0 to 3b, 5 and 6 are complete. | **Owner:** the repository owner | **Last update:** 2026-10-13
 
-A personal, self-hosted job aggregator that checks 34 BFSI (Banking, Financial
-Services & Insurance) employer career sites and surfaces leadership-track
-roles based in India GCC hub cities (Bangalore, Mumbai, Delhi-NCR, Pune,
-Hyderabad, Chennai, Gurugram, Noida).
+India GCC Board is a personal job board. It runs on your own computer.
+It checks the career sites of 36 BFSI (banking, financial services and insurance) employers.
+It keeps the leadership roles in India GCC hub cities: Bengaluru, Mumbai, Delhi NCR, Pune, Hyderabad, Chennai, Gurugram and Noida.
+It shows only the roles that match a target profile, and it scores each role against two resume variants.
 
-This document reconciles the project scaffold against
-`BFSI_Job_Board_Architecture_Spec.md` (the source spec). **One deliberate
-deviation from that spec:** the refresh cadence here is **daily at 6:00 AM
-IST**, not the spec's Monday/Thursday 8:00 AM IST — a conscious choice made
-2026-09-13, not an oversight. Everything else below follows the spec.
+**Terms that this document uses:**
+
+| Term | Meaning |
+|---|---|
+| Role | One job opening on an employer career site. |
+| Shortlisted role | A role with the tier "target" or "exception". |
+| Refresh | One run of `refresh.js`: scrape, classify, store, get descriptions, publish. |
+| Career site | The public job pages of an employer. |
+| Board | The web page that `server.js` shows. |
+
+This document starts from the source specification `BFSI_Job_Board_Architecture_Spec.md`.
+This document is different from the specification in one item: the refresh occurs each day at 06:00 IST.
+The specification gives Monday and Thursday at 08:00 IST. This change was a decision on 2026-09-13.
 
 ---
 
-## 1. System Architecture
+## 1. System architecture
 
-### 1.1 High-level data flow
+### 1.1 Data flow
 
 ```
-Career Portal Sites (34, sitemap-first where available)
+Career sites (22 automated employers)
         ↓
-   Scraper Service (ethical, respectful, ATS-aware)
+Scrapers (one class for each ATS type; robots.txt, crawl delay)
         ↓
-   Role Parser & Transformer (normalize + filter)
+Parser (normalize, filter by location and keywords)
         ↓
-   SQLite Database (employers, roles, role_marks, scrape_runs, meta)
+Targeting (grade, family, tier from the title: config/targets.json)
         ↓
-   Job Board Frontend (Claude Artifact, React)
+SQLite database (employers, roles, role_scores, scrape_runs, meta)
         ↓
-   User (browse, filter, mark)
+Descriptions (full job description for target and exception roles)
+        ↓
+Scoring (ATS and fit scores against two resume variants: score.js)
+        ↓
+Publisher (data/roles.json: target roles, and exception roles with fit 75 or more)
+        ↓
+server.js (board web page and API)
+        ↓
+User (search, filter, sort by score, mark roles)
 ```
 
-### 1.2 Component breakdown
+### 1.2 Components
 
-| Component | Technology | Purpose |
+| Component | Technology | Function |
 |---|---|---|
-| **Scraper** | Node.js + axios/cheerio, puppeteer where JS rendering is required | Fetch and extract listings per ATS type |
-| **Parser** | Node.js (cheerio) | Normalize raw listings into the `roles` schema |
-| **Database** | SQLite (local) | Persistent role storage |
-| **Frontend** | React + Claude Artifact DB capability | Job board UI, live search, user marks |
-| **Scheduler** | node-cron (local) + GitHub Actions cron | Daily 6:00 AM IST refresh |
-| **CLI** | Node.js CLI (`bin/cli.js`, Phase 4) | Manual trigger, health checks, single-employer re-run |
+| Scraper | Node.js, axios, cheerio. Puppeteer only for pages that need JavaScript. | Gets the role lists from each ATS. |
+| Parser | Node.js, cheerio | Changes the raw data into the `roles` schema. Applies `config/filters.json`. |
+| Targeting | `lib/targeting.js`, `config/targets.json` | Gives each role a grade, a family and a tier from its title. |
+| Descriptions | `lib/descriptions.js` | Gets the full job description of each shortlisted role from the ATS detail API. |
+| Scoring | `score.js`, `lib/scoring.js`, `config/scoring-rubric.md` | Exports the roles that need a score. Validates and stores the scores. |
+| Database | SQLite (`data/jobs.db`) | Stores the employers, the roles and the scores. |
+| Publisher | `lib/publisher.js` | Writes `data/roles.json` for the board. |
+| Server | Express, node-cron (`server.js`) | Shows the board and the API. Runs the daily refresh. |
+| Frontend | Static HTML and JavaScript (`frontend/public/index.html`) | The board: search, filters, scores, marks. |
 
-### 1.3 Data flow timeline (approximate, per daily run)
+### 1.3 Refresh timeline (approximate)
 
-- **T+0** (06:00 IST): scheduled trigger fires
-- **T+0 to T+30min**: scrape all active employers, sequential per host with per-employer crawl delay (see §2)
-- **T+30 to T+35min**: parse & deduplicate roles
-- **T+35 to T+40min**: sync to database
-- **T+40 to T+45min**: publish to Claude Artifact
-- **T+45min+**: board reflects the day's data; freshness indicator shows the new `last_run_at`
+1. **06:00 IST:** the scheduler starts the refresh.
+2. **06:00 to 06:30:** the scrapers get the roles of all active employers, one employer at a time, with a crawl delay.
+3. **06:30 to 06:35:** the parser normalizes and filters the roles. The targeting rules classify each role.
+4. **06:35:** the refresh writes the roles to the database.
+5. **06:35 to 06:40:** the refresh gets the new job descriptions (approximately 5 seconds for each role).
+6. **06:40:** the publisher writes `data/roles.json`. The board shows the new data.
 
-Each stage is independently testable: scrapers return raw HTML/JSON,
-the parser normalizes and filters against `config/filters.json`, and the
-database layer is the only thing that touches SQLite. `refresh.js` wires
-these together in sequence and contains no scraping or parsing logic itself.
+Scoring is a separate step. Refer to section 13.
+
+Each stage has its own module and its own tests. `refresh.js` connects the stages in sequence. It does not contain scraping or parsing logic.
 
 ---
 
-## 2. Ethical Scraping Policy
+## 2. Scraping policy
 
-**Principle:** respect explicit site directives; scrape only what a site
-invites crawlers to index. Public career listing pages only — no login
-walls, no personal data, no resume databases.
+**Rule:** obey the directives of each site. Scrape only the public career pages that a site lets crawlers index.
+Do not scrape pages behind a login. Do not collect personal data. Do not scrape resume databases.
 
 | Rule | Implementation |
 |---|---|
-| **robots.txt** | Parsed and honored per domain before crawling; a disallowed careers path takes that employer to `active: false` |
-| **Sitemaps** | Prefer `/sitemap.xml` job-listing URLs over ad-hoc HTML crawling where a site provides one — faster and more targeted |
-| **Crawl delay** | 5–10 seconds between requests to the same domain (`crawl_delay_seconds` per employer); no parallel requests to the same host |
-| **User-Agent** | Identifies as `india-gcc-board-bot/1.0 (+github repo URL)` — no spoofing of browser UAs to evade detection |
-| **Rate limits** | Stop on `429`/`403` for that employer. Back off 1 hour within the run; if still blocked, skip and retry on the next daily cycle — never loop-retry against a blocking host |
-| **Data use** | Internal personal aggregation only. No resale, no redistribution |
-| **Auth** | Public pages only. No login-gated content, no application-portal scraping |
-| **Data minimization** | Store only title, location, department, posting URL, posted/deadline dates, and a source job ID for dedup — no applicant counts or personal data |
+| robots.txt | The scrapers read robots.txt for each domain before they crawl. If robots.txt disallows the careers path, the employer becomes `active: false`. The description fetcher checks robots.txt for the detail API path. |
+| Sitemaps | The scrapers use `/sitemap.xml` job URLs when a site has them. |
+| Crawl delay | 5 to 10 seconds between requests to the same domain (`crawl_delay_seconds` for each employer). The refresh does not send parallel requests to one host. |
+| User-Agent | `india-gcc-board-bot/1.0 (+github repository URL)`. The scrapers do not use a browser User-Agent to hide. |
+| Blocks | When an employer site answers 429 or 403, the refresh records an error for that employer and continues with the next employer. The next daily refresh tries again. The refresh does not repeat requests to a host that blocks it. |
+| Data use | Use the data only for your personal search. Do not sell the data. Do not give the data to other persons. |
+| Authentication | Scrape only public pages. |
+| Data minimization | The database stores the title, the location, the department, the URL, the dates, the job description and the source job ID. It does not store applicant data. |
 
 ### 2.1 Site classification
 
-**Green (34 sites):** explicit or implicit crawl permission — robots.txt
-allows careers paths, no authentication required.
+- **Automated (22 employers):** robots.txt permits the careers paths, and the site does not need a login.
+- **Excluded by policy (3 employers):** Citigroup (robots.txt: `Disallow: /search-jobs/`), JPMorgan Chase (403 login wall), Charles Schwab (robots.txt: `Disallow: /` for all user agents). These are in `config/employers.json`, list `excluded`.
+- **Inactive (11 employers):** bot protection, or no scraper yet. Refer to section 8.2.
 
-**Red (2 sites, excluded — see `config/employers.json` → `excluded`):**
-- **Citigroup** — robots.txt: `Disallow: /search-jobs/`
-- **JPMorgan Chase** — 403 authentication wall on careers pages
+If a site later prohibits scraping, add the employer to the `excluded` list and set `active: false`.
+Do not remove the employer from the configuration. Do not write logic that evades a block.
 
-Any employer whose site is later found to prohibit scraping gets added to
-this excluded list and flipped to `active: false` — never silently dropped
-from config, and never worked around with stealth/evasion logic.
+### 2.2 Scraper strategy for each ATS type
 
-### 2.2 Per-ATS crawl strategy
+| ATS type | Employers | Method |
+|---|---|---|
+| Workday (12) | LPL Financial, Wells Fargo, Invesco, Broadridge, Northern Trust, State Street, LSEG, Bank of America, Barclays, AIG, Visa, CME Group | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
+| Oracle Fusion Recruiting Cloud (2) | DTCC, BNY | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
+| Greenhouse (1) | Bridgewater Associates | The public API `boards-api.greenhouse.io`. |
+| Avature (1) | Deloitte USI | The server-rendered search result pages, and the location block on each detail page. |
+| Custom (6) | Franklin Templeton, PwC AC, EY GDS, Standard Chartered, Mastercard, Marsh & McLennan | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). |
 
-**Workday** (LPL Financial, Wells Fargo, Franklin Templeton, Invesco,
-Broadridge, LSEG, Northern Trust, KPMG, State Street — 9):
-- Sitemap or `/careers/jobs/search-results` style listing endpoint
-- Filter via query params (`?location=India` / `?country=India`)
-- Crawl delay: 5s; max 2 concurrent Workday requests across the run
+### 2.3 Logs
 
-**Oracle** (PwC AC, EY GDS, Deloitte USI — 3):
-- Career portal main page; use listing API endpoints if discoverable
-- Fallback to HTML parsing; crawl delay: 5s
+The logger writes structured lines. Refer to section 7.2 for the format.
 
-**Taleo** (DTCC, BNY — 2):
-- Oracle Taleo career-section URLs; handle pagination
-- Crawl delay: 5s
+Look for these events:
 
-**Custom portals** (remaining 20, e.g. Goldman Sachs, Morgan Stanley, UBS,
-Deutsche Bank, Barclays, Bank of America, BNP Paribas, Vanguard, Standard
-Chartered, Charles Schwab, and others):
-- Fetch `/sitemap.xml` where present; otherwise parse the careers page directly
-- cheerio for static HTML; puppeteer only for JS-heavy SPAs
-- Crawl delay: 5–10s depending on site fragility
-
-**Payment systems** (Mastercard, Visa — a `custom`-ATS subgroup with their
-own crawl profile):
-- Parse `/careers` job grid/table directly
-- Crawl delay: 5s
-
-### 2.3 Monitoring & compliance logging
-
-Every request logs a structured line (see §7.2 for the shape):
-
-```json
-{
-  "timestamp": "2026-09-13T00:30:00Z",
-  "site": "goldman-sachs",
-  "url": "https://higher.gs.com/careers/search-jobs",
-  "method": "GET",
-  "statusCode": 200,
-  "delay_seconds": 10,
-  "roles_extracted": 42,
-  "errors": null
-}
-```
-
-**Alert on:** `403`/`429` responses (pause that site for the run),
-robots.txt changes (log & review before next run), response time > 30s
-(log warning).
+- 403 or 429 responses (the refresh stops requests to that employer for that run).
+- Changes to robots.txt (examine them before the next run).
+- Responses that take more than 30 seconds.
+- An employer for which most description fetches report a closed role, or all fail (refer to section 13.2).
 
 ---
 
-## 3. Data Schema
+## 3. Data schema
 
-SQLite (`data/jobs.db`), created by `lib/database.js` (`refresh.js --init`).
+`lib/database.js` makes the SQLite database `data/jobs.db` (`node refresh.js --init`).
+The same command adds new columns to an existing database. It does not delete data.
 
 ### `employers`
+
 ```sql
 CREATE TABLE employers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  slug TEXT UNIQUE NOT NULL,        -- matches config/employers.json "id", e.g. "goldman-sachs"
+  slug TEXT UNIQUE NOT NULL,        -- the "id" in config/employers.json, for example "bny"
   name TEXT UNIQUE NOT NULL,
   domain TEXT NOT NULL,
   careers_url TEXT NOT NULL,
-  ats_type TEXT,                    -- 'workday' | 'oracle' | 'taleo' | 'custom'
-  robots_txt_compliant BOOLEAN DEFAULT TRUE,
+  ats_type TEXT,                    -- 'workday' | 'oracle' | 'greenhouse' | 'avature' | 'custom'
+  robots_txt_compliant BOOLEAN DEFAULT 1,
   crawl_delay_seconds INTEGER DEFAULT 5,
-  active BOOLEAN DEFAULT TRUE,
+  active BOOLEAN DEFAULT 1,
   last_scraped TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
-The spec's PK is a bare integer; we add `slug` as a unique natural key so
-scraper/config code can reference employers by the same string id used in
-`config/employers.json` without a DB round trip. `roles`/`scrape_runs`
-foreign keys still target the integer `id`, per spec.
+
+The specification uses only an integer key. This schema adds `slug` as a unique key.
+The code can then refer to an employer with the same text ID as `config/employers.json`.
+The foreign keys in `roles` and `scrape_runs` use the integer `id`.
 
 ### `roles`
+
 ```sql
 CREATE TABLE roles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   employer_id INTEGER NOT NULL REFERENCES employers(id),
-  external_job_id TEXT,             -- the site's own job ID/ref
+  external_job_id TEXT,             -- the job ID on the employer site
   title TEXT NOT NULL,
-  description TEXT,
+  description TEXT,                 -- the text from the scraper (often empty)
   location TEXT,
   country TEXT DEFAULT 'India',
   department TEXT,
-  experience_level TEXT,            -- 'entry' | 'mid' | 'senior' | 'lead'
-  job_type TEXT,                    -- 'full-time' | 'contract' | 'hybrid'
+  experience_level TEXT,            -- 'entry' | 'mid' | 'senior' | 'lead', from the title only
+  job_type TEXT,
   salary_range TEXT,
   posted_date DATE,
   deadline DATE,
   job_url TEXT NOT NULL,
-  source_updated TIMESTAMP,         -- when the site last showed this role
+  source_updated TIMESTAMP,
   scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  is_active BOOLEAN DEFAULT TRUE,
+  is_active BOOLEAN DEFAULT 1,
+  -- targeting (section 11)
+  grade TEXT,                       -- for example 'VP', 'Director', 'AVP'
+  family TEXT,                      -- for example 'Product'
+  tier TEXT,                        -- 'target' | 'exception' | 'excluded'
+  tier_reason TEXT,
+  -- descriptions (section 13.2)
+  full_description TEXT,            -- from the ATS detail API; syncRoles does not write it
+  description_status TEXT,          -- 'ok' | 'gone' | 'error' | 'skipped'
+  description_error TEXT,
+  description_fetched_at TIMESTAMP,
   UNIQUE(employer_id, external_job_id)
 );
 ```
 
-### `role_marks` (user engagement)
+### `role_scores`
+
+```sql
+CREATE TABLE role_scores (
+  role_id INTEGER PRIMARY KEY REFERENCES roles(id),
+  po_ats INTEGER NOT NULL,          -- Product Owner resume: ATS score
+  po_fit INTEGER NOT NULL,          -- Product Owner resume: fit score
+  em_ats INTEGER NOT NULL,          -- Engineering Leader resume: ATS score
+  em_fit INTEGER NOT NULL,          -- Engineering Leader resume: fit score
+  recommended TEXT NOT NULL,        -- 'PO' | 'EM'
+  ats_score INTEGER NOT NULL,       -- the scores of the recommended resume
+  fit_score INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  matched_keywords TEXT NOT NULL,   -- JSON array
+  gaps TEXT NOT NULL,               -- JSON array
+  confidence TEXT NOT NULL,         -- 'high' | 'low'
+  scorer TEXT NOT NULL,             -- for example 'claude-code'
+  rubric_version INTEGER NOT NULL,
+  description_hash TEXT NOT NULL,   -- the title and description that the score used
+  scored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### `role_marks`
+
 ```sql
 CREATE TABLE role_marks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   role_id INTEGER NOT NULL REFERENCES roles(id),
-  user_id TEXT,                     -- device-scoped id, not an account system
+  user_id TEXT,
   status TEXT,                      -- 'interested' | 'applied' | 'rejected' | 'closed'
   marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(role_id, user_id, status)
 );
 ```
-`user_id` is a device identifier for cross-device continuity, not a login
-system — this stays a single-owner tool (see §12).
 
-### `scrape_runs` (monitoring)
+> **NOTE:** The board does not use this table now. The board keeps the marks in the browser (`localStorage`). Refer to section 5.
+
+### `scrape_runs`
+
 ```sql
 CREATE TABLE scrape_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -221,215 +244,141 @@ CREATE TABLE scrape_runs (
   status TEXT                       -- 'in_progress' | 'completed' | 'failed'
 );
 ```
-One row per full daily run (aggregate), matching the spec. Per-employer
-detail for that run lives in the structured request logs (§2.3/§7.2), not
-as separate DB rows — keeps `scrape_runs` cheap to query for a health
-dashboard while the logs remain the audit trail.
+
+The refresh writes one row for each full run. The logs keep the details for each employer.
 
 ### `meta`
+
 ```sql
 CREATE TABLE meta (
   key TEXT PRIMARY KEY,
   value TEXT,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
--- seeded rows: last_refresh, next_refresh, total_active_roles,
--- total_employers, data_version
+-- rows: last_refresh, total_active_roles, total_employers, data_version
 ```
 
 ### 3.1 Indexes
+
 ```sql
 CREATE INDEX idx_roles_employer ON roles(employer_id);
 CREATE INDEX idx_roles_location ON roles(location);
 CREATE INDEX idx_roles_posted ON roles(posted_date DESC);
 CREATE INDEX idx_roles_active ON roles(is_active);
+CREATE INDEX idx_roles_tier ON roles(tier);
 CREATE INDEX idx_role_marks_user ON role_marks(user_id);
 ```
 
 ---
 
-## 4. Scraper Architecture
+## 4. Scraper architecture
 
-**Factory pattern**: `lib/scrapers/ScraperFactory.js` reads `ats_type` from
-an employer's config entry and instantiates the matching scraper class, all
-extending a shared `BaseScraper`.
+`lib/scrapers/ScraperFactory.js` reads `ats_type` from the employer configuration.
+It makes an object of the related scraper class. All scraper classes extend `BaseScraper`.
 
-**Design principle — one class per ATS family, parameterized per employer,
-never one class per organization.** Every employer on a given ATS is served
-by the *same* scraper class; what differs between LPL and Wells Fargo is
-config data passed into the constructor (tenant/site slug, base URL,
-selector overrides), not code. Concretely: `ScraperFactory.create(employer)`
-returns `new WorkdayScraper(employer)` for every Workday employer — one
-class, N configured instances. Adding employer #35 on an already-supported
-ATS is a one-line addition to `config/employers.json`; it should never
-require a new class or a code review of scraper logic. This is also why
-`CustomScraper` uses a per-site *selector config* (`config/selectors/<id>.json`)
-rather than a per-employer subclass — even the least standardized ATS
-bucket stays data-driven. A dedicated subclass is only justified when a
-site's fetch/parse *mechanism* fundamentally differs (e.g. needs Puppeteer
-for JS rendering instead of axios+cheerio), not merely because its HTML
-differs.
+**Design rule:** use one class for each ATS type. Do not make one class for each employer.
+The configuration in `config/employers.json` gives the differences between employers (tenant, site, sitemap URL).
+To add an employer on a supported ATS, add one entry to `config/employers.json`. Do not add a class.
+Make a new class only when the fetch method or the parse method is different (for example, Avature).
 
 ```
 BaseScraper (lib/scrapers/BaseScraper.js)
- ├─ constructor(employerConfig) — captures per-employer params (careers_url,
- │   tenant/site slug, crawl_delay_seconds, selector overrides, ...)
- ├─ checks robots.txt, prefers sitemap.xml when present
- ├─ enforces crawl delay + UA header + 429/403 backoff (§2)
- ├─ abstract fetchListings() -> raw HTML/JSON
- └─ abstract extractRoles(raw) -> [{ title, location, url, postedDate, externalJobId, ... }]
+ ├─ constructor(employer): keeps the configuration of the employer
+ ├─ checkRobotsTxt(): reads robots.txt and applies the * and $ rules
+ ├─ delay(): the crawl delay of the employer
+ ├─ fetchListings(): abstract; gets the raw data
+ └─ extractRoles(raw): abstract; returns [{ title, location, url, postedDate, externalJobId, ... }]
 
-WorkdayScraper   extends BaseScraper   (9 employers, one class)
-OracleScraper    extends BaseScraper   (3 employers, one class)
-TaleoScraper     extends BaseScraper   (2 employers, one class)
-CustomScraper    extends BaseScraper   (20 employers, one class — per-site
-                                         CSS selectors from
-                                         config/selectors/<id>.json;
-                                         puppeteer only for JS-heavy SPAs)
+WorkdayScraper    (12 employers)
+OracleScraper     (2 employers)
+GreenhouseScraper (1 employer)
+AvatureScraper    (1 employer)
+CustomScraper     (6 employers; sitemap and JobPosting data; optional Puppeteer)
 ```
 
-`lib/parser.js` normalizes whatever a scraper returns into the `roles`
-schema (§3), including a `detectLevel()`-style classifier over
-title+description text against `config/filters.json`'s `experience_levels`
-keywords, and applies `exclude_keywords`/location filtering before a role
-is considered for sync.
+`lib/parser.js` changes the scraper output into the `roles` schema. It does these steps:
+
+1. It removes HTML from the title and the description.
+2. It finds the city. When two city names match, the parser selects the longer name.
+3. It sets `experience_level` from the title only.
+4. It classifies the role with `lib/targeting.js` (section 11).
+5. It applies `exclude_keywords` and the location list in `config/filters.json`. It uses whole-word matches.
 
 ### 4.1 Concurrency
 
-Scraper class structure and execution parallelism are independent concerns
-— parallelism belongs in the orchestrator, not in how many classes exist.
-`refresh.js` runs a **bounded worker pool** (small concurrency cap, e.g. 4–6)
-across all active employers regardless of ATS type, with one constraint:
-**never two in-flight requests to the same domain at once** (a per-domain
-mutex/queue), since crawl-delay is a per-domain courtesy, not a global one.
-This gets the speed benefit of parallel scraping without needing per-site
-classes and without violating §2's rate-limit policy — a Workday employer
-and a Custom employer can scrape concurrently; two Workday employers on
-different tenants can too, since `crawl_delay_seconds` only serializes
-requests *within* one domain.
-
-Built in **Phase 1** (generic scraper + `BaseScraper` + 3 pilot Workday
-sites, per the spec's phase-1 scope, to prove the pattern end-to-end) and
-**Phase 2** (remaining ATS-specific coverage).
+The refresh scrapes one employer at a time. It waits for the crawl delay between employers.
+A worker pool with one request at a time for each domain is a possible future change.
 
 ---
 
-## 5. Frontend Design (Phase 3) ✅ — self-hosted (Phase 3b)
+## 5. Frontend
 
-**Self-hosted via `server.js`**, not a Claude Artifact. The board was
-originally published as a Claude Artifact (kept at
-`https://claude.ai/code/artifact/35691137-5630-4af7-a06c-72cd225e065c` as
-a historical/secondary mirror, no longer the primary), but that hosting
-model had a hard limitation worth naming plainly: **there is no public
-API for a plain Node script to write into a published Artifact's
-database.** The `db` capability's write path only exists for a live
-page-viewer's own browser or for an interactive Claude Code session's
-`write_db` tool action — a `node refresh.js` run has no credentials or
-endpoint to push through either way. That made "daily automated refresh"
-false advertising: the scrape could run unattended, but getting the
-result onto the visible board could not, without a human (or a Claude
-session) in the loop every time. See git history on this file for the
-full account of that model, if useful context.
+`server.js` shows the board. The board is not a Claude Artifact now.
 
-Phase 3b replaces that with `server.js` (Express): a small self-hosted
-server that serves the frontend (`frontend/public/index.html`) and the
-scraped data (`GET /api/roles`, reading `data/roles.json`) directly, over
-plain HTTP, with zero Claude dependency in the runtime loop. This is a
-genuine architecture change, not a patch — see §6 for how it runs and is
-reached from other devices.
+The first version of the board was a Claude Artifact.
+A Node.js script cannot write to the database of a published Artifact. Because of this, the daily refresh did not update the board without a person or a Claude session.
+Phase 3b replaced the Artifact with `server.js`. The old Artifact is a historical copy. It does not update.
 
-**Built in vanilla JS, not React** — no bundler/build step needed for a
-plain server-rendered static page; at ~600 rows, in-memory filtering and
-`innerHTML` re-rendering is fast enough that a framework wouldn't change
-the user experience, only the code size.
+The board is static HTML and JavaScript. It does not use React or a build step.
+The board has fewer than 100 shortlisted roles. Because of this, the browser filters the roles quickly.
 
-- **Live search** across title/employer (client-side, instant).
-- **Filters**: experience level, city, employer, and priority-keyword
-  focus area (from `config/filters.json`), all as toggleable chips,
-  AND'd across facets / OR'd within one.
-- **Tabs**: All / Interested / Applied / Rejected / Closed, so marked
-  roles are one click away instead of buried in a filtered search.
-- **User marks**: interested / applied / rejected / closed, persisted in
-  the browser's `localStorage` — this is a single-user personal tool, so
-  there's no need for a shared backend just to remember your own marks.
-  Tradeoff: marks don't follow you across browsers/devices; see §6 for
-  why that's an acceptable default for now.
-- **Freshness indicator**: last-refresh relative time, active role count,
-  employer coverage (fetched/tracked, with/without results this cycle),
-  always visible at the top.
-- **On-demand refresh**: a "Refresh now" button calls `POST /api/refresh`,
-  which spawns `node refresh.js` as a background child process (guarded
-  against overlapping runs) and polls `GET /api/refresh/status` until it
-  finishes, then reloads the data — see §6.
+The board has these functions:
+
+- **Scores:** each role shows an ATS score and a fit score, with colors. Green is 75 or more. Amber is 50 to 74. Grey is less than 50.
+- **Recommended resume:** each role shows the resume to send (Product Owner or Engineering Leader).
+- **Why this score:** a panel shows the reason, the matched keywords, the gaps, and the scores for both resumes.
+- **Sort:** best fit (the default), best ATS, newest, employer, title.
+- **Filters:** fit band, grade, family, city, employer. The filters use AND between groups and OR in one group.
+- **Search:** by title or employer.
+- **Tabs:** All, Interested, Applied, Rejected, Closed.
+- **Marks:** Interested, Applied, Rejected, Closed. The browser keeps the marks in `localStorage`. The marks do not move to other browsers or devices.
+- **Status bar:** the status bar shows these items:
+  - The time of the last refresh.
+  - The number of shortlisted roles.
+  - The number of scored roles and hidden exception roles.
+  - The employer coverage.
+- **Refresh now:** this button starts `node refresh.js` on the server. The board checks `GET /api/refresh/status` until the refresh is complete. Then it loads the new data.
 
 ---
 
-## 6. Scheduling & Deployment (Phase 3b: local-first)
+## 6. Scheduling and deployment
 
-**Deliberately local-first** (decided 2026-09-14): the board runs on your
-own machine, reachable from your own devices only, with a clear path to a
-private hosted URL later that needs no rearchitecture — just a different
-way of exposing the same unchanged server.
+The board runs on your own computer. Only your own devices can open it. This was a decision on 2026-09-14.
 
-**`server.js`** is a long-running process that does two jobs:
-1. Serves `frontend/public/` + `GET /api/roles` (reads `data/roles.json`)
-   + `POST /api/refresh` (spawns `node refresh.js`, guarded against
-   overlapping runs) + `GET /api/refresh/status`.
-2. Schedules the same refresh **in-process** via `node-cron`
-   (`REFRESH_CRON` env var, default `0 6 * * *` in `TZ`, default
-   `Asia/Kolkata`) — no separate OS-level cron/launchd job needed.
+`server.js` is a long-running process. It does two tasks:
 
-Run it: `npm run serve` (binds `0.0.0.0` by default — already reachable
-from other devices on the same network, not just `localhost`).
+1. It shows `frontend/public/`, and it gives these API endpoints:
+   - `GET /api/roles`: reads `data/roles.json`.
+   - `POST /api/refresh`: starts `node refresh.js`. A lock prevents two refreshes at the same time.
+   - `GET /api/refresh/status`: the state of the refresh.
+2. It runs the daily refresh with `node-cron`. `REFRESH_CRON` sets the time (default `0 6 * * *`). `TZ` sets the time zone (default `Asia/Kolkata`).
 
-**Reaching it from your other devices — two tiers, same server:**
+To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:
 
-1. **Same Wi-Fi / LAN**: open `http://<this-machine's-LAN-IP>:4000` from
-   your phone or another computer on the same network. Zero setup beyond
-   running the server.
-2. **From anywhere, still private to only your own devices**:
-   [Tailscale](https://tailscale.com) (free for personal use) — install it
-   on this machine and on each device that should reach the board; it
-   creates a private mesh network between just those devices (not a
-   public exposure of any kind), and the board becomes reachable at your
-   Tailscale hostname from anywhere with internet, not just the same Wi-Fi.
+- **Same Wi-Fi network:** `http://<LAN-IP>:4000`.
+- **Other networks:** Tailscale (a private network between your devices).
+- **An unlisted URL:** `cloudflared tunnel --url http://localhost:4000`. This needs no change to the project.
 
-**Later, if/when you want an unlisted URL others could use** (no
-Tailscale install required on their end): run
-[`cloudflared`](https://github.com/cloudflare/cloudflared) (free,
-open-source) pointed at the same local port —
-`cloudflared tunnel --url http://localhost:4000` — which hands back a
-public-but-unlisted HTTPS URL. This requires **zero changes to `server.js`
-or the frontend**; it's the same process, just reached a different way.
-That's the "minimal effort to go from local to private URL" property this
-architecture was chosen for.
-
-**GitHub Actions** (`.github/workflows/refresh-schedule.yml`) still exists
-in the repo but is not part of this local-first setup — it predates this
-model (references a Claude Artifact publish step that no longer applies)
-and is left as a starting point for a possible future fully-cloud-hosted
-phase, not something to enable now.
-
-**The original Claude Artifact** (`https://claude.ai/code/artifact/35691137-5630-4af7-a06c-72cd225e065c`)
-still exists as a secondary/historical mirror but is no longer kept in
-sync automatically or treated as the primary board.
+The workflow `.github/workflows/refresh-schedule.yml` is from an earlier cloud setup. Its schedule is in a comment, so it runs only when a person starts it. Do not enable the schedule.
+The workflow is a possible start point for a future cloud phase.
 
 ---
 
-## 7. Error Handling & Monitoring
+## 7. Errors and monitoring
 
-### 7.1 Error categories & actions
+### 7.1 Error types
 
 | Error type | Example | Action |
 |---|---|---|
-| Site down | 503 | Log, skip, retry next daily cycle |
-| Rate limited | 429 | Back off 1hr within run; skip to next employer; retry next cycle |
-| Auth required | 403 | Skip site, alert |
-| Parse failure | HTML structure changed | Log sample, flag for manual review |
-| DB error | Connection/write failure | Rollback, alert operator |
-| Network | Timeout > 30s | Retry up to 2 times, then skip |
+| Site not available | 503 | Record the error. Continue with the next employer. Try again at the next refresh. |
+| Rate limit | 429 | Record the error. Continue with the next employer. Try again at the next refresh. |
+| Access refused | 403 | Record the error. Examine the site. If the block continues, set the employer to `active: false`. |
+| Parse failure | The HTML structure changed | Record a sample. Examine the scraper. |
+| Database error | A write failure | The reclassify step uses a transaction and rolls back. Other steps stop the refresh. |
+| Network | Timeout after 30 seconds | Record the error. Continue with the next employer. |
+| Closed role | Workday 403 with errorCode S22, or 404; Oracle returns no items | Set the role to inactive. |
 
-### 7.2 Structured log schema
+### 7.2 Log format
 
 ```json
 {
@@ -437,7 +386,7 @@ sync automatically or treated as the primary board.
   "run_id": "refresh_20260913_0600",
   "level": "INFO",
   "component": "scraper",
-  "employer": "goldman-sachs",
+  "employer": "bny",
   "event": "roles_extracted",
   "count": 42,
   "duration_ms": 3200,
@@ -445,231 +394,265 @@ sync automatically or treated as the primary board.
 }
 ```
 
-Written via `lib/logger.js` (winston) to console (dev), `logs/combined.log`,
-and `logs/error.log` (10MB rotation, 5 files kept).
+`lib/logger.js` (winston) writes to the console, to `logs/combined.log` and to `logs/error.log`.
+Each log file has a maximum size of 10 MB. The logger keeps 5 files.
 
 ### 7.3 Health checks
 
-**Daily:** active-role count should hold steady or increase; `last_refresh`
-should be < 24h old; alert if more than 5 employers failed in one run.
+**Each day:**
 
-**Weekly:** review parse errors and flag ATS structure changes; verify
-robots.txt compliance hasn't drifted for any active employer.
+- `last_refresh` is less than 24 hours old.
+- The number of active roles is stable or increases.
+- Fewer than 5 employers fail in one refresh.
+- `node score.js --status` shows 0 new roles after you score.
+
+**Each week:**
+
+- Examine the parse errors and the description errors.
+- Make sure that robots.txt still permits the paths for each active employer.
 
 ---
 
-## 8. Implementation Roadmap
+## 8. Implementation phases
 
-| Phase | Scope | Key deliverables |
+| Phase | Scope | Deliverables |
 |---|---|---|
-| **0 — Foundation** (this doc) | Architecture, config, scaffold | This file, `docs/SETUP.md`, `config/*.json`, `refresh.js` shell, logger, workflow, folder structure |
-| **1 — Database + generic scraper** ✅ | Prove the pipeline end-to-end on 3 pilot Workday employers (per spec §8) | `lib/database.js`, `lib/parser.js`, `lib/scrapers/BaseScraper.js`, `lib/scrapers/ScraperFactory.js`, `WorkdayScraper.js` configured for LPL Financial / Wells Fargo / Invesco — 106 real roles verified end-to-end |
-| **2 — ATS-specific scrapers** ✅ | Cover as many of the remaining employers as could be verified live | `OracleScraper`, `CustomScraper` (sitemap + JSON-LD/Microdata + `<title>`/URL fallbacks, optional Puppeteer render mode), `GreenhouseScraper`, 12 Workday employers found by direct verification. **21/33 employers active, 586 real India-based roles** as of 2026-09-14 (Phase 2b). See §8.1 for what didn't make it in and why. |
-| **3 — Frontend** ✅ | Job board UI (built vanilla JS, not React — see §5) | Search, filters, marks — originally live via Claude Artifact `db`; superseded by 3b |
-| **3b — Self-hosted, local-first** ✅ | Remove the Claude-session dependency from the runtime loop entirely — see §5/§6 | `server.js` (Express + in-process `node-cron`), `frontend/public/index.html` (fetches `/api/roles`, marks in `localStorage`), `lib/publisher.js` writes `data/roles.json`. Reachable from other devices via LAN or Tailscale now; `cloudflared` tunnel is a zero-code-change path to an unlisted URL later. |
-| **4 — Hardening** | Make the daily run more resilient | Consecutive-failure detection, notifications, GitHub Actions revisited only if/when a fully cloud-hosted phase is wanted |
+| 0: Foundation | Architecture, configuration, scaffold | This document, `docs/SETUP.md`, `config/*.json`, `refresh.js`, logger, folder structure |
+| 1: Database and generic scraper | Prove the pipeline on 3 Workday employers | `lib/database.js`, `lib/parser.js`, `BaseScraper`, `ScraperFactory`, `WorkdayScraper`. 106 roles verified. |
+| 2: ATS-specific scrapers | All employers that live tests could verify | `OracleScraper`, `CustomScraper`, `GreenhouseScraper`, `AvatureScraper`. 22 employers active. Refer to section 8.1. |
+| 3: Frontend | Job board | Search, filters, marks. Phase 3b replaces the hosting. |
+| 3b: Self-hosted, local-first | No Claude session in the daily operation | `server.js`, `frontend/public/index.html`, `data/roles.json` |
+| 4: Hardening | A more reliable daily refresh | Not started. Alerts for repeated failures, notifications. |
+| 5: Role targeting | Show only roles that match the target profile | `config/targets.json`, `lib/targeting.js`, `refresh.js --reclassify`. Refer to section 11. |
+| 6: Descriptions and AI scoring | ATS and fit scores on each role | `lib/descriptions.js`, `score.js`, `lib/scoring.js`, `config/scoring-rubric.md`, the score UI. Refer to sections 12 and 13. |
 
-### 8.1 Phase 2 / 2b notes: what verification actually found
+### 8.1 Phase 2 findings
 
-The source spec's Workday/Oracle/Taleo classification was wrong often
-enough (Franklin Templeton, PwC AC, EY GDS, Marsh & McLennan misfiled as
-Workday/Oracle when they're Phenom/SuccessFactors; Bank of
-America/Barclays/Visa/AIG/CME Group misfiled as "custom" when they're
-Workday; Bridgewater misfiled as "custom" when it's Greenhouse) that
-**every employer's real platform was checked against its live site**
-rather than trusted — see `config/employers.json`'s per-employer `note`
-fields for what was found, dated by which pass found it. Design decisions
-that came out of this:
+The ATS types in the source specification were often wrong. For example:
 
-- **No dedicated Taleo/Phenom/SuccessFactors/iCIMS scraper classes.**
-  "Oracle" in this codebase specifically means Oracle Fusion Recruiting
-  Cloud (its public, unauthenticated `recruitingCEJobRequisitions` REST
-  API) — no employer was found running genuine legacy Taleo. Phenom,
-  SuccessFactors, and unidentified platforms are all served by one
-  `CustomScraper` via sitemap.xml + schema.org `JobPosting` structured
-  data, because that convention turned out to be shared across vendors
-  while each vendor's private search API is not. **Greenhouse got its own
-  type** (`GreenhouseScraper`) despite the same reasoning, because its
-  `boards-api.greenhouse.io` is itself a clean, public, documented REST
-  API — closer in kind to Oracle Fusion than to the sitemap-scraping
-  vendors.
-- **`CustomScraper` grew a render mode and a fallback chain, both found
-  necessary by testing, not designed upfront.** `custom.render: true`
-  switches detail-page fetching to a headless browser (Puppeteer) for
-  tenants that render job content entirely client-side (Standard
-  Chartered's SuccessFactors instance — EY GDS's SuccessFactors instance,
-  by contrast, is server-rendered; same vendor, different deployment).
-  Separately, when structured data is present but incomplete — Standard
-  Chartered's Microdata tags only `description`, not title or location —
-  extraction falls back to the page's `<title>` tag for the title and a
-  known city name in the URL for location, in that order, only filling
-  gaps the stronger source left.
-- **Three bugs only surfaced by testing against live sites, not sample
-  data:** a location pre-filter that hard-filtered to zero candidates for
-  platforms whose URL slugs don't embed a city name (fixed: rank instead
-  of filter); a JSON-LD-only extractor that silently found nothing on
-  Microdata tenants (fixed: try both); and `exclude_keywords`/location
-  matching via plain `.includes()`, which matched "Intern" inside
-  "international" and let "India" win over "Pune" in a first-match scan
-  (fixed: word-boundary regex, longest-match-first for location).
-- **A confirmed platform is not always a green light.** Charles Schwab
-  turned out to be iCIMS, but its robots.txt disallows crawling
-  *everything* (`Disallow: /` for `User-agent: *`), not just careers —
-  moved to `excluded` outright rather than left "pending," since building
-  a scraper for it would mean ignoring what its own robots.txt says.
-  Blackstone's apparent "Workday" signal was actually a Cloudflare
-  bot-challenge page mentioning the word incidentally, confirmed even via
-  a real headless browser — genuinely bot-protected, not a flaky static
-  fetch, so it's a stop per §12, not a "try harder" TODO.
+- Franklin Templeton, PwC AC, EY GDS and Marsh & McLennan use Phenom or SuccessFactors, not Workday or Oracle.
+- Bank of America, Barclays, Visa, AIG and CME Group use Workday, not a custom site.
+- Bridgewater uses Greenhouse.
 
-**Remaining inactive employers (11 of 33)**: confirmed bot-protected (UBS,
-BNP Paribas, Blackstone — not something to work around); and platforms
-that render real content even under a full headless browser but match no
-known ATS vendor, so are presumed proprietary in-house builds (Vanguard,
-Goldman Sachs, Morgan Stanley, Deutsche Bank, Citadel) or are still
-unidentified after repeated false-positive vendor-string matches (KPMG,
-Zurich, ICE). Each has a dated `note` in config explaining which.
+Because of this, the team examined the live site of each employer. The `note` field of each employer in `config/employers.json` gives the finding and its date.
 
-### 8.1.1 Phase 2c: Deloitte USI, and a robots.txt parser bug
+These design decisions came from the findings:
 
-Deloitte USI's own real career site turned out to be
-`usijobs.deloitte.com/en_US/careersUSI` — a distinctly-branded hostname on
-the same Avature tenant as `deloitteus.avature.net`, not a separate
-platform. It genuinely has no job-search sitemap (its generic
-`sitemap.xml` is a one-entry favicon stub), so a new `AvatureScraper`
-class was built around the only real enumeration surface: the
-server-rendered, paginated search-results HTML
-(`?jobRecordsPerPage=10&jobOffset=N`). Detail pages do carry schema.org
-`JobPosting` JSON-LD, but multi-location postings — the norm on this
-tenant — leave `jobLocation` empty; the real per-city list lives in a
-separate `.article__header--locations` HTML block that JSON-LD doesn't
-cover, so the scraper reads that directly rather than trusting JSON-LD
-location.
+- **No Taleo, Phenom, SuccessFactors or iCIMS classes.** "Oracle" in this project means Oracle Fusion Recruiting Cloud and its public REST API. No employer uses old Taleo. `CustomScraper` serves Phenom, SuccessFactors and other sites through `sitemap.xml` and schema.org `JobPosting` data. Many vendors use this convention. Greenhouse has its own class because its API is public and documented.
+- **CustomScraper has a render mode and fallbacks.** `custom.render: true` uses Puppeteer for tenants that make the content with JavaScript (Standard Chartered). When the structured data has no title or location, the scraper uses the page `<title>` and a city name in the URL.
+- **Live tests found three bugs:**
+  1. A location filter removed all roles on sites whose URLs have no city name. The fix ranks the URLs and does not filter them.
+  2. A JSON-LD-only parser found no data on Microdata sites. The fix reads both formats.
+  3. Keyword matches with `.includes()` found "Intern" in "international", and the parser applied "India" before "Pune". The fix uses whole-word matches and the longest city name.
+- **A known ATS does not always mean that the employer permits scraping.** Charles Schwab uses iCIMS, but its robots.txt disallows all paths. Because of this, Charles Schwab is in the excluded list. Blackstone shows a Cloudflare challenge page, also in a headless browser. Blackstone is bot-protected. Refer to section 14.
 
-Wiring this up surfaced a real bug in `BaseScraper`'s robots.txt parser:
-it matched rules with plain `pathToCheck.startsWith(rule)`, treating `*`
-as a literal character instead of the wildcard the robots.txt spec
-defines it as. Deloitte's robots.txt allows every locale-prefixed careers
-path via `Allow: /*/careers`, but the literal-string check never matched
-it, so the file's catch-all `Disallow: /` silently won and every such
-path read as blocked when it wasn't. Fixed by compiling each rule to a
-real regex (`*` → `.*`, trailing `$` → an end anchor) — verified against
-Deloitte USI (now correctly `allowed: true`) and re-checked against every
-other active employer's robots.txt to confirm none flipped the other way.
+Inactive employers (11): UBS, BNP Paribas and Blackstone are bot-protected. Vanguard, Goldman Sachs, Morgan Stanley, Deutsche Bank and Citadel probably use their own systems. The platforms of KPMG, Zurich and ICE are not known.
 
----
+### 8.1.1 Phase 2c: Deloitte USI and a robots.txt bug
 
-### 8.2 Manually-tracked employers
+The career site of Deloitte USI is `usijobs.deloitte.com/en_US/careersUSI`. It is on the Avature tenant `deloitteus.avature.net`.
+It has no job sitemap. Because of this, `AvatureScraper` reads the server-rendered search pages (`?jobRecordsPerPage=10&jobOffset=N`).
+The JSON-LD on a detail page often has no location when the role has many cities. Because of this, the scraper reads the `.article__header--locations` block.
 
-Not every employer that matters belongs in the automated pipeline. Two
-distinct reasons an employer ends up here instead of `active: true`:
+This work found a bug in the robots.txt parser of `BaseScraper`.
+The parser used `startsWith()`. It did not treat `*` as a wildcard. Because of this, `Allow: /*/careers` did not match, and `Disallow: /` blocked all paths.
+The fix changes each rule to a regular expression: `*` becomes `.*`, and a `$` at the end becomes an end anchor.
+The team checked the robots.txt of each active employer again after the fix.
 
-**Policy stop — will not be automated, by design (6):** the employer's own
-site says not to. Robots.txt disallowing everything, or a hard bot-wall,
-is a clear signal, and evading it (rotating IPs, spoofing headers, solving
-challenges) is exactly what §12 rules out. Checking these by hand — a
-human visiting a public page isn't what robots.txt governs — is the
-correct alternative, not a scraper workaround.
+### 8.2 Employers that you must check manually
 
-| Employer | Reason | Job board (check manually) |
+**Policy stop (6). Do not automate these employers.** The site does not permit crawlers, or it has a bot wall.
+Do not try to go around a block (refer to section 14). A person can visit the public pages.
+
+| Employer | Reason | Career site |
 |---|---|---|
 | Citigroup | robots.txt: `Disallow: /search-jobs/` | https://jobs.citi.com/search-jobs |
-| JPMorgan Chase | 403 authentication wall | https://www.jpmorganchase.com/careers |
-| Charles Schwab | robots.txt: `Disallow: /` for every user-agent | https://schwabjobs.com |
-| UBS | 403, confirmed bot-protected | https://jobs.ubs.com |
-| BNP Paribas | 403, confirmed bot-protected | https://group.bnpparibas/en/careers |
-| Blackstone | Cloudflare challenge page, confirmed even via headless browser | https://www.blackstone.com/careers |
+| JPMorgan Chase | 403 login wall | https://www.jpmorganchase.com/careers |
+| Charles Schwab | robots.txt: `Disallow: /` for all user agents | https://schwabjobs.com |
+| UBS | 403, bot protection | https://jobs.ubs.com |
+| BNP Paribas | 403, bot protection | https://group.bnpparibas/en/careers |
+| Blackstone | Cloudflare challenge page, also in a headless browser | https://www.blackstone.com/careers |
 
-**Backlog — not yet automated, no policy blocker (8):** these employers
-don't forbid crawling; they just don't fit `CustomScraper`'s sitemap +
-structured-data convention yet, or their real platform hasn't been
-identified. Candidates for a future phase (dedicated CSS-selector
-scrapers per docs/ARCHITECTURE.md §4's "genuinely bespoke" carve-out),
-worth checking by hand in the meantime. (Deloitte USI was in this table
-until 2026-09-14 — see §8.1.1 for the `AvatureScraper` that moved it to
-active.)
+**Backlog (8). No policy block.** These sites do not match the `CustomScraper` method, or their platform is not known.
+A future phase can add a scraper with CSS selectors for each site (refer to section 4).
 
-| Employer | Status | Job board (check manually) |
+| Employer | Status | Career site |
 |---|---|---|
-| Vanguard | Real content, no known ATS vendor — likely proprietary | https://www.vanguard.in/ |
-| Goldman Sachs | Real content, no known ATS vendor — likely proprietary | https://higher.gs.com/roles |
-| Morgan Stanley | Real content, no known ATS vendor — likely proprietary | https://www.morganstanley.com/careers/students-graduates/experienced-professionals |
-| Deutsche Bank | Real content, no known ATS vendor — likely proprietary | https://careers.db.com/search-results |
-| Citadel | Real content, no known ATS vendor — likely proprietary | https://www.citadel.com/careers/open-opportunities/ |
-| KPMG | Marketing site only; real ATS URL not found | https://www.kpmguscareers.com/ |
-| Zurich Insurance | Real URL not yet found; India ops may sit under a separate JV (Zurich Kotak) | https://www.zurich.com/careers |
-| ICE | Real platform not identified (two false-positive vendor matches so far) | https://careers.ice.com |
+| Vanguard | Content is available. No known ATS. Probably a proprietary system. | https://www.vanguard.in/ |
+| Goldman Sachs | Content is available. No known ATS. Probably a proprietary system. | https://higher.gs.com/roles |
+| Morgan Stanley | Content is available. No known ATS. Probably a proprietary system. | https://www.morganstanley.com/careers/students-graduates/experienced-professionals |
+| Deutsche Bank | Content is available. No known ATS. Probably a proprietary system. | https://careers.db.com/search-results |
+| Citadel | Content is available. No known ATS. Probably a proprietary system. | https://www.citadel.com/careers/open-opportunities/ |
+| KPMG | Marketing site only. The ATS URL is not known. | https://www.kpmguscareers.com/ |
+| Zurich Insurance | The URL is not known. The India operations can be in a joint venture (Zurich Kotak). | https://www.zurich.com/careers |
+| ICE | The platform is not known. Two vendor matches were false. | https://careers.ice.com |
 
-See `config/employers.json`'s per-employer `note` field for the full,
-dated finding behind each row above.
+---
 
-## 9. Configuration File Templates
+## 9. Configuration files
 
-`config/employers.json` — one entry per employer:
+| File | Content |
+|---|---|
+| `config/employers.json` | One entry for each employer, the `excluded` list and `meta`. |
+| `config/filters.json` | The location lists, the job types and `exclude_keywords`. |
+| `config/targets.json` | The targeting rules (section 11). |
+| `config/scoring-rubric.md` | The scoring rubric and its version (section 12). |
+| `.env` | Runtime settings. Git ignores this file. Copy it from `.env.example`. |
+
+Example entry in `config/employers.json`:
+
 ```json
 { "id": "example-bank", "name": "Example Bank", "domain": "example.com",
   "careers_url": "https://careers.example.com", "ats_type": "workday",
+  "workday": { "tenant": "example", "cluster": "wd1", "site": "Careers" },
   "crawl_delay_seconds": 5, "active": true }
 ```
 
-`config/filters.json`:
-```json
-{ "locations": ["India", "Bangalore", "Mumbai", "..."],
-  "job_types": ["Full-time", "Contract", "Hybrid"],
-  "experience_levels": ["Entry", "Mid", "Senior", "Lead"],
-  "exclude_keywords": ["Intern", "Trainee", "freelance"] }
-```
-
-`.env` (from `.env.example`) — secrets and runtime tuning, never committed.
-
 ---
 
-## 10. Tech Stack
+## 10. Technology
 
-| Layer | Choice | Why |
+| Layer | Choice | Reason |
 |---|---|---|
-| Runtime | Node.js 18+, ESM | matches Puppeteer/Cheerio ecosystem |
-| HTTP | axios | simple, well-understood retry/timeout config |
-| JS-rendered sites | puppeteer | only where Cheerio+axios can't get the data |
-| HTML parsing | cheerio | fast, no headless browser overhead for static ATS pages |
-| Database | sqlite3 | zero-ops, file-based, fine for single-user scale |
-| Scheduling | node-cron (local) + GitHub Actions cron | redundant, matches §6 |
-| Logging | winston | rotation, levels, structured output |
-| Frontend | React, published as a Claude Artifact | no separate hosting needed |
-| Testing | jest + nock | HTTP mocking for scraper tests without hitting real sites |
+| Runtime | Node.js 18 or later, ES modules | It works with Puppeteer and cheerio. |
+| HTTP | axios | It has a simple timeout configuration. |
+| Sites that need JavaScript | puppeteer | The scrapers use it only when axios and cheerio cannot get the data. |
+| HTML parsing | cheerio | It is fast, and it does not need a browser. |
+| Database | sqlite3 | The database is one file and needs no server. This is correct for one user. |
+| Server | Express | It is small and well known. |
+| Scheduling | node-cron in `server.js` | No separate operating-system job. |
+| Logging | winston | It has levels, structured output and file rotation. |
+| Frontend | Static HTML and JavaScript | It needs no build step. |
+| Tests | Jest and nock | nock gives fake HTTP responses. The tests do not send requests to real sites. |
 
 ---
 
-## 11. Success Metrics
+## 11. Role targeting
 
-- **Coverage**: 34/34 employers actively scraped, or explicitly
-  `active: false` with a documented reason.
-- **Compliance**: 0 robots.txt violations, 0 sustained rate-limit blocks.
-- **Freshness**: daily run completes before 7:00 AM IST; surfaced roles
-  posted within the last 7 days where the source site provides a date.
-- **Reliability**: ≥90% of daily runs in a 30-day window complete without
-  manual intervention (looser than the spec's "100%" given a daily,
-  unattended cadence has more surface area for transient site issues than
-  the spec's twice-weekly run).
-- **Signal quality**: <10% of surfaced roles are false positives against
-  the `experience_level`/location filters (spot-checked monthly).
-- **Personal usefulness**: the frontend is actually checked and roles are
-  actually marked — the real metric this project exists for. (The spec's
-  "342 live roles" launch target is not carried over here — it's not a
-  number this scaffold can verify yet; a real target should come from
-  Phase 1 pilot-scrape data, not be assumed upfront.)
+`lib/targeting.js` classifies each role from its title only. The rules are in `config/targets.json`. You can change the rules without a code change.
+After you change the rules, run `node refresh.js --reclassify`. This command applies the rules to all stored roles. It does not scrape.
+
+The classifier does these steps in this sequence:
+
+1. **Grade.** The first grade pattern that matches gives the grade and the tier.
+   - Target: SVP, Associate Director, Director (also Senior, Executive and Group Director), VP, Head.
+   - Exception: AVP (also Assistant and Associate Vice President), Senior Manager, and senior manager titles with no grade (for example "Lead Product Manager").
+   - Excluded: Managing Director, EVP and C-level titles, and titles with no target grade.
+2. **Hard exclusion.** Functions that are not targets: for example legal, audit, sourcing, consulting, advisory, security.
+3. **Soft exclusion.** Domain words: for example risk, finance, treasury, HR, sales. These exclude the role only when the title does not also name a technology function (technology, engineering, platform, IT, software, data, product management, program management). Because of this, "Director, Risk Technology" stays.
+4. **Hands-on exclusion.** Individual contributor titles: for example engineer, developer, architect, analyst, specialist. This step does not exclude a product-leadership title (for example "Product Management", "Product Owner").
+5. **Family.** The first family pattern that matches: Product; AI / Data leadership; Engineering leadership; Delivery / Program / Transformation. The classifier excludes a role that has no family.
+
+The grade patterns use `(^|[^a-z])AVP([^a-z]|$)` and not `\bAVP\b`. Some titles put an underscore next to the grade (for example "AVP_ Data Products"), and an underscore is a word character in a regular expression.
+
+The database keeps all roles, also the excluded roles. Only target roles and exception roles go to `data/roles.json`.
+`test/targeting.test.js` has 77 real and constructed titles.
 
 ---
 
-## 12. Out of Scope (explicitly)
+## 12. Scoring
 
-- No email/SMS notifications (frontend-only, checked manually).
-- No multi-user accounts — `role_marks.user_id` is a device identifier for
-  cross-device continuity on one person's own devices, not an auth system.
-- No scraping of application forms, salary negotiation data, or any
-  authenticated employer-portal content.
-- No circumvention of anti-bot measures (CAPTCHA solving, IP rotation,
-  browser fingerprint spoofing). A site that requires this is out of scope
-  per §2 and gets marked `active: false`.
-- No cloud/Postgres deployment for now — single-user, file-based SQLite is
-  sufficient; revisit only if usage patterns change.
+### 12.1 Rubric
+
+`config/scoring-rubric.md` defines the scores. It has a version number. A change to the rubric must increase the version. Then all scores become stale.
+
+- **ATS score (0–100):** required skills and keywords (40), title and function match (20), must-have requirements (20), years of experience (10), domain words (10).
+- **Fit score (0–100):** grade and scope (25), leadership type (20), domain (20), technology (20), location and practical fit (15).
+- **Calibration:** 85–100 strong match; 75–84 good match (the minimum for an exception role); 50–74 partial match; 0–49 weak match.
+
+The scorer scores each role against two resume variants: PO (Product Owner) and EM (Engineering Leader).
+The recommended resume is the variant with the higher fit score. When the fit scores are equal, the higher ATS score decides.
+
+### 12.2 Personal data
+
+The scorer uses these files in `Resume/`:
+
+- `profile_product_owner.txt`
+- `profile_engineering_leader.txt`
+- `candidate_profile.txt` (current grade and scope, home city, city preferences, domain list)
+
+> **CAUTION:** These files contain personal data. Git ignores `Resume/`. The rubric in `config/` is generic and contains no personal data. Do not copy resume text into a file that git tracks.
+
+### 12.3 The scoring procedure
+
+`score.js` has these commands:
+
+| Command | Function |
+|---|---|
+| `node score.js --status` | Shows the number of shortlisted roles, scored roles, new roles and stale roles. |
+| `node score.js --pending [--out FILE] [--limit N]` | Writes the roles that need a score, with their descriptions and a `description_hash`, to `.cache/scoring/pending.json`. |
+| `node score.js --import FILE [--scorer NAME]` | Validates each score, stores the valid scores, rejects the others with a reason, and writes `data/roles.json`. |
+
+A score is stale when the title, the description or the rubric version changes. `lib/scoring.js` makes a hash of the title and the description.
+
+`validateScoreRecord()` rejects a score in these conditions:
+
+- A score is not an integer from 0 to 100.
+- A resume variant is missing.
+- The recommended resume does not have the higher fit score.
+- The reason is empty or longer than 35 words.
+- There are more than 10 matched keywords or more than 3 gaps.
+- The confidence is not "high" or "low".
+
+`score.js --import` also rejects a score in these conditions:
+
+- The role is not an active target role or exception role.
+- The file has the same `role_id` two times. Import keeps the first record.
+- The `description_hash` in the record is missing, or it is not equal to the current hash. This occurs when a refresh changes the description after `--pending`. Export the role again and score it again.
+
+### 12.4 The scorer
+
+The current scorer is Claude Code (Option B). It needs no API key. You ask for the scores. Refer to `docs/SETUP.md`, section 6.
+
+The job description is external data. The scorer uses it only as evidence. The scorer does not obey text in a job description.
+
+A future option is an automatic scorer in `refresh.js` (Option A). Possible providers are a local model (Ollama), a free cloud tier (Groq) or the Claude API.
+All providers must use the same rubric and the same `score.js --import` validation.
+
+### 12.5 The exception rule
+
+The publisher hides an exception role when its fit score is less than `exception_min_fit_score` (75) in `config/targets.json`.
+An exception role with no score stays on the board until it gets a score.
+A stale score stays on the board with the label "score out of date". A stale score cannot hide an exception role.
+
+---
+
+## 13. Job descriptions
+
+### 13.1 Why
+
+The Workday and Oracle list APIs give only the title. A score needs the full description.
+Because of this, `lib/descriptions.js` gets the description of each target role and each exception role from the ATS detail API.
+
+| ATS | Detail request | Closed role |
+|---|---|---|
+| Workday | `GET https://<tenant>.<cluster>.myworkdayjobs.com/wday/cxs/<tenant>/<site><externalPath>`; text from `jobPostingInfo.jobDescription` | 404, or 403 with `errorCode` `S22` |
+| Oracle | `GET https://<host>/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails?finder=ById;Id="<id>",siteNumber=<site>`; text from the description, responsibilities and qualifications fields | An empty `items` list |
+
+The other ATS types already give the full description in the scrape.
+
+### 13.2 Rules
+
+- The fetcher reads robots.txt for the detail path of each host. A disallowed path gives the status `skipped`.
+- The fetcher waits for the crawl delay of the employer after each request.
+- A closed role becomes inactive at once.
+- An employer can have 4 or more roles that need a description in one run. If more than half of these roles report closed, the refresh does not trust the result. It records an error and keeps the roles active.
+- `syncRoles` does not write `full_description`. A new scrape does not remove it.
+- The refresh gets a description again in these conditions:
+  - `ok`, after 14 days (the employer can change the text).
+  - `error`, after 20 hours.
+  - `skipped`, after 7 days.
+  - `gone`, when a later scrape makes the role active again.
+- The maximum length of a stored description is 50,000 characters.
+
+The first run on 2026-10-13 got 36 descriptions, found 21 closed roles, and had 0 errors.
+
+---
+
+## 14. Out of scope
+
+- No email or SMS notifications. You check the board.
+- No accounts for many users. `role_marks.user_id` is for one person's devices only.
+- No scraping of application forms, salary data or pages behind a login.
+- No evasion of bot protection (no CAPTCHA solving, no IP rotation, no browser fingerprint changes). Set such a site to `active: false`.
+- No cloud database. One SQLite file is sufficient for one user.

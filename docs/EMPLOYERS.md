@@ -1,20 +1,21 @@
-# Employer Directory
+# Employer directory
 
-All 36 employers ever considered for the board, and how each is tracked.
-22 are scraped automatically every day; the other 14 are tracked manually
-— either because the employer's own site says not to crawl it, or because
-nobody's built a scraper for it yet. See `docs/ARCHITECTURE.md` §8.1–8.2
-for the full verification history behind every row, and
-`config/employers.json` for the per-employer `note` field with dates.
+This document lists all 36 employers and the method that tracks each employer.
 
-*Last reviewed: 2026-09-14. Every job board link opens in a new tab.*
+- The refresh scrapes 22 employers automatically each day.
+- You must check 14 employers manually. The site of the employer does not permit crawlers, or a scraper does not exist yet.
+
+For the verification history, refer to `docs/ARCHITECTURE.md`, sections 8.1 and 8.2.
+For the dated finding for each employer, refer to the `note` field in `config/employers.json`.
+
+*Last review: 2026-09-14. Each career site link opens in a new tab.*
 
 ## Automated (22)
 
-Scraped daily via `refresh.js`. Platform is the ATS actually confirmed
-live against the real site, not assumed from the original spec.
+`refresh.js` scrapes these employers each day.
+The platform column gives the ATS that a test on the live site confirmed. It is not the ATS in the source specification.
 
-| Employer | Platform | Job board |
+| Employer | Platform | Career site |
 |---|---|---|
 | LPL Financial | Workday | <a href="https://lplfinancial.wd1.myworkdayjobs.com/India_Ext" target="_blank" rel="noopener noreferrer">lplfinancial.wd1.myworkdayjobs.com/India_Ext</a> |
 | Wells Fargo | Workday | <a href="https://wf.wd1.myworkdayjobs.com/WellsFargoJobs" target="_blank" rel="noopener noreferrer">wf.wd1.myworkdayjobs.com/WellsFargoJobs</a> |
@@ -39,42 +40,40 @@ live against the real site, not assumed from the original spec.
 | Bridgewater Associates | Greenhouse | <a href="https://www.bridgewater.com/careers" target="_blank" rel="noopener noreferrer">bridgewater.com/careers</a> |
 | Deloitte USI | Avature | <a href="https://usijobs.deloitte.com/en_US/careersUSI" target="_blank" rel="noopener noreferrer">usijobs.deloitte.com/en_US/careersUSI</a> |
 
-## Manual — policy stop (6)
+## Manual: policy stop (6)
 
-The employer's own site says not to crawl it: robots.txt disallowing
-everything, or a bot-wall. This won't change with more engineering effort
-— per `docs/ARCHITECTURE.md` §12, working around it would be evasion, not
-scraping. Check these yourself if they matter to you.
+The site of the employer does not permit crawlers: robots.txt disallows the paths, or a bot wall blocks access.
+More engineering does not change this. Do not try to go around the block (refer to `docs/ARCHITECTURE.md`, section 14).
+Check these career sites yourself.
 
-| Employer | Why manual | Job board |
+| Employer | Reason | Career site |
 |---|---|---|
 | Citigroup | robots.txt: `Disallow: /search-jobs/` | <a href="https://jobs.citi.com/search-jobs" target="_blank" rel="noopener noreferrer">jobs.citi.com/search-jobs</a> |
-| JPMorgan Chase | 403 authentication wall | <a href="https://www.jpmorganchase.com/careers" target="_blank" rel="noopener noreferrer">jpmorganchase.com/careers</a> |
-| Charles Schwab | robots.txt: `Disallow: /` for every user-agent | <a href="https://schwabjobs.com" target="_blank" rel="noopener noreferrer">schwabjobs.com</a> |
-| UBS | 403, confirmed bot-protected | <a href="https://jobs.ubs.com" target="_blank" rel="noopener noreferrer">jobs.ubs.com</a> |
-| BNP Paribas | 403, confirmed bot-protected | <a href="https://group.bnpparibas/en/careers" target="_blank" rel="noopener noreferrer">group.bnpparibas/en/careers</a> |
-| Blackstone | Cloudflare challenge, confirmed via headless browser | <a href="https://www.blackstone.com/careers" target="_blank" rel="noopener noreferrer">blackstone.com/careers</a> |
+| JPMorgan Chase | 403 login wall | <a href="https://www.jpmorganchase.com/careers" target="_blank" rel="noopener noreferrer">jpmorganchase.com/careers</a> |
+| Charles Schwab | robots.txt: `Disallow: /` for all user agents | <a href="https://schwabjobs.com" target="_blank" rel="noopener noreferrer">schwabjobs.com</a> |
+| UBS | 403, bot protection | <a href="https://jobs.ubs.com" target="_blank" rel="noopener noreferrer">jobs.ubs.com</a> |
+| BNP Paribas | 403, bot protection | <a href="https://group.bnpparibas/en/careers" target="_blank" rel="noopener noreferrer">group.bnpparibas/en/careers</a> |
+| Blackstone | Cloudflare challenge page, also in a headless browser | <a href="https://www.blackstone.com/careers" target="_blank" rel="noopener noreferrer">blackstone.com/careers</a> |
 
-## Manual — backlog (8)
+## Manual: backlog (8)
 
-No policy blocker — just not automated yet. Either a genuinely
-proprietary platform (would need dedicated CSS-selector scraping, not
-the sitemap + structured-data convention `CustomScraper` relies on) or
-the real ATS hasn't been identified.
+No policy blocks these employers. The refresh does not scrape them yet, for one of these reasons:
 
-| Employer | Status | Job board |
+- The site uses a proprietary platform. It needs a scraper with CSS selectors. `CustomScraper` uses sitemaps and structured data, and these sites do not have them.
+- The ATS of the site is not known.
+
+| Employer | Status | Career site |
 |---|---|---|
-| Vanguard | Real content, no known ATS vendor — likely proprietary | <a href="https://www.vanguard.in/" target="_blank" rel="noopener noreferrer">vanguard.in</a> |
-| Goldman Sachs | Real content, no known ATS vendor — likely proprietary | <a href="https://higher.gs.com/roles" target="_blank" rel="noopener noreferrer">higher.gs.com/roles</a> |
-| Morgan Stanley | Real content, no known ATS vendor — likely proprietary | <a href="https://www.morganstanley.com/careers/students-graduates/experienced-professionals" target="_blank" rel="noopener noreferrer">morganstanley.com/careers</a> |
-| Deutsche Bank | Real content, no known ATS vendor — likely proprietary | <a href="https://careers.db.com/search-results" target="_blank" rel="noopener noreferrer">careers.db.com/search-results</a> |
-| Citadel | Real content, no known ATS vendor — likely proprietary | <a href="https://www.citadel.com/careers/open-opportunities/" target="_blank" rel="noopener noreferrer">citadel.com/careers/open-opportunities</a> |
-| KPMG | Marketing site only; real ATS URL not found | <a href="https://www.kpmguscareers.com/" target="_blank" rel="noopener noreferrer">kpmguscareers.com</a> |
-| Zurich Insurance | Real URL not found; India ops may sit under a JV (Zurich Kotak) | <a href="https://www.zurich.com/careers" target="_blank" rel="noopener noreferrer">zurich.com/careers</a> |
-| ICE | Real platform not identified (two false-positive vendor matches so far) | <a href="https://careers.ice.com" target="_blank" rel="noopener noreferrer">careers.ice.com</a> |
+| Vanguard | Content is available. No known ATS. Probably a proprietary system. | <a href="https://www.vanguard.in/" target="_blank" rel="noopener noreferrer">vanguard.in</a> |
+| Goldman Sachs | Content is available. No known ATS. Probably a proprietary system. | <a href="https://higher.gs.com/roles" target="_blank" rel="noopener noreferrer">higher.gs.com/roles</a> |
+| Morgan Stanley | Content is available. No known ATS. Probably a proprietary system. | <a href="https://www.morganstanley.com/careers/students-graduates/experienced-professionals" target="_blank" rel="noopener noreferrer">morganstanley.com/careers</a> |
+| Deutsche Bank | Content is available. No known ATS. Probably a proprietary system. | <a href="https://careers.db.com/search-results" target="_blank" rel="noopener noreferrer">careers.db.com/search-results</a> |
+| Citadel | Content is available. No known ATS. Probably a proprietary system. | <a href="https://www.citadel.com/careers/open-opportunities/" target="_blank" rel="noopener noreferrer">citadel.com/careers/open-opportunities</a> |
+| KPMG | Marketing site only. The ATS URL is not known. | <a href="https://www.kpmguscareers.com/" target="_blank" rel="noopener noreferrer">kpmguscareers.com</a> |
+| Zurich Insurance | The URL is not known. The India operations can be in a joint venture (Zurich Kotak). | <a href="https://www.zurich.com/careers" target="_blank" rel="noopener noreferrer">zurich.com/careers</a> |
+| ICE | The platform is not known. Two vendor matches were false. | <a href="https://careers.ice.com" target="_blank" rel="noopener noreferrer">careers.ice.com</a> |
 
 ## Interactive version
 
-A filterable/searchable version of this same list (also opens every link
-in a new tab) is published at:
+A version of this list with search and filters is available at this link. Each link in it also opens in a new tab:
 <https://claude.ai/code/artifact/feda9848-2b8a-4d2a-b9dd-d5f2fb08ab94>

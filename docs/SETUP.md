@@ -1,117 +1,184 @@
-# Setup Guide
+# Setup guide
+
+This guide gives the procedures to install, start, refresh and score the board.
 
 ## Prerequisites
 
-- Node.js 18+
-- macOS/Linux shell access
+- Node.js 18 or later.
+- A macOS or Linux shell.
 
-## 1. Install dependencies
+## 1. Install the packages
 
-```bash
-npm install
-```
+1. Open a shell in the project folder.
+2. Install the packages:
 
-## 2. Configure environment
+   ```bash
+   npm install
+   ```
 
-```bash
-cp .env.example .env
-```
+## 2. Configure the environment
 
-Fill in `.env` — sane defaults already in `.env.example`:
-- `PORT` / `HOST` — where `server.js` listens (default `4000` / `0.0.0.0`;
-  `0.0.0.0` means it's already reachable from other devices on your
-  network, not just `localhost`).
-- `REFRESH_CRON` / `TZ` — when the server's built-in scheduler runs the
-  daily refresh (default 6 AM `Asia/Kolkata`).
-- `CRAWL_DELAY_MS`, `DB_PATH` — scraper behavior, rarely need changing.
+1. Copy the example file:
 
-## 3. Initialize the database
+   ```bash
+   cp .env.example .env
+   ```
 
-```bash
-node refresh.js --init
-```
+2. Examine the values in `.env`. The default values are correct for most installations.
 
-Creates `data/jobs.db` with the schema described in `docs/ARCHITECTURE.md` §3.
+| Variable | Default | Function |
+|---|---|---|
+| `PORT` | `4000` | The port that `server.js` listens on. |
+| `HOST` | `0.0.0.0` | The address that `server.js` listens on. `0.0.0.0` lets other devices on your network open the board. |
+| `REFRESH_CRON` | `0 6 * * *` | The time of the daily refresh (cron format). |
+| `TZ` | `Asia/Kolkata` | The time zone for `REFRESH_CRON`. |
+| `LOG_LEVEL` | `info` | The minimum level of log messages. |
+| `CRAWL_DELAY_MS` | `8000` | Not used. The scrapers use `crawl_delay_seconds` for each employer in `config/employers.json`. |
+| `MAX_CONCURRENT_SCRAPERS` | `3` | Not used. The refresh scrapes one employer at a time. |
+| `USER_AGENT` | `india-gcc-board-bot/1.0 (...)` | The name that the scrapers send to the employer sites. |
+| `DB_PATH` | `./data/jobs.db` | The location of the database. |
+| `SLACK_WEBHOOK` | (empty) | Not used. Notifications are a Phase 4 item. |
 
-## 4. Run a first scrape
+## 3. Make the database
 
-```bash
-node refresh.js
-```
+1. Make the database:
 
-This scrapes all `active: true` employers in `config/employers.json`
-(currently 22), writes results to `data/jobs.db`, and publishes
-`data/roles.json` for the server to serve. A full run takes roughly
-30–45 minutes — most of that is deliberate per-employer crawl delay
-(politeness toward the employer sites, not a performance problem).
-Logs go to stdout and `logs/combined.log` / `logs/error.log`.
+   ```bash
+   node refresh.js --init
+   ```
+
+This command makes `data/jobs.db`. Refer to `docs/ARCHITECTURE.md`, section 3, for the schema.
+You can run this command again. It adds new columns and tables to an existing database and keeps the data.
+
+## 4. Do a refresh
+
+1. Start a full refresh:
+
+   ```bash
+   node refresh.js
+   ```
+
+A full refresh does these steps:
+
+1. It scrapes all employers that have `active: true` in `config/employers.json` (22 employers).
+2. It classifies each role with the rules in `config/targets.json`.
+3. It writes the roles to `data/jobs.db`.
+4. It gets the full job description for each target role and each exception role.
+5. It writes `data/roles.json`. The server shows this file.
+
+A full refresh takes approximately 30 to 45 minutes.
+Most of this time is the crawl delay between requests to each employer site. The delay is intentional.
+The logs go to the shell and to `logs/combined.log` and `logs/error.log`.
+
+### Other refresh commands
+
+| Command | Function | Time |
+|---|---|---|
+| `node refresh.js --reclassify` | Applies `config/targets.json` again to all stored roles. Use it after you change the targeting rules. It does not scrape. | Seconds |
+| `node refresh.js --descriptions` | Gets the missing job descriptions. It does not scrape the role lists. | Approximately 5 seconds for each role |
 
 ## 5. Start the server
 
+1. Start the server:
+
+   ```bash
+   npm run serve
+   ```
+
+2. Open http://localhost:4000 in a browser.
+
+The server does these tasks:
+
+- It shows the board.
+- It does a refresh each day at the time in `REFRESH_CRON`, while the process runs.
+- It does a refresh when you click **Refresh now**. A lock prevents two refreshes at the same time.
+
+> **NOTE:** The daily refresh occurs only while the server runs. To keep the server running after you close the shell, use a process manager. For example: `pm2 start server.js --name india-gcc-board`, or a `launchd` agent on macOS.
+
+## 6. Score the roles
+
+The board shows two scores on each role:
+
+- **ATS score (0–100):** how well your resume text matches the job description.
+- **Fit score (0–100):** how a recruiter rates your experience for the role.
+
+The board also shows the recommended resume (Product Owner or Engineering Leader), a reason, the matched keywords and the gaps.
+Exception roles (AVP, Senior Manager) stay on the board only when the fit score is 75 or more.
+
+The scorer is Claude Code. Do this procedure after each refresh that finds new roles.
+
+> **CAUTION:** Keep the resume files only in `Resume/`. Do not copy resume text into a file that git tracks. The resume files contain personal data. Git ignores the `Resume/` folder.
+
+1. Make sure that these files are in the `Resume/` folder:
+   - `profile_product_owner.txt`
+   - `profile_engineering_leader.txt`
+   - `candidate_profile.txt`
+2. Open Claude Code in the project folder.
+3. Type: "score the new roles".
+4. Wait until Claude Code shows the number of stored scores.
+5. Reload the board.
+
+> **NOTE:** In step 4, Claude Code does these tasks:
+> - It runs `node score.js --pending`. This command writes the roles that need a score to `.cache/scoring/pending.json`.
+> - It scores each role with the rubric in `config/scoring-rubric.md`.
+> - It writes the scores to a file and runs `node score.js --import <file>`.
+
+To see how many roles need a score, run:
+
 ```bash
-npm run serve
+node score.js --status
 ```
 
-Open **http://localhost:4000** — that's the board. It also:
-- Re-runs the refresh automatically every day at the time set by
-  `REFRESH_CRON`, for as long as the process keeps running.
-- Exposes a **"Refresh now"** button in the UI for an on-demand run
-  (`POST /api/refresh`; a lock prevents two runs overlapping).
+A score becomes stale when the job description or the rubric version changes. The `--pending` output includes stale roles.
+The board shows a stale score with the label "score out of date".
 
-Keep it running: for actual daily use, run it under something that
-survives terminal closes and machine sleep — e.g. `pm2 start server.js
---name india-gcc-board`, a `launchd` agent on macOS, or just a spare
-terminal tab you leave open. Not scripted here since it's a one-time
-personal preference, not something the app needs to dictate.
+> **NOTE:** `score.js --import` rejects a score that does not agree with the rubric schema. For example, it rejects a score above 100, or a recommended resume that does not have the higher fit score. The command shows the reason for each rejection.
 
-## 6. Reach it from your other devices
+## 7. Open the board from other devices
 
-**Same Wi-Fi (laptop, desktop, phone on the same network):** nothing
-extra to do — find this machine's LAN IP (`ipconfig getifaddr en0` on
-macOS Wi-Fi) and open `http://<that-ip>:4000` from the other device.
+### Devices on the same Wi-Fi network
 
-**From anywhere, still private to only your own devices** (e.g. phone on
-mobile data, not home Wi-Fi):
+1. Run `ipconfig getifaddr en0` to find the LAN IP address of this computer (macOS, Wi-Fi).
+2. On the other device, open `http://<LAN-IP>:4000`.
 
-1. Install [Tailscale](https://tailscale.com/download) on this machine
-   and sign in (free for personal use).
-2. Install Tailscale on each other device (phone, other laptop) and sign
-   into the **same account**.
-3. On this machine, note the Tailscale hostname/IP (`tailscale status` or
-   the Tailscale app).
-4. From another device, open `http://<tailscale-hostname>:4000`.
+### Devices on other networks
 
-This is a private mesh network between only your signed-in devices —
-nothing is exposed publicly.
+Use Tailscale. Tailscale makes a private network between your devices only. It does not make the board public.
 
-## 7. Later: an unlisted URL, if you ever want to share it
+1. Install [Tailscale](https://tailscale.com/download) on this computer.
+2. Sign in to Tailscale.
+3. Install Tailscale on each other device.
+4. Sign in on each device with the same account.
+5. On this computer, run `tailscale status` to find the Tailscale host name.
+6. On the other device, open `http://<tailscale-host-name>:4000`.
 
-No changes to this project needed — run
-[`cloudflared`](https://github.com/cloudflare/cloudflared) (free,
-open-source) alongside the already-running server:
+## 8. Optional: an unlisted public URL
 
-```bash
-cloudflared tunnel --url http://localhost:4000
-```
+You can share the board with a URL that no search engine or list shows. The project does not need changes for this.
 
-This prints a public-but-unlisted `https://*.trycloudflare.com` URL that
-proxies to your local server for as long as the tunnel runs. Nobody finds
-it without the exact link. (A named, persistent tunnel with your own
-domain is also possible later via a free Cloudflare account, if the
-quick-tunnel URL changing on restart becomes annoying — not needed to
-start.)
+> **WARNING:** Do not share the URL with persons who must not see your data. The board shows your scores and the reasons, and these contain details from your resume.
 
-## GitHub Actions (not used in this setup)
+1. Install [`cloudflared`](https://github.com/cloudflare/cloudflared).
+2. While the server runs, run:
 
-`.github/workflows/refresh-schedule.yml` exists in the repo from an
-earlier cloud-hosting attempt and currently references a publish step
-that no longer applies. It's left as a starting point for a possible
-future fully-cloud-hosted phase — leave it disabled (don't add its
-secrets) unless/until you deliberately revisit that path; see
-`docs/ARCHITECTURE.md` §6.
+   ```bash
+   cloudflared tunnel --url http://localhost:4000
+   ```
 
-## Where things stand
+3. Copy the `https://*.trycloudflare.com` URL that `cloudflared` shows.
 
-All phases through **3b (self-hosted, local-first)** are done — see the
-status table in `README.md` and `docs/ARCHITECTURE.md` §8 for the full
-phase-by-phase history and what's still open (Phase 4: hardening).
+The URL works while the tunnel runs. A person can open the board only with the exact URL.
+
+> **NOTE:** The quick-tunnel URL changes each time you start the tunnel. A named tunnel with your own domain needs a free Cloudflare account.
+
+## GitHub Actions (not used)
+
+The file `.github/workflows/refresh-schedule.yml` is from an earlier cloud setup. It refers to a publish step that the project does not use now.
+Its schedule is in a comment, so the workflow runs only when a person starts it.
+Do not enable the schedule. Do not add its secrets.
+Refer to `docs/ARCHITECTURE.md`, section 6.
+
+## Status
+
+Phases 0 to 3b, 5 and 6 are complete. Phase 4 (hardening) is not started.
+Refer to the status table in `README.md` and to `docs/ARCHITECTURE.md`, section 8.
