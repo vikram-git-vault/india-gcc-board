@@ -28,3 +28,6 @@ logs/*.log
 # Cache
 .cache/
 .eslintcache
+
+# Personal — resumes and any tailored versions (never commit)
+Resume/
