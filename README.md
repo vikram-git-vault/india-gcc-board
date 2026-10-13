@@ -1,7 +1,8 @@
 # India GCC Board
 
-India GCC Board is a personal job board for leadership roles in BFSI (banking, financial services and insurance).
-It collects roles from the career sites of 36 employers in India GCC (global capability center) hub cities.
+India GCC Board is a personal job board for leadership roles in India GCC (global capability center) hub cities.
+It covers BFSI (banking, financial services and insurance) and other industries.
+It collects roles from the career sites of the employers in `config/employers.json` (149 employers; the refresh scrapes 57 of them).
 It keeps only the roles that match a target profile.
 It gives each role an ATS score and a fit score against two resume variants.
 A small server on your computer shows the roles in a web page.
@@ -51,8 +52,8 @@ Do these steps one time:
 
 7. Click **Refresh now** to collect the roles for the first time. A full refresh takes approximately 30 to 45 minutes.
 
-The server refreshes the roles automatically each day at 06:00 IST.
-To change the time, change `REFRESH_CRON` and `TZ` in `.env`.
+By default, the server refreshes the roles each day at 06:00 IST.
+To change the schedule, use the **Auto refresh** control in the board header: **Daily at** a time, or **On demand only**.
 
 > **NOTE:** The server listens on `0.0.0.0`. Other devices on the same Wi-Fi network can open `http://<LAN-IP-of-this-computer>:4000`.
 > For access from other networks, use Tailscale. Refer to [`docs/SETUP.md`](docs/SETUP.md).
@@ -62,7 +63,10 @@ To change the time, change `REFRESH_CRON` and `TZ` in `.env`.
 1. **Collect.** The scrapers get the roles from each employer career site.
 2. **Target.** The rules in `config/targets.json` classify each role by its title:
    - **Target:** VP, Associate Director, Director, Head, SVP. The board shows these roles.
-   - **Exception:** AVP, Senior Manager, and senior manager titles with no grade (for example "Lead Product Manager"). The board shows these roles only when the fit score is 75 or more.
+   - **Target, lead role with no grade:** the board shows these roles. They are:
+     - Product and program roles: product owner, product manager, program manager.
+     - Engineering leader roles: engineering, development or delivery manager; engineering, chapter, squad or tribe lead.
+   - **Exception:** AVP, Senior Manager. The board shows these roles only when the fit score is 75 or more.
    - **Excluded:** all other grades, hands-on engineering roles and non-technology functions. The board does not show these roles.
 3. **Describe.** The refresh gets the full job description for each target role and each exception role.
 4. **Score.** A scorer compares each role with the two resume variants. The scorer uses the rubric in `config/scoring-rubric.md`. Each role gets an ATS score, a fit score, the recommended resume and a short reason.
@@ -74,7 +78,7 @@ To score new roles, ask Claude Code: "score the new roles". Refer to [`docs/SETU
 
 ## Status
 
-Current status: Phase 6 is complete. 22 of 36 employers are automated. The board shows 29 scored roles from 572 active roles.
+Current status: Phase 8 is complete. The refresh scrapes 57 of 149 employers. Do a full refresh to collect the roles of all 57 employers.
 
 | Phase | Status |
 |---|---|
@@ -86,15 +90,18 @@ Current status: Phase 6 is complete. 22 of 36 employers are automated. The board
 | 4: Hardening | Not started. |
 | 5: Role targeting | Complete. `config/targets.json` and `lib/targeting.js`. |
 | 6: Job descriptions and AI scoring | Complete. `lib/descriptions.js`, `score.js`, `config/scoring-rubric.md`. The scorer is Claude Code. An automatic scorer is a future option. |
+| 7: Board redesign and schedule control | Complete. Wide layout, ATS score and RM score on each role, **Auto refresh** control (daily or on demand only). |
+| 8: Employer discovery | Complete. `discover.js` finds companies and their ATS. 113 employers added (BFSI and other industries). Refer to `docs/ARCHITECTURE.md`, section 15. |
 
 ## Project structure
 
 ```
 config/             employers, filters, targeting rules, scoring rubric
-lib/                database, parser, targeting, descriptions, scoring, publisher
+lib/                database, parser, targeting, descriptions, scoring, discovery, schedule, publisher
 lib/scrapers/       scraper classes, one for each ATS type
 refresh.js          refresh: scrape, classify, get descriptions, publish
 score.js            scoring: export roles to score, import scores
+discover.js         discovery: find companies and detect their ATS (manual run)
 server.js           server: shows the board, gives the API, runs the daily refresh
 frontend/public/    the board web page (index.html)
 test/               Jest tests

@@ -30,8 +30,8 @@ This guide gives the procedures to install, start, refresh and score the board.
 |---|---|---|
 | `PORT` | `4000` | The port that `server.js` listens on. |
 | `HOST` | `0.0.0.0` | The address that `server.js` listens on. `0.0.0.0` lets other devices on your network open the board. |
-| `REFRESH_CRON` | `0 6 * * *` | The time of the daily refresh (cron format). |
-| `TZ` | `Asia/Kolkata` | The time zone for `REFRESH_CRON`. |
+| `REFRESH_CRON` | `0 6 * * *` | The first default for the daily refresh time (cron format). The board can change the schedule. Refer to section 5.1. |
+| `TZ` | `Asia/Kolkata` | The time zone of the refresh schedule. |
 | `LOG_LEVEL` | `info` | The minimum level of log messages. |
 | `CRAWL_DELAY_MS` | `8000` | Not used. The scrapers use `crawl_delay_seconds` for each employer in `config/employers.json`. |
 | `MAX_CONCURRENT_SCRAPERS` | `3` | Not used. The refresh scrapes one employer at a time. |
@@ -90,8 +90,25 @@ The logs go to the shell and to `logs/combined.log` and `logs/error.log`.
 The server does these tasks:
 
 - It shows the board.
-- It does a refresh each day at the time in `REFRESH_CRON`, while the process runs.
+- It does a refresh on the schedule that you set on the board, while the process runs.
 - It does a refresh when you click **Refresh now**. A lock prevents two refreshes at the same time.
+
+### 5.1 Set the refresh schedule
+
+The board header has the control **Auto refresh**. It has two settings:
+
+- **Daily at:** the server does a refresh each day at the time that you set.
+- **On demand only:** the server does a refresh only when you click **Refresh now**.
+
+To change the schedule:
+
+1. In the board header, select **Daily at** or **On demand only**.
+2. If you select **Daily at**, set the time.
+3. Wait until the control shows **Saved**.
+
+The change has an effect immediately. You do not have to restart the server.
+The server keeps the setting in `data/schedule.json`. Git ignores this file.
+If the file does not exist, the server uses `REFRESH_CRON` in `.env` as the daily time.
 
 > **NOTE:** The daily refresh occurs only while the server runs. To keep the server running after you close the shell, use a process manager. For example: `pm2 start server.js --name india-gcc-board`, or a `launchd` agent on macOS.
 

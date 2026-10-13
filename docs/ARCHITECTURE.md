@@ -1,9 +1,9 @@
 # India GCC Board: architecture
 
-**Status:** Phases 0 to 3b, 5 and 6 are complete. | **Owner:** the repository owner | **Last update:** 2026-10-13
+**Status:** Phases 0 to 3b and 5 to 8 are complete. | **Owner:** the repository owner | **Last update:** 2026-10-13
 
 India GCC Board is a personal job board. It runs on your own computer.
-It checks the career sites of 36 BFSI (banking, financial services and insurance) employers.
+It checks the career sites of 149 employers: BFSI (banking, financial services and insurance) employers and employers in other industries.
 It keeps the leadership roles in India GCC hub cities: Bengaluru, Mumbai, Delhi NCR, Pune, Hyderabad, Chennai, Gurugram and Noida.
 It shows only the roles that match a target profile, and it scores each role against two resume variants.
 
@@ -28,7 +28,7 @@ The specification gives Monday and Thursday at 08:00 IST. This change was a deci
 ### 1.1 Data flow
 
 ```
-Career sites (22 automated employers)
+Career sites (57 automated employers)
         ↓
 Scrapers (one class for each ATS type; robots.txt, crawl delay)
         ↓
@@ -92,26 +92,33 @@ Do not scrape pages behind a login. Do not collect personal data. Do not scrape 
 | Blocks | When an employer site answers 429 or 403, the refresh records an error for that employer and continues with the next employer. The next daily refresh tries again. The refresh does not repeat requests to a host that blocks it. |
 | Data use | Use the data only for your personal search. Do not sell the data. Do not give the data to other persons. |
 | Authentication | Scrape only public pages. |
+| Terms of use | Read the terms of use of a site before you add it. If the terms prohibit automated access, do not scrape the site, also when robots.txt permits it. |
+| Job aggregators | Do not scrape roles from job aggregators (for example LinkedIn, Naukri, Indeed, Talent500). Get each role from the career site of the employer. |
+| Talent500 | The terms of use of Talent500 (6 February 2025) prohibit crawling and automated access. The owner decided to use its jobs sitemap for company discovery only (refer to section 15). This is a manual run, not part of the refresh. |
 | Data minimization | The database stores the title, the location, the department, the URL, the dates, the job description and the source job ID. It does not store applicant data. |
 
 ### 2.1 Site classification
 
-- **Automated (22 employers):** robots.txt permits the careers paths, and the site does not need a login.
+- **Automated (57 employers):** robots.txt permits the careers paths, and the site does not need a login.
 - **Excluded by policy (3 employers):** Citigroup (robots.txt: `Disallow: /search-jobs/`), JPMorgan Chase (403 login wall), Charles Schwab (robots.txt: `Disallow: /` for all user agents). These are in `config/employers.json`, list `excluded`.
-- **Inactive (11 employers):** bot protection, or no scraper yet. Refer to section 8.2.
+- **Inactive (89 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
 
 If a site later prohibits scraping, add the employer to the `excluded` list and set `active: false`.
 Do not remove the employer from the configuration. Do not write logic that evades a block.
 
 ### 2.2 Scraper strategy for each ATS type
 
-| ATS type | Employers | Method |
+| ATS type | Active employers | Method |
 |---|---|---|
-| Workday (12) | LPL Financial, Wells Fargo, Invesco, Broadridge, Northern Trust, State Street, LSEG, Bank of America, Barclays, AIG, Visa, CME Group | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
-| Oracle Fusion Recruiting Cloud (2) | DTCC, BNY | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
-| Greenhouse (1) | Bridgewater Associates | The public API `boards-api.greenhouse.io`. |
-| Avature (1) | Deloitte USI | The server-rendered search result pages, and the location block on each detail page. |
-| Custom (6) | Franklin Templeton, PwC AC, EY GDS, Standard Chartered, Mastercard, Marsh & McLennan | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). |
+| Workday | 45 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
+| Oracle Fusion Recruiting Cloud | 3 | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
+| Greenhouse | 2 | The public API `boards-api.greenhouse.io`. |
+| Avature | 1 | The server-rendered search result pages, and the location block on each detail page. |
+| Custom | 6 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). |
+
+For the list of employers for each ATS type, refer to `docs/EMPLOYERS.md`.
+
+The employers with these ATS types are inactive because no scraper exists yet: Phenom, SuccessFactors, Eightfold, iCIMS, Taleo. Some employers use their own careers system (for example Google, Amazon, Apple).
 
 ### 2.3 Logs
 
@@ -324,11 +331,12 @@ The board has fewer than 100 shortlisted roles. Because of this, the browser fil
 
 The board has these functions:
 
-- **Scores:** each role shows an ATS score and a fit score, with colors. Green is 75 or more. Amber is 50 to 74. Grey is less than 50.
+- **Layout:** a navy header with the status, the search and the sort. A filter column on the left. One role in each row. The page is up to 1440 pixels wide. On a phone, the filters are in a **Filters** panel.
+- **Scores:** each role shows two score blocks: **ATS score** and **RM score** (recruiter match; the `fit` value in the data). Green is 75 or more. Saffron is 50 to 74. Grey is less than 50.
 - **Recommended resume:** each role shows the resume to send (Product Owner or Engineering Leader).
 - **Why this score:** a panel shows the reason, the matched keywords, the gaps, and the scores for both resumes.
-- **Sort:** best fit (the default), best ATS, newest, employer, title.
-- **Filters:** fit band, grade, family, city, employer. The filters use AND between groups and OR in one group.
+- **Sort:** best RM score (the default), best ATS score, newest, employer, title.
+- **Filters:** RM score band, grade, role family, city, employer. The filters use AND between groups and OR in one group.
 - **Search:** by title or employer.
 - **Tabs:** All, Interested, Applied, Rejected, Closed.
 - **Marks:** Interested, Applied, Rejected, Closed. The browser keeps the marks in `localStorage`. The marks do not move to other browsers or devices.
@@ -337,6 +345,7 @@ The board has these functions:
   - The number of shortlisted roles.
   - The number of scored roles and hidden exception roles.
   - The employer coverage.
+- **Auto refresh:** a control in the header. Select **Daily at** a time, or **On demand only**. Refer to section 6.
 - **Refresh now:** this button starts `node refresh.js` on the server. The board checks `GET /api/refresh/status` until the refresh is complete. Then it loads the new data.
 
 ---
@@ -351,7 +360,10 @@ The board runs on your own computer. Only your own devices can open it. This was
    - `GET /api/roles`: reads `data/roles.json`.
    - `POST /api/refresh`: starts `node refresh.js`. A lock prevents two refreshes at the same time.
    - `GET /api/refresh/status`: the state of the refresh.
-2. It runs the daily refresh with `node-cron`. `REFRESH_CRON` sets the time (default `0 6 * * *`). `TZ` sets the time zone (default `Asia/Kolkata`).
+2. It runs the refresh schedule with `node-cron`. The schedule has two modes: `daily` at a time, or `manual` (on demand only).
+   - `GET /api/schedule` gives the current schedule.
+   - `PUT /api/schedule` changes the schedule. `lib/schedule.js` validates the data. The server saves it in `data/schedule.json` and replaces the cron job immediately.
+   - When `data/schedule.json` does not exist, `REFRESH_CRON` gives the daily time (default `0 6 * * *`). `TZ` sets the time zone (default `Asia/Kolkata`).
 
 To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:
 
@@ -425,6 +437,8 @@ Each log file has a maximum size of 10 MB. The logger keeps 5 files.
 | 4: Hardening | A more reliable daily refresh | Not started. Alerts for repeated failures, notifications. |
 | 5: Role targeting | Show only roles that match the target profile | `config/targets.json`, `lib/targeting.js`, `refresh.js --reclassify`. Refer to section 11. |
 | 6: Descriptions and AI scoring | ATS and fit scores on each role | `lib/descriptions.js`, `score.js`, `lib/scoring.js`, `config/scoring-rubric.md`, the score UI. Refer to sections 12 and 13. |
+| 7: Board redesign and schedule | A wider board and a schedule control | One role in each row, ATS score and RM score blocks, the **Auto refresh** control (`lib/schedule.js`, `/api/schedule`). |
+| 8: Employer discovery | More employers, also in other industries | `discover.js`, `lib/discovery.js`, `refresh.js --only`. 113 employers added. Refer to section 15. |
 
 ### 8.1 Phase 2 findings
 
@@ -536,17 +550,22 @@ The classifier does these steps in this sequence:
 
 1. **Grade.** The first grade pattern that matches gives the grade and the tier.
    - Target: SVP, Associate Director, Director (also Senior, Executive and Group Director), VP, Head.
-   - Exception: AVP (also Assistant and Associate Vice President), Senior Manager, and senior manager titles with no grade (for example "Lead Product Manager").
+   - Exception: AVP (also Assistant and Associate Vice President), Senior Manager.
+   - Target, lead role with no grade: a title with no bank grade that names a lead role. The lead roles are:
+     - Product and program roles: product owner, product manager, product lead, program manager (also "programme manager"). The rule also includes "Technical Product Manager" and "Technical Product Owner".
+     - Engineering leader roles: engineering manager, development manager, delivery manager, delivery lead, engineering lead, chapter lead, squad lead, tribe lead. Some employers (for example Visa, Invesco, Mastercard) do not put a bank grade in the title.
+   - Excluded: a lead-role title that has a marker of a lower grade (Specialist, Associate, Analyst, Junior, Assistant, Intern, Trainee, Apprentice).
    - Excluded: Managing Director, EVP and C-level titles, and titles with no target grade.
 2. **Hard exclusion.** Functions that are not targets: for example legal, audit, sourcing, consulting, advisory, security.
 3. **Soft exclusion.** Domain words: for example risk, finance, treasury, HR, sales. These exclude the role only when the title does not also name a technology function (technology, engineering, platform, IT, software, data, product management, program management). Because of this, "Director, Risk Technology" stays.
-4. **Hands-on exclusion.** Individual contributor titles: for example engineer, developer, architect, analyst, specialist. This step does not exclude a product-leadership title (for example "Product Management", "Product Owner").
+4. **Hands-on exclusion.** Individual contributor titles: for example engineer, developer, architect, analyst, specialist. This step does not exclude a product-leadership title (for example "Product Management", "Product Owner"). It also does not exclude a people-leader title (`leadership_override`: for example "Engineering Manager", "Chapter Lead - Data Engineer"). "Tech Lead" and "Lead Software Engineer" are hands-on titles.
+   A support or operations title (`exclude_support`) is excluded only when it is not a leader role. A leader role has a leader word (manager, head, lead, leader) or the grade SVP, Director, Associate Director or Head. For example, "Engineering Manager - Application Support" is a target. The classifier excludes "VP, Production Services Application Support".
 5. **Family.** The first family pattern that matches: Product; AI / Data leadership; Engineering leadership; Delivery / Program / Transformation. The classifier excludes a role that has no family.
 
 The grade patterns use `(^|[^a-z])AVP([^a-z]|$)` and not `\bAVP\b`. Some titles put an underscore next to the grade (for example "AVP_ Data Products"), and an underscore is a word character in a regular expression.
 
 The database keeps all roles, also the excluded roles. Only target roles and exception roles go to `data/roles.json`.
-`test/targeting.test.js` has 77 real and constructed titles.
+`test/targeting.test.js` has 111 real and constructed titles.
 
 ---
 
@@ -656,3 +675,28 @@ The first run on 2026-10-13 got 36 descriptions, found 21 closed roles, and had 
 - No scraping of application forms, salary data or pages behind a login.
 - No evasion of bot protection (no CAPTCHA solving, no IP rotation, no browser fingerprint changes). Set such a site to `active: false`.
 - No cloud database. One SQLite file is sufficient for one user.
+
+---
+
+## 15. Employer discovery
+
+`discover.js` helps to add employers. It has two commands. Both are manual runs. The refresh does not use them.
+
+| Command | Function |
+|---|---|
+| `node discover.js --detect <careers-url> ...` | Reads robots.txt and one careers page for each URL. Finds the ATS from the links in the page. Writes the result to `.cache/discovery/detect-results.json`. |
+| `node discover.js --talent500` | Reads the Talent500 jobs sitemap (no job pages). Applies `config/targets.json` to the job titles in the URLs. Writes a list of companies with matching roles to `.cache/discovery/talent500-companies.json`. |
+
+> **CAUTION:** The terms of use of Talent500 prohibit automated access. The owner of this project decided to run `--talent500` for company discovery only. Do not use it to collect roles. Do not run it in a schedule.
+
+To add an employer, do these steps:
+
+1. Run `node discover.js --detect` with the careers page of the company.
+2. If the ATS is Workday, Oracle, Greenhouse or Avature, make sure that a search for "India" gives India roles.
+3. Add the entry to `config/employers.json`. Write the finding and the date in the `note` field. Keep the existing format: one employer on each line.
+4. Run `node refresh.js --only=<employer-id>` to scrape only the new employer.
+5. Regenerate `docs/EMPLOYERS.md`.
+
+`detectAts()` in `lib/discovery.js` knows these signatures: Workday, Oracle, Greenhouse, Avature, Lever, SmartRecruiters, Eightfold, SuccessFactors, iCIMS, Phenom, Taleo.
+
+The discovery on 2026-10-13 added 113 employers: 35 active and 78 inactive. Some employers are excluded on purpose.
