@@ -94,7 +94,19 @@
   .fresh-dot.live { background: var(--high); }
   /* Same colours in light and dark mode: the header is always navy. */
   .partial-tag { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; font-size: 14px; font-weight: 600; background: #F0B357; color: #11284B; vertical-align: 1px; }
-  #freshStatus[title] { cursor: help; }
+  .partial-tag[hidden] { display: none; }
+  /* Refresh status panel: opens on hover, keyboard focus or a tap. */
+  #freshStatus { position: relative; cursor: pointer; }
+  .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 8px; border-radius: 50%; border: 1.5px solid currentColor; font-size: 12px; font-weight: 700; vertical-align: 1px; }
+  .fresh-tip { display: none; position: absolute; top: calc(100% + 10px); left: 0; z-index: 30; width: min(440px, calc(100vw - 32px)); padding: 14px 16px; border-radius: 10px; background: var(--surface); color: var(--text); border: 1px solid var(--line); box-shadow: 0 10px 28px rgba(8, 20, 40, 0.28); font-size: 15px; line-height: 1.45; cursor: default; }
+  #freshStatus.open .fresh-tip { display: block; }
+  /* Hover only where a real pointer hovers; on a phone, :hover sticks after a tap. */
+  @media (hover: hover) { #freshStatus:hover .fresh-tip { display: block; } }
+  .fresh-tip h4 { margin: 0 0 8px; font-size: 16px; }
+  .fresh-tip dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
+  .fresh-tip dt { color: var(--text-muted); }
+  .fresh-tip dd { margin: 0; }
+  .fresh-tip p { margin: 10px 0 0; color: var(--text-muted); font-size: 14px; }
   @keyframes stat-pulse { 0% { color: var(--mid-fill); } 100% { color: var(--on-ink); } }
 
   .search-row { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -270,7 +282,7 @@
     </div>
 
     <ul class="stats" id="freshbar">
-      <li id="freshStatus" tabindex="0"><span class="fresh-dot"></span>Updated <strong id="freshTime">—</strong><span id="freshTimeExact"></span><span class="partial-tag" id="freshPartial" hidden>Partial</span></li>
+      <li id="freshStatus" tabindex="0" aria-describedby="freshTip"><span class="fresh-dot"></span>Updated <strong id="freshTime">—</strong><span id="freshTimeExact"></span><span class="partial-tag" id="freshPartial" hidden>Partial</span><span class="info-icon" aria-hidden="true">i</span><div class="fresh-tip" id="freshTip" role="tooltip"></div></li>
       <li><strong id="freshCount">—</strong>roles on your board<span id="freshTargetDetail"></span></li>
       <li id="freshScoring"></li>
       <li><strong id="freshEmployers">—</strong>employers scraped<span id="freshEmployersDetail"></span></li>
@@ -634,35 +646,100 @@
     return 'Refreshing';
   }
 
-  // Tooltip on "Updated …": was the last run complete, or did it stop
-  // partway (lib/checkpoint.js)? "Updated" is always the last complete run.
+  // The refresh status panel on "Updated …": what is done and what is
+  // pending (lib/checkpoint.js). "Updated" is always the last complete run.
+  function refreshSummary() {
+    var r = state.meta.refresh;
+    var t = state.targeting || {};
+    var last = state.meta.last_refresh ? exactTime(state.meta.last_refresh) : 'unknown';
+    var rows = [];
+    var heading;
+    var note = '';
+    if (state.refreshRunning) {
+      var p = state.refreshProgress;
+      heading = 'Refresh running';
+      rows.push(['Now', progressText(p).replace(/^Refreshing: /, '')]);
+      if (r && !r.complete) {
+        rows.push(['Done', r.refreshed + ' of ' + r.total + ' employers saved']);
+        rows.push(['Pending', (r.total - r.refreshed) + ' employers']);
+      }
+      rows.push(['Last complete', last]);
+      note = 'Until the refresh finishes, some roles are from the last complete refresh.';
+    } else if (!r) {
+      heading = 'Complete';
+      rows.push(['Last refresh', last]);
+    } else if (r.complete) {
+      heading = 'Complete';
+      rows.push(['Done', r.refreshed + ' of ' + r.total + ' employers']);
+      rows.push(['Finished', exactTime(r.completed_at)]);
+      rows.push(['Failed', r.failed.length ? r.failed.join(', ') : 'none']);
+      if (r.failed.length) note = 'Failed employers show roles from an earlier refresh. The next refresh tries them again.';
+    } else {
+      heading = 'Partial: the last refresh stopped before the end';
+      rows.push(['Done', r.refreshed + ' of ' + r.total + ' employers']);
+      rows.push(['Pending', (r.total - r.refreshed) + ' employers, with roles from ' + last]);
+      rows.push(['Started', exactTime(r.started_at)]);
+      if (r.failed.length) rows.push(['Failed', r.failed.join(', ')]);
+      note = 'A scheduled or automatic run in the 12 hours after the start continues from where this run stopped. Refresh now starts a full refresh.';
+    }
+    if (t.scored != null) {
+      rows.push(['Scores', t.scored + ' scored' + (t.unscored ? ', ' + t.unscored + ' waiting' : '') + (state.refreshScoring ? ' (scoring now)' : '')]);
+    }
+    return { heading: heading, rows: rows, note: note };
+  }
+
   function renderRefreshCompleteness() {
     var r = state.meta.refresh;
-    var el = document.getElementById('freshStatus');
-    var last = state.meta.last_refresh ? exactTime(state.meta.last_refresh) : 'unknown';
-    var text;
-    var tag = document.getElementById('freshPartial');
-    if (state.refreshRunning) {
-      text = progressText(state.refreshProgress) + '. ' + (r && !r.complete ? r.refreshed + ' of ' + r.total + ' employers are saved so far. ' : '') +
-        'Until it finishes, some roles are from the last complete refresh (' + last + ').';
-    } else if (!r) {
-      text = 'Last complete refresh: ' + last + '.';
-    } else if (r.complete) {
-      text = 'Complete refresh: ' + r.refreshed + ' of ' + r.total + ' employers refreshed, finished ' + exactTime(r.completed_at) + '.';
-      if (r.failed.length) text += ' Failed: ' + r.failed.join(', ') + '. These show data from an earlier refresh.';
-    } else {
-      text = 'Partial refresh: ' + r.refreshed + ' of ' + r.total + ' employers refreshed in the run that started ' + exactTime(r.started_at) + '. ' +
-        'The other ' + (r.total - r.refreshed) + ' show data from the last complete refresh (' + last + '). ' +
-        'A scheduled or automatic run in the 12 hours after the start continues from where this run stopped. Refresh now starts a full refresh.';
-      if (r.failed.length) text += ' Failed in this run: ' + r.failed.join(', ') + '.';
+    var summary = refreshSummary();
+    var tip = document.getElementById('freshTip');
+    tip.textContent = '';
+    var h = document.createElement('h4');
+    h.textContent = summary.heading;
+    tip.appendChild(h);
+    var dl = document.createElement('dl');
+    summary.rows.forEach(function (row) {
+      var dt = document.createElement('dt');
+      dt.textContent = row[0];
+      var dd = document.createElement('dd');
+      dd.textContent = row[1];
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+    tip.appendChild(dl);
+    if (summary.note) {
+      var note = document.createElement('p');
+      note.textContent = summary.note;
+      tip.appendChild(note);
     }
-    el.title = text;
-    el.setAttribute('aria-label', 'Updated ' + document.getElementById('freshTime').textContent + '. ' + text);
+    var tag = document.getElementById('freshPartial');
     var p = state.refreshProgress;
     tag.textContent = !state.refreshRunning ? 'Partial'
       : (p && p.stage === 'scrape' ? 'Refreshing ' + p.done + ' of ' + p.total : 'Refreshing');
     tag.hidden = !state.refreshRunning && !(r && !r.complete);
   }
+
+  // A tap opens or closes the panel (no hover on a phone); Escape and a
+  // tap outside close it.
+  (function () {
+    var el = document.getElementById('freshStatus');
+    // Keyboard focus opens the panel; a tap toggles it (focus stays on
+    // the item after a tap, so focus alone cannot be the open state).
+    el.addEventListener('focus', function () { el.classList.add('open'); });
+    el.addEventListener('blur', function () { el.classList.remove('open'); });
+    el.addEventListener('click', function (e) {
+      if (e.target.closest('.fresh-tip')) return;
+      if (el.classList.contains('open') && el.dataset.justFocused !== '1') { el.classList.remove('open'); el.blur(); }
+      else el.classList.add('open');
+      el.dataset.justFocused = '';
+    });
+    el.addEventListener('pointerdown', function () { el.dataset.justFocused = document.activeElement === el ? '' : '1'; });
+    document.addEventListener('click', function (e) {
+      if (!el.contains(e.target)) el.classList.remove('open');
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { el.classList.remove('open'); el.blur(); }
+    });
+  })();
 
   function renderFreshbar() {
     document.getElementById('freshTime').textContent = state.meta.last_refresh ? relativeTime(state.meta.last_refresh) : 'unknown';
@@ -763,6 +840,7 @@
   function pollRefreshStatus() {
     fetch('/api/refresh/status').then(function (r) { return r.json(); }).then(function (s) {
       state.refreshRunning = Boolean(s.running);
+      state.refreshScoring = Boolean(s.scoring);
       state.refreshProgress = s.running ? (s.progress || null) : null;
       renderRefreshCompleteness();
       if (s.running) {
