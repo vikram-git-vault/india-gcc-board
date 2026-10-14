@@ -2,26 +2,27 @@
 
 This document lists all 149 employers and the method that tracks each employer.
 
-- The refresh scrapes 56 employers automatically.
-- You must check 90 employers manually. A scraper for their career site does not exist yet, or their site does not show India roles.
+- The refresh scrapes 63 employers automatically.
+- You must check 83 employers manually. A scraper for their career site does not exist yet, or their site does not show India roles.
 - 3 employers are excluded because their site does not permit crawlers.
 
 A script makes this document from `config/employers.json`. Do not edit the tables by hand. For the dated finding for each employer, refer to the `note` field in `config/employers.json`.
 
-*Last update: 2026-10-13. Each career site link opens in a new tab.*
+*Last update: 2026-10-14. Each career site link opens in a new tab.*
 
-## Automated (56)
+## Automated (63)
 
 The refresh scrapes these employers. The platform column gives the ATS that a test on the live site confirmed.
 
 | Employer | Sector | Platform | Career site |
 |---|---|---|---|
+| ABB | Other industry | Phenom | <a href="https://careers.abb/global/en" target="_blank" rel="noopener noreferrer">careers.abb/global/en</a> |
 | Abbott | Other industry | Workday | <a href="https://abbott.wd5.myworkdayjobs.com/abbottcareers" target="_blank" rel="noopener noreferrer">abbott.wd5.myworkdayjobs.com/abbottcareers</a> |
-| Abercrombie & Fitch | Other industry | Workday | <a href="https://abercrombie.wd108.myworkdayjobs.com/anf" target="_blank" rel="noopener noreferrer">abercrombie.wd108.myworkdayjobs.com/anf</a> |
 | Adobe | Other industry | Workday | <a href="https://adobe.wd5.myworkdayjobs.com/external_experienced" target="_blank" rel="noopener noreferrer">adobe.wd5.myworkdayjobs.com/external_experienced</a> |
 | AIG | BFSI | Workday | <a href="https://aig.wd1.myworkdayjobs.com/aig" target="_blank" rel="noopener noreferrer">aig.wd1.myworkdayjobs.com/aig</a> |
 | Airbus | Other industry | Workday | <a href="https://ag.wd3.myworkdayjobs.com/Airbus" target="_blank" rel="noopener noreferrer">ag.wd3.myworkdayjobs.com/Airbus</a> |
 | Alkami | BFSI | Workday | <a href="https://alkami.wd12.myworkdayjobs.com/Alkami" target="_blank" rel="noopener noreferrer">alkami.wd12.myworkdayjobs.com/Alkami</a> |
+| Allianz Technology | BFSI | Phenom | <a href="https://careers.allianz.com/global/en" target="_blank" rel="noopener noreferrer">careers.allianz.com/global/en</a> |
 | Ameriprise Financial | BFSI | Workday | <a href="https://ameriprise.wd5.myworkdayjobs.com/Ameriprise" target="_blank" rel="noopener noreferrer">ameriprise.wd5.myworkdayjobs.com/Ameriprise</a> |
 | Amgen | Other industry | Workday | <a href="https://amgen.wd1.myworkdayjobs.com/Careers" target="_blank" rel="noopener noreferrer">amgen.wd1.myworkdayjobs.com/Careers</a> |
 | Autodesk | Other industry | Workday | <a href="https://autodesk.wd1.myworkdayjobs.com/Ext" target="_blank" rel="noopener noreferrer">autodesk.wd1.myworkdayjobs.com/Ext</a> |
@@ -35,14 +36,18 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | CME Group | BFSI | Workday | <a href="https://cmegroup.wd1.myworkdayjobs.com/cme_careers" target="_blank" rel="noopener noreferrer">cmegroup.wd1.myworkdayjobs.com/cme_careers</a> |
 | Commonwealth Bank (CBA) | BFSI | Workday | <a href="https://cba.wd3.myworkdayjobs.com/CommBank_Careers" target="_blank" rel="noopener noreferrer">cba.wd3.myworkdayjobs.com/CommBank_Careers</a> |
 | CSG | Other industry | Workday | <a href="https://csgi.wd5.myworkdayjobs.com/CSGCareers" target="_blank" rel="noopener noreferrer">csgi.wd5.myworkdayjobs.com/CSGCareers</a> |
+| Danaher | Other industry | Phenom | <a href="https://jobs.danaher.com/global/en" target="_blank" rel="noopener noreferrer">jobs.danaher.com/global/en</a> |
 | Deloitte USI | BFSI | Avature | <a href="https://usijobs.deloitte.com/en_US/careersUSI" target="_blank" rel="noopener noreferrer">usijobs.deloitte.com/en_US/careersUSI</a> |
 | DTCC | BFSI | Oracle Fusion | <a href="https://ebxr.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs" target="_blank" rel="noopener noreferrer">ebxr.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs</a> |
 | Evernorth (Cigna) | Other industry | Workday | <a href="https://cigna.wd5.myworkdayjobs.com/cignacareers" target="_blank" rel="noopener noreferrer">cigna.wd5.myworkdayjobs.com/cignacareers</a> |
 | Expedia Group | Other industry | Workday | <a href="https://expedia.wd108.myworkdayjobs.com/search" target="_blank" rel="noopener noreferrer">expedia.wd108.myworkdayjobs.com/search</a> |
 | EY GDS | BFSI | Custom (sitemap) | <a href="https://careers.ey.com" target="_blank" rel="noopener noreferrer">careers.ey.com</a> |
 | FIS | BFSI | Workday | <a href="https://fis.wd5.myworkdayjobs.com/SearchJobs" target="_blank" rel="noopener noreferrer">fis.wd5.myworkdayjobs.com/SearchJobs</a> |
+| Fiserv | BFSI | Phenom | <a href="https://careers.fiserv.com/us/en" target="_blank" rel="noopener noreferrer">careers.fiserv.com/us/en</a> |
 | Franklin Templeton | BFSI | Custom (sitemap) | <a href="https://careers.franklintempleton.com/us/en/search-results" target="_blank" rel="noopener noreferrer">careers.franklintempleton.com/us/en/search-results</a> |
+| GE Aerospace | Other industry | Phenom | <a href="https://careers.geaerospace.com/global/en" target="_blank" rel="noopener noreferrer">careers.geaerospace.com/global/en</a> |
 | GE Vernova | Other industry | Workday | <a href="https://gevernova.wd5.myworkdayjobs.com/Vernova_ExternalSite" target="_blank" rel="noopener noreferrer">gevernova.wd5.myworkdayjobs.com/Vernova_ExternalSite</a> |
+| HSBC | BFSI | Eightfold | <a href="https://portal.careers.hsbc.com/careers" target="_blank" rel="noopener noreferrer">portal.careers.hsbc.com/careers</a> |
 | Intel | Other industry | Workday | <a href="https://intel.wd1.myworkdayjobs.com/External" target="_blank" rel="noopener noreferrer">intel.wd1.myworkdayjobs.com/External</a> |
 | Invesco | BFSI | Workday | <a href="https://invesco.wd1.myworkdayjobs.com/IVZ" target="_blank" rel="noopener noreferrer">invesco.wd1.myworkdayjobs.com/IVZ</a> |
 | LPL Financial | BFSI | Workday | <a href="https://lplfinancial.wd1.myworkdayjobs.com/India_Ext" target="_blank" rel="noopener noreferrer">lplfinancial.wd1.myworkdayjobs.com/India_Ext</a> |
@@ -64,6 +69,7 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | State Street | BFSI | Workday | <a href="https://statestreet.wd1.myworkdayjobs.com/Global" target="_blank" rel="noopener noreferrer">statestreet.wd1.myworkdayjobs.com/Global</a> |
 | Synchrony | BFSI | Workday | <a href="https://synchronyfinancial.wd5.myworkdayjobs.com/careers" target="_blank" rel="noopener noreferrer">synchronyfinancial.wd5.myworkdayjobs.com/careers</a> |
 | T-Mobile | Other industry | Workday | <a href="https://tmobile.wd1.myworkdayjobs.com/External" target="_blank" rel="noopener noreferrer">tmobile.wd1.myworkdayjobs.com/External</a> |
+| Thales | Other industry | Phenom | <a href="https://careers.thalesgroup.com/global/en" target="_blank" rel="noopener noreferrer">careers.thalesgroup.com/global/en</a> |
 | Thomson Reuters | BFSI | Workday | <a href="https://thomsonreuters.wd5.myworkdayjobs.com/External_Career_Site" target="_blank" rel="noopener noreferrer">thomsonreuters.wd5.myworkdayjobs.com/External_Career_Site</a> |
 | TJX | Other industry | Workday | <a href="https://tjx.wd1.myworkdayjobs.com/TJX_EXTERNAL" target="_blank" rel="noopener noreferrer">tjx.wd1.myworkdayjobs.com/TJX_EXTERNAL</a> |
 | TransUnion | BFSI | Workday | <a href="https://transunion.wd5.myworkdayjobs.com/TransUnion" target="_blank" rel="noopener noreferrer">transunion.wd5.myworkdayjobs.com/TransUnion</a> |
@@ -71,20 +77,20 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | Visa | BFSI | Workday | <a href="https://visa.wd5.myworkdayjobs.com/Visa" target="_blank" rel="noopener noreferrer">visa.wd5.myworkdayjobs.com/Visa</a> |
 | Wells Fargo | BFSI | Workday | <a href="https://wf.wd1.myworkdayjobs.com/WellsFargoJobs" target="_blank" rel="noopener noreferrer">wf.wd1.myworkdayjobs.com/WellsFargoJobs</a> |
 | ZEISS | Other industry | Workday | <a href="https://zeissgroup.wd3.myworkdayjobs.com/External" target="_blank" rel="noopener noreferrer">zeissgroup.wd3.myworkdayjobs.com/External</a> |
+| Zimmer Biomet | Other industry | Phenom | <a href="https://careers.zimmerbiomet.com/us/en" target="_blank" rel="noopener noreferrer">careers.zimmerbiomet.com/us/en</a> |
 | Zinnia | BFSI | Greenhouse | <a href="https://www.zinnia.com/careers/" target="_blank" rel="noopener noreferrer">www.zinnia.com/careers</a> |
 
-## Manual (90)
+## Manual (83)
 
 Check these career sites yourself. The reason column tells why the refresh does not scrape the employer.
 
 | Employer | Sector | Platform | Reason | Career site |
 |---|---|---|---|---|
-| ABB | Other industry | Phenom | Phenom site (no scraper yet). | <a href="https://careers.abb/global/en" target="_blank" rel="noopener noreferrer">careers.abb/global/en</a> |
+| Abercrombie & Fitch | Other industry | Workday | set inactive. | <a href="https://abercrombie.wd108.myworkdayjobs.com/anf" target="_blank" rel="noopener noreferrer">abercrombie.wd108.myworkdayjobs.com/anf</a> |
 | ADM | Other industry | Not known | ATS not detected. | <a href="https://www.adm.com/en-us/careers/" target="_blank" rel="noopener noreferrer">www.adm.com/en-us/careers</a> |
 | Albertsons India | Other industry | Oracle Fusion | Oracle site eofd.fa.us6/CX_1001 returns 0 India roles; India GCC posts elsewhere. | <a href="https://www.albertsonscompanies.com/careers/" target="_blank" rel="noopener noreferrer">www.albertsonscompanies.com/careers</a> |
 | Alcon | Other industry | Not known | Careers page TLS error. | <a href="https://careers.alcon.com/" target="_blank" rel="noopener noreferrer">careers.alcon.com</a> |
 | AllianceBernstein | BFSI | Not known | careers.alliancebernstein.com did not resolve. | <a href="https://www.alliancebernstein.com/corporate/en/careers.html" target="_blank" rel="noopener noreferrer">www.alliancebernstein.com/corporate/en/careers.html</a> |
-| Allianz Technology | BFSI | Phenom | Phenom (no scraper yet). | <a href="https://careers.allianz.com/" target="_blank" rel="noopener noreferrer">careers.allianz.com</a> |
 | Allstate | BFSI | Not known | Careers page timed out. | <a href="https://www.allstatecareers.com/" target="_blank" rel="noopener noreferrer">www.allstatecareers.com</a> |
 | Amazon | Other industry | Not known | Own careers system; needs a custom scraper. | <a href="https://www.amazon.jobs/" target="_blank" rel="noopener noreferrer">www.amazon.jobs</a> |
 | AMD | Other industry | iCIMS | iCIMS (no scraper yet). | <a href="https://careers.amd.com/" target="_blank" rel="noopener noreferrer">careers.amd.com</a> |
@@ -104,7 +110,6 @@ Check these career sites yourself. The reason column tells why the refresh does 
 | Citadel | BFSI | Custom (sitemap) | Re-checked 2026-09-14 with Puppeteer — loads fine this time (200, 308KB, not bot-blocked like the earlier axios 403 suggested), but no known ATS vendor signatur | <a href="https://www.citadel.com/careers/open-opportunities/" target="_blank" rel="noopener noreferrer">www.citadel.com/careers/open-opportunities</a> |
 | Costco | Other industry | Not known | ATS not detected. | <a href="https://www.costco.com/jobs.html" target="_blank" rel="noopener noreferrer">www.costco.com/jobs.html</a> |
 | Crisil | BFSI | Not known | ATS not detected. | <a href="https://www.crisil.com/en/home/careers.html" target="_blank" rel="noopener noreferrer">www.crisil.com/en/home/careers.html</a> |
-| Danaher | Other industry | Phenom | Phenom site (no scraper yet). | <a href="https://jobs.danaher.com/" target="_blank" rel="noopener noreferrer">jobs.danaher.com</a> |
 | Deutsche Bank | BFSI | Custom (sitemap) | Re-checked 2026-09-14 with Puppeteer — 134KB rendered, real India location pages exist (Bangalore/Pune/Mumbai), but no known ATS vendor signature. | <a href="https://careers.db.com/search-results" target="_blank" rel="noopener noreferrer">careers.db.com/search-results</a> |
 | Deutsche Börse | BFSI | SuccessFactors | careers.deutsche-boerse.com is SAP SuccessFactors (no scraper yet). | <a href="https://careers.deutsche-boerse.com/" target="_blank" rel="noopener noreferrer">careers.deutsche-boerse.com</a> |
 | DocuSign | Other industry | Not known | ATS not detected (generic iCIMS mention only). | <a href="https://careers.docusign.com/" target="_blank" rel="noopener noreferrer">careers.docusign.com</a> |
@@ -112,17 +117,14 @@ Check these career sites yourself. The reason column tells why the refresh does 
 | Experian | BFSI | Not known | ATS not detected. | <a href="https://jobs.experian.com/" target="_blank" rel="noopener noreferrer">jobs.experian.com</a> |
 | FactSet | BFSI | Not known | ATS not detected. | <a href="https://www.factset.com/careers" target="_blank" rel="noopener noreferrer">www.factset.com/careers</a> |
 | Ferguson | Other industry | Not known | ATS not detected. | <a href="https://corporate.ferguson.com/careers" target="_blank" rel="noopener noreferrer">corporate.ferguson.com/careers</a> |
-| Fiserv | BFSI | Phenom | Phenom (no scraper yet). | <a href="https://www.careers.fiserv.com/" target="_blank" rel="noopener noreferrer">www.careers.fiserv.com</a> |
 | FM Global | BFSI | Not known | fm.com/careers redirects to a host that does not resolve (www.careersatfm.com). | <a href="https://www.fm.com/careers" target="_blank" rel="noopener noreferrer">www.fm.com/careers</a> |
 | Gallagher | BFSI | iCIMS | iCIMS (no scraper yet). | <a href="https://jobs.ajg.com/" target="_blank" rel="noopener noreferrer">jobs.ajg.com</a> |
-| GE Aerospace | Other industry | Phenom | Phenom site (no scraper yet). | <a href="https://careers.geaerospace.com/" target="_blank" rel="noopener noreferrer">careers.geaerospace.com</a> |
 | Global Payments | BFSI | Not known | ATS not detected. | <a href="https://jobs.globalpayments.com/" target="_blank" rel="noopener noreferrer">jobs.globalpayments.com</a> |
 | Goldman Sachs | BFSI | Custom (sitemap) | Re-checked 2026-09-14 with Puppeteer — 780KB rendered, real job search results, no known ATS vendor signature. | <a href="https://higher.gs.com/roles" target="_blank" rel="noopener noreferrer">higher.gs.com/roles</a> |
 | Google | Other industry | Not known | Own careers system; needs a custom scraper. | <a href="https://www.google.com/about/careers/applications/" target="_blank" rel="noopener noreferrer">www.google.com/about/careers/applications</a> |
 | HP | Other industry | Eightfold | Eightfold ATS (no scraper yet). | <a href="https://jobs.hp.com/" target="_blank" rel="noopener noreferrer">jobs.hp.com</a> |
-| HSBC | BFSI | Avature | mycareer.hsbc.com is Avature (robots allows), but AvatureScraper (built for Deloitte USI markup) returned 0 roles. | <a href="https://mycareer.hsbc.com/en_GB/external/SearchJobs" target="_blank" rel="noopener noreferrer">mycareer.hsbc.com/en_GB/external/SearchJobs</a> |
 | ICE | BFSI | Custom (sitemap) | Checked 2026-09-14: page mentions 'icims' twice but both are false positives (a shared CSS class name, and iCIMS's own generic privacy-policy link) — same patte | <a href="https://careers.ice.com" target="_blank" rel="noopener noreferrer">careers.ice.com</a> |
-| Inspire Brands | Other industry | Phenom | Phenom site (no scraper yet). | <a href="https://www.inspirebrands.com/careers/" target="_blank" rel="noopener noreferrer">www.inspirebrands.com/careers</a> |
+| Inspire Brands | Other industry | Phenom | the Phenom site answers 403 to automated requests (inspirebrands.phenompeople.com); kept inactive. | <a href="https://www.inspirebrands.com/careers/" target="_blank" rel="noopener noreferrer">www.inspirebrands.com/careers</a> |
 | Intuit | BFSI | Not known | jobs.intuit.com is a Radancy (TalentBrew) site; underlying ATS not found. | <a href="https://jobs.intuit.com/" target="_blank" rel="noopener noreferrer">jobs.intuit.com</a> |
 | ION Group | BFSI | Not known | ATS not detected. | <a href="https://iongroup.com/careers/" target="_blank" rel="noopener noreferrer">iongroup.com/careers</a> |
 | Kestra Financial | BFSI | Not known | US wealth management firm (independent advisor platform) with a Bengaluru technology team. | <a href="https://www.kestrafinancial.com/careers" target="_blank" rel="noopener noreferrer">www.kestrafinancial.com/careers</a> |
@@ -158,7 +160,6 @@ Check these career sites yourself. The reason column tells why the refresh does 
 | TD SYNNEX | Other industry | Not known | ATS not detected. | <a href="https://www.tdsynnex.com/na/us/careers/" target="_blank" rel="noopener noreferrer">www.tdsynnex.com/na/us/careers</a> |
 | Temenos | BFSI | Workday | Workday site returns 0 India roles. | <a href="https://temenos.wd103.myworkdayjobs.com/Temenoscareers" target="_blank" rel="noopener noreferrer">temenos.wd103.myworkdayjobs.com/Temenoscareers</a> |
 | Texas Instruments | Other industry | Not known | ATS not detected. | <a href="https://careers.ti.com/" target="_blank" rel="noopener noreferrer">careers.ti.com</a> |
-| Thales | Other industry | Phenom | Phenom site (no scraper yet). | <a href="https://careers.thalesgroup.com/" target="_blank" rel="noopener noreferrer">careers.thalesgroup.com</a> |
 | TIAA | BFSI | Not known | Careers page timed out. | <a href="https://www.tiaa.org/public/about-tiaa/careers" target="_blank" rel="noopener noreferrer">www.tiaa.org/public/about-tiaa/careers</a> |
 | UBS | BFSI | Custom (sitemap) | Static fetch returned 403 (bot-protected) 2026-09-13 — needs headless-browser investigation, may require additional care re: bot-detection ethics per docs/ARCHI | <a href="https://jobs.ubs.com" target="_blank" rel="noopener noreferrer">jobs.ubs.com</a> |
 | Under Armour | Other industry | SuccessFactors | SuccessFactors (no scraper yet). | <a href="https://careers.underarmour.com/" target="_blank" rel="noopener noreferrer">careers.underarmour.com</a> |
@@ -166,7 +167,6 @@ Check these career sites yourself. The reason column tells why the refresh does 
 | Wise | BFSI | Not known | ATS not detected. | <a href="https://wise.jobs/" target="_blank" rel="noopener noreferrer">wise.jobs</a> |
 | WTW | BFSI | Not known | ATS not detected. | <a href="https://careers.wtwco.com/" target="_blank" rel="noopener noreferrer">careers.wtwco.com</a> |
 | YipitData | Other industry | Not known | ATS not detected. | <a href="https://www.yipitdata.com/careers" target="_blank" rel="noopener noreferrer">www.yipitdata.com/careers</a> |
-| Zimmer Biomet | Other industry | Phenom | Phenom site (no scraper yet). | <a href="https://careers.zimmerbiomet.com/" target="_blank" rel="noopener noreferrer">careers.zimmerbiomet.com</a> |
 | Zscaler | Other industry | Not known | ATS not detected on careers page. | <a href="https://www.zscaler.com/careers" target="_blank" rel="noopener noreferrer">www.zscaler.com/careers</a> |
 | Zurich Insurance | BFSI | Custom (sitemap) | zurich.com/en/careers/job-search returns a near-empty redirect stub even after Puppeteer rendering (2026-09-14) — real URL not yet found. | <a href="https://www.zurich.com/careers" target="_blank" rel="noopener noreferrer">www.zurich.com/careers</a> |
 

@@ -14,6 +14,12 @@ describe('mapLocation', () => {
     expect(mapLocation(raw, filters)).toBe(expected);
   });
 
+  test('a multi-location list takes the first listed city, not the longest name', () => {
+    expect(mapLocation('Pune, Maharashtra, India | Hyderabad, Telangana, India | Bangalore, Karnataka, India', filters)).toBe('Pune');
+    expect(mapLocation('Vadodara, Gujarat, India | Chennai, Tamil Nadu, India', filters)).toBe('Chennai');
+    expect(mapLocation('Thane, Maharashtra, India | Surat, India', filters)).toBe('India');
+  });
+
   test('a multi-location Workday role takes the city from the job URL', () => {
     expect(mapLocation('2 Locations', filters, 'https://x.wd1.myworkdayjobs.com/Ext/job/Bengaluru-IND/Senior-Manager_R1')).toBe('Bengaluru');
   });

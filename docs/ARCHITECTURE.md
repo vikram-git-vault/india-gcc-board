@@ -28,7 +28,7 @@ The specification gives Monday and Thursday at 08:00 IST. This change was a deci
 ### 1.1 Data flow
 
 ```
-Career sites (57 automated employers)
+Career sites (63 automated employers)
         ↓
 Scrapers (one class for each ATS type; robots.txt, crawl delay)
         ↓
@@ -99,9 +99,9 @@ Do not scrape pages behind a login. Do not collect personal data. Do not scrape 
 
 ### 2.1 Site classification
 
-- **Automated (57 employers):** robots.txt permits the careers paths, and the site does not need a login.
+- **Automated (63 employers):** robots.txt permits the careers paths, and the site does not need a login.
 - **Excluded by policy (3 employers):** Citigroup (robots.txt: `Disallow: /search-jobs/`), JPMorgan Chase (403 login wall), Charles Schwab (robots.txt: `Disallow: /` for all user agents). These are in `config/employers.json`, list `excluded`.
-- **Inactive (89 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
+- **Inactive (83 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
 
 If a site later prohibits scraping, add the employer to the `excluded` list and set `active: false`.
 Do not remove the employer from the configuration. Do not write logic that evades a block.
@@ -110,15 +110,17 @@ Do not remove the employer from the configuration. Do not write logic that evade
 
 | ATS type | Active employers | Method |
 |---|---|---|
-| Workday | 45 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
-| Oracle Fusion Recruiting Cloud | 3 | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
+| Workday | 44 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
+| Oracle Fusion Recruiting Cloud | 2 | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
 | Greenhouse | 2 | The public API `boards-api.greenhouse.io`. |
 | Avature | 1 | The server-rendered search result pages, and the location block on each detail page. |
+| Phenom | 7 | `POST /widgets` with `ddoKey` `refineSearch` and the country filter `India`, 50 jobs on each page. This is the call that the search page of the site makes. The descriptions stage uses `ddoKey` `jobDetail`. robots.txt on Phenom sites blocks `*/px-widgets`, `*/apply` and `*/jobcart`, but not `/widgets`. Each employer has its own `lang`, `country` and URL `path` in its `phenom` block. Read these values from the home page of the site. |
+| Eightfold | 1 | The public API `/api/apply/v2/jobs` with `domain` and `location=India`, 10 positions on each page. The descriptions stage gets the description from `/api/apply/v2/jobs/<id>`. HSBC since 2026-10-14. |
 | Custom | 6 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). |
 
 For the list of employers for each ATS type, refer to `docs/EMPLOYERS.md`.
 
-The employers with these ATS types are inactive because no scraper exists yet: Phenom, SuccessFactors, Eightfold, iCIMS, Taleo. Some employers use their own careers system (for example Google, Amazon, Apple).
+The employers with these ATS types are inactive because no scraper exists yet: SuccessFactors, iCIMS, Taleo. Inspire Brands (Phenom) stays inactive because its site refuses automated requests (HTTP 403). The other Eightfold employers (BCG, HP, NAB, PayPal) stay inactive for now. For each site, a person must first verify the host, the domain and robots.txt. Some employers use their own careers system (for example Google, Amazon, Apple).
 
 ### 2.3 Logs
 
@@ -383,7 +385,7 @@ The refresh saves each employer to the database immediately after it scrapes tha
 - **Retry.** If an error or a signal stops a refresh early, the server starts it again one time after 10 minutes. The retry run uses `--resume`. The server does not try a failed retry run again. A run that completes with some failed employers does not stop with an error. The next scheduled run scrapes these employers again.
 - **Completion.** Before the last publication step, the refresh writes `completed_at` in the checkpoint. If the publication fails, the refresh removes `completed_at` again. Thus the retry continues the run and does not scrape all employers again.
 - **Run record.** The `scrape_runs` row of a resumed run includes the employers from before the stop. If a resumed run records the same `run_id` again, the new row replaces the old row. A complete run also sets `last_refresh` in `meta`. An `--only` run does not change `last_refresh`.
-- **The board.** The publisher adds `meta.refresh` to `data/roles.json`: `complete`, `total`, `refreshed`, `failed` and the times. The "Updated" text on the board always shows the end of the last complete run. Its tooltip tells you if the data is complete or partial. When the data is partial, the board also shows a **Partial** label. While a refresh runs, the label shows the progress, for example **Refreshing 14 of 56**. The footer shows the current step. Each 15 seconds, the board reads `GET /api/refresh/status`. When the scrape completes a new employer, the board loads the roles again, not more than one time each minute.
+- **The board.** The publisher adds `meta.refresh` to `data/roles.json`: `complete`, `total`, `refreshed`, `failed` and the times. The "Updated" text on the board always shows the end of the last complete run. Point to it, or tap it, to open the refresh status panel. The panel shows the status: complete or partial. It also shows the finished, pending and failed employers, and the number of scored roles. When the data is partial, the board also shows a **Partial** label. While a refresh runs, the label shows the progress, for example **Refreshing 14 of 56**. The footer shows the current step. Each 15 seconds, the board reads `GET /api/refresh/status`. When the scrape completes a new employer, the board loads the roles again, not more than one time each minute.
 - **The board file.** The publisher writes `data/roles.json` to a temporary file first and then renames it. Thus the board never reads half a file during a refresh.
 
 To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:
