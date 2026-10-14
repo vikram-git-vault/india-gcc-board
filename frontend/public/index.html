@@ -755,6 +755,7 @@
       var notes = [];
       if (t.unscored) notes.push(t.unscored + ' waiting for a score');
       if (t.exceptions_hidden) notes.push(t.exceptions_hidden + ' AVP or Senior Manager roles hidden (RM score below ' + t.exception_min_fit + ')');
+      if (t.employer_floor_hidden) notes.push(t.employer_floor_hidden + ' Amazon roles hidden (RM score below ' + ((t.employer_min_fit || {}).amazon || '') + ')');
       if (notes.length) text += ', ' + notes.join(', ');
       scoringEl.innerHTML = text;
     } else {

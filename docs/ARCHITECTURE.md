@@ -699,6 +699,8 @@ The publisher hides an exception role when its fit score is less than `exception
 An exception role with no score stays on the board until it gets a score.
 A stale score stays on the board with the label "score out of date". A stale score cannot hide an exception role.
 
+An employer can also have its own minimum fit score (`employer_min_fit_score` in `config/targets.json`). The publisher hides each scored role of that employer that has a lower fit score. The rule applies to all grades. Amazon has the minimum 65, because most of its roles are a partial match. This keeps approximately 25 Amazon roles. The owner made this decision on 2026-10-14. The board header shows the number of hidden roles.
+
 ---
 
 ## 13. Job descriptions

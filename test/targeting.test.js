@@ -1,4 +1,5 @@
-import { classifyRole, nonItReason } from '../lib/targeting.js';
+import fs from 'fs';
+import { compileTargets, classifyRole, nonItReason } from '../lib/targeting.js';
 import { detectLevel } from '../lib/parser.js';
 
 // Real titles from the scraped data (2026-09-14 snapshot).
@@ -196,5 +197,12 @@ describe('junior levels and employer rules (owner decision 2026-10-14)', () => {
     ['Engineering Manager_Vice President_Software Engineering', 'morgan-stanley', 'target'],
   ])('%s at %s -> %s', (title, employer, tier) => {
     expect(classifyRole(title, undefined, employer).tier).toBe(tier);
+  });
+});
+
+describe('employer_min_fit_score', () => {
+  test('compiles integer floors only', () => {
+    const t = compileTargets({ ...JSON.parse(fs.readFileSync(new URL('../config/targets.json', import.meta.url), 'utf-8')), employer_min_fit_score: { amazon: 65, bad: '70' } });
+    expect(t.employerMinFit).toEqual({ amazon: 65 });
   });
 });

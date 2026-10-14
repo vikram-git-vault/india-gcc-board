@@ -101,5 +101,9 @@
       "reason": "Amazon IC level (Program/Product Manager title without Senior or Principal)"
     }
   },
-  "_comment_rules": "junior_level_suffix: ungraded titles ending in level I or II are junior (owner decision 2026-10-14). employer_rules: extra exclusions for one employer; Amazon plain PM/TPM titles are IC levels (owner decision 2026-10-14: drop junior levels only, keep Senior/Principal and managers)."
+  "_comment_rules": "junior_level_suffix: ungraded titles ending in level I or II are junior (owner decision 2026-10-14). employer_rules: extra exclusions for one employer; Amazon plain PM/TPM titles are IC levels (owner decision 2026-10-14: drop junior levels only, keep Senior/Principal and managers).",
+  "employer_min_fit_score": {
+    "amazon": 65
+  },
+  "_comment_employer_min_fit": "employer_min_fit_score: hide a scored role of this employer when its RM fit is below the value (owner decision 2026-10-14: Amazon 65 keeps its most relevant roles). Unscored and stale roles stay."
 }
