@@ -28,7 +28,7 @@ The specification gives Monday and Thursday at 08:00 IST. This change was a deci
 ### 1.1 Data flow
 
 ```
-Career sites (63 automated employers)
+Career sites (88 automated employers)
         ↓
 Scrapers (one class for each ATS type; robots.txt, crawl delay)
         ↓
@@ -99,9 +99,9 @@ Do not scrape pages behind a login. Do not collect personal data. Do not scrape 
 
 ### 2.1 Site classification
 
-- **Automated (63 employers):** robots.txt permits the careers paths, and the site does not need a login.
+- **Automated (88 employers):** robots.txt permits the careers paths, and the site does not need a login.
 - **Excluded by policy (3 employers):** Citigroup (robots.txt: `Disallow: /search-jobs/`), JPMorgan Chase (403 login wall), Charles Schwab (robots.txt: `Disallow: /` for all user agents). These are in `config/employers.json`, list `excluded`.
-- **Inactive (83 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
+- **Inactive (58 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
 
 If a site later prohibits scraping, add the employer to the `excluded` list and set `active: false`.
 Do not remove the employer from the configuration. Do not write logic that evades a block.
@@ -110,17 +110,29 @@ Do not remove the employer from the configuration. Do not write logic that evade
 
 | ATS type | Active employers | Method |
 |---|---|---|
-| Workday | 44 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
-| Oracle Fusion Recruiting Cloud | 2 | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
+| Workday | 48 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
+| Oracle Fusion Recruiting Cloud | 3 | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
 | Greenhouse | 2 | The public API `boards-api.greenhouse.io`. |
-| Avature | 1 | The server-rendered search result pages, and the location block on each detail page. |
-| Phenom | 7 | `POST /widgets` with `ddoKey` `refineSearch` and the country filter `India`, 50 jobs on each page. This is the call that the search page of the site makes. The descriptions stage uses `ddoKey` `jobDetail`. robots.txt on Phenom sites blocks `*/px-widgets`, `*/apply` and `*/jobcart`, but not `/widgets`. Each employer has its own `lang`, `country` and URL `path` in its `phenom` block. Read these values from the home page of the site. |
-| Eightfold | 1 | The public API `/api/apply/v2/jobs` with `domain` and `location=India`, 10 positions on each page. The descriptions stage gets the description from `/api/apply/v2/jobs/<id>`. HSBC since 2026-10-14. |
-| Custom | 6 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). |
+| Avature | 2 | The server-rendered search result pages, and the location block on each detail page. `custom.search_params` adds a server filter (MetLife: `semanticSearch=India`). When the list has no total, the scraper reads pages until a page is empty. When a detail page has no title, location or description block, the scraper uses the banner title, the location on the list card and the "Description" block. |
+| Phenom | 8 | `POST /widgets` with `ddoKey` `refineSearch` and the country filter `India`, 50 jobs on each page. This is the call that the search page of the site makes. The descriptions stage uses `ddoKey` `jobDetail`. robots.txt on Phenom sites blocks `*/px-widgets`, `*/apply` and `*/jobcart`, but not `/widgets`. Each employer has its own `lang`, `country` and URL `path` in its `phenom` block. Read these values from the home page of the site. |
+| Eightfold | 4 | Two APIs. HSBC uses `/api/apply/v2/jobs`. PayPal, NAB and HP use `/api/pcsx/search` (`eightfold.api: "pcsx"`), because there the older API answers 403. Both take `domain` and `location=India`, with 10 positions on each page. The descriptions stage uses `/api/apply/v2/jobs/<id>` or `/api/pcsx/position_details`. |
+| Jibe | 7 | `GET /api/jobs?location=India`, 100 jobs on each page, with the full description. Jibe is a front end for iCIMS (AMD, Gallagher, Aon, ICE, Schneider Electric, DocuSign, Publicis). The location filter removes the jobs outside India. |
+| Amazon | 1 | `GET /en/search.json` with `normalized_country_code[]=IND`, 100 jobs on each page, with the description and the qualifications. |
+| Custom | 13 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD, also inside `@graph`, or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). The scraper reads first the job URLs that contain an Indian city name. Radancy sites (Moody's, Intuit), SuccessFactors career sites (ANZ) and sites with a vacancy sitemap (Experian, Wise) use this method. |
 
 For the list of employers for each ATS type, refer to `docs/EMPLOYERS.md`.
 
-The employers with these ATS types are inactive because no scraper exists yet: SuccessFactors, iCIMS, Taleo. Inspire Brands (Phenom) stays inactive because its site refuses automated requests (HTTP 403). The other Eightfold employers (BCG, HP, NAB, PayPal) stay inactive for now. For each site, a person must first verify the host, the domain and robots.txt. Some employers use their own careers system (for example Google, Amazon, Apple).
+The reason for each inactive employer is in its `note` in `config/employers.json`. The main reasons are:
+
+- The site refuses automated requests (HTTP 403, timeouts). Examples: UBS, BNP Paribas, Citadel, Nokia, American Express.
+- robots.txt blocks the job API or the whole host. Examples: American Airlines (`/services/`), Swiss Re (`Disallow: /`), the SmartRecruiters API host.
+- The site has no India roles, or posts its India roles on a different site. Examples: Under Armour, Principal, T. Rowe Price, Lloyds.
+- The configured address no longer exists (HTTP 404). Examples: Morgan Stanley, Deutsche Bank.
+- The site needs its own scraper. Examples: Goldman Sachs, Atlassian, Deutsche Börse, Google, Apple.
+
+### 2.2.1 robots.txt rules
+
+`isPathAllowed()` in `lib/scrapers/BaseScraper.js` reads the rules for `User-agent: *`. The longest rule that matches wins. `*` matches any characters, and `$` marks the end of the path. All other characters are literal, also `?`. Before 2026-10-14, `?` was not literal. Thus the rule `Disallow: /jobs?*` also blocked `/job/`.
 
 ### 2.3 Logs
 
@@ -578,6 +590,8 @@ The classifier does these steps in this sequence:
      - Product and program roles: product owner, product manager, product lead, program manager (also "programme manager"). The rule also includes "Technical Product Manager" and "Technical Product Owner".
      - Engineering leader roles: engineering manager, development manager, delivery manager, delivery lead, engineering lead, chapter lead, squad lead, tribe lead. Some employers (for example Visa, Invesco, Mastercard) do not put a bank grade in the title.
    - Excluded: a lead-role title that has a marker of a lower grade (Specialist, Associate, Analyst, Junior, Assistant, Intern, Trainee, Apprentice).
+   - Excluded: a lead-role title with the level I or II (`junior_level_suffix`). Examples: "Program Manager II", "Product Manager-II", "Program Manager (II)". The owner made this decision on 2026-10-14. A regulation or a phase name is not a level. Thus "Solvency II", "Basel II", "MiFID II", "Phase II" and "Tier II" stay.
+   - Excluded: a lead-role title that an employer rule (`employer_rules`) matches. The classifier gets the employer id from the scraper and from the database. The rule does not apply to a title with a grade (for example Head or Director). At Amazon, some titles are an individual contributor level: Program Manager, Product Manager and Technical Program Manager. The rule excludes them when the title does not have "Senior", "Sr." or "Principal". The rule also matches up to three words before the title, for example "WHS Program Manager".
    - Excluded: Managing Director, EVP and C-level titles, and titles with no target grade.
 2. **Hard exclusion.** Functions that are not targets: for example legal, audit, sourcing, consulting, advisory, security.
 3. **Soft exclusion.** Domain words: for example risk, finance, treasury, HR, sales. These exclude the role only when the title does not also name a technology function (technology, engineering, platform, IT, software, data, product management, program management). Because of this, "Director, Risk Technology" stays.

@@ -50,3 +50,25 @@ describe('Eightfold description fetch', () => {
     expect((await fetchDescription({ external_job_id: '../x' }, employer)).status).toBe('error');
   });
 });
+
+describe('Eightfold PCSX tenants', () => {
+  const pcsx = { ...employer, eightfold: { host: 'acme.eightfold.ai', domain: 'acme.com', location: 'India', api: 'pcsx' } };
+  test('lists through /api/pcsx/search and maps the PCSX fields', async () => {
+    nock('https://acme.eightfold.ai').get('/robots.txt').times(2).reply(200, 'User-agent: *\nAllow: /\n');
+    nock('https://acme.eightfold.ai').get('/api/pcsx/search').query({ domain: 'acme.com', query: '', location: 'India', start: 0 })
+      .reply(200, { data: { count: 1, positions: [{ id: 5, name: 'Head of Product', locations: ['Praha, Czechia', 'Bengaluru, Karnataka, India'], postedTs: 1790593200, department: 'Product', positionUrl: '/careers/job/5' }] } });
+    const roles = await new EightfoldScraper(pcsx).scrape();
+    expect(roles).toEqual([{
+      externalJobId: '5', title: 'Head of Product', description: '', location: 'Praha, Czechia | Bengaluru, Karnataka, India',
+      url: 'https://acme.eightfold.ai/careers/job/5', postedDate: new Date(1790593200000).toISOString(), jobType: null, department: 'Product',
+    }]);
+  });
+  test('descriptions from /api/pcsx/position_details; 404 is gone', async () => {
+    nock('https://acme.eightfold.ai').get('/robots.txt').reply(200, 'User-agent: *\nAllow: /\n');
+    nock('https://acme.eightfold.ai').get('/api/pcsx/position_details').query({ position_id: '5', domain: 'acme.com', hl: 'en' })
+      .reply(200, { data: { jobDescription: '<p>Own the roadmap.</p>' } });
+    nock('https://acme.eightfold.ai').get('/api/pcsx/position_details').query({ position_id: '6', domain: 'acme.com', hl: 'en' }).reply(404, { status: 404 });
+    expect(await fetchDescription({ external_job_id: '5' }, pcsx)).toEqual({ status: 'ok', text: 'Own the roadmap.' });
+    expect(await fetchDescription({ external_job_id: '6' }, pcsx)).toEqual({ status: 'gone' });
+  });
+});

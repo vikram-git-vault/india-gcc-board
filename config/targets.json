@@ -50,7 +50,8 @@
     {
       "grade": "Lead role (ungraded)",
       "tier": "target",
-      "pattern": "^(?!.*\\b(specialist|associate|analyst|junior|assistant|intern|trainee|apprentice)\\b).*\\b(product owner|product manager|program(me)? manager|product (management )?lead(er)?|delivery lead(er)?|manager,? (software )?engineering|engineer(ing)? manager|development manager|delivery manager|engineering lead(er)?|(chapter|squad|tribe) lead(er)?)\\b"
+      "pattern": "^(?!.*\\b(specialist|associate|analyst|junior|assistant|intern|trainee|apprentice)\\b).*\\b(product owner|product manager|program(me)? manager|product (management )?lead(er)?|delivery lead(er)?|manager,? (software )?engineering|engineer(ing)? manager|development manager|delivery manager|engineering lead(er)?|(chapter|squad|tribe) lead(er)?)\\b",
+      "ungraded": true
     }
   ],
   "exclude_hard": "\\b(business development|account development|legal|audit|accounting|accountant|tax|benefits|talent acquisition|recruit\\w*|private banker|affluent|coverage|liabilities|quant\\w*|sourcing|procurement|deal management|consulting|advisory|marketing|balance sheet|content operations|security|cyber|CISO)\\b",
@@ -92,5 +93,13 @@
       "family": "Delivery / Program / Transformation",
       "pattern": "\\bdelivery\\b|\\bprogram(me)?\\b|\\bproject\\b|\\btransformation\\b|\\bimplementation\\b|\\bplatforms?\\b|\\boperating model\\b|\\bportfolio\\b|\\bchange\\b|\\bagile\\b|\\bscrum\\b|\\brelease\\b"
     }
-  ]
+  ],
+  "junior_level_suffix": "(?<!\\b(?:Solvency|Basel|MiFID|Phase|Tier|Level|Pillar|Stage|Wave|Release|Gen|Part|Type|Class|Grade))(?:\\s+|\\s*-\\s*|\\s*\\(\\s*)(I|II)\\s*\\)?\\s*($|[,(\\-–—|:])",
+  "employer_rules": {
+    "amazon": {
+      "exclude_title": "^\\s*(?:(?!(?:senior|sr|principal|manager)\\b)[\\w&./]+\\s+){0,3}?(technical\\s+)?(program|product)\\s+manager\\b(?!\\s*[,\\-–—]?\\s*(?:senior|sr\\.?|principal)\\b)",
+      "reason": "Amazon IC level (Program/Product Manager title without Senior or Principal)"
+    }
+  },
+  "_comment_rules": "junior_level_suffix: ungraded titles ending in level I or II are junior (owner decision 2026-10-14). employer_rules: extra exclusions for one employer; Amazon plain PM/TPM titles are IC levels (owner decision 2026-10-14: drop junior levels only, keep Senior/Principal and managers)."
 }

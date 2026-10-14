@@ -2,7 +2,7 @@
 
 India GCC Board is a personal job board for leadership roles in India GCC (global capability center) hub cities.
 It covers BFSI (banking, financial services and insurance) and other industries.
-It collects roles from the career sites of the employers in `config/employers.json` (149 employers; the refresh scrapes 63 of them).
+It collects roles from the career sites of the employers in `config/employers.json` (149 employers; the refresh scrapes 88 of them).
 It keeps only the roles that match a target profile.
 It gives each role an ATS score and a fit score against two resume variants.
 A small server on your computer shows the roles in a web page.
@@ -78,7 +78,7 @@ After each refresh, the server scores the new roles with Claude Code (`autoscore
 
 ## Status
 
-Current status: Phase 8 is complete. The refresh scrapes 63 of 149 employers.
+Current status: Phase 8 is complete. The refresh scrapes 88 of 149 employers.
 
 | Phase | Status |
 |---|---|

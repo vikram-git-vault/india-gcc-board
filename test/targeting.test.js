@@ -167,3 +167,32 @@ describe('nonItReason (job description check)', () => {
     expect(nonItReason('HVAC plumbing')).toBeNull();
   });
 });
+
+describe('junior levels and employer rules (owner decision 2026-10-14)', () => {
+  test.each([
+    ['Program Manager II, VSP', 'amazon', 'excluded'],
+    ['Product Manager I', null, 'excluded'],
+    ['Program Manager III, RBS', 'amazon', 'excluded'],
+    ['Program Manager, WHS CPT', 'amazon', 'excluded'],
+    ['Senior Program Manager, RBS', 'amazon', 'target'],
+    ['Principal Program Manager, Ship With Amazon', 'amazon', 'target'],
+    ['Program Manager', 'bny', 'target'],
+    ['Program Manager III', 'bny', 'target'],
+    // Review 2026-10-14: regulation and phase names are not levels.
+    ['Program Manager, Solvency II', null, 'target'],
+    ['Product Manager, Basel II', null, 'target'],
+    ['Program Manager - MiFID II', null, 'target'],
+    ['Program Manager, Phase II', null, 'target'],
+    ['Product Manager-II', null, 'excluded'],
+    ['Program Manager (II)', null, 'excluded'],
+    // Amazon: prefixes, Sr./dash forms, graded titles.
+    ['WHS Program Manager, Environment', 'amazon', 'excluded'],
+    ['Tech Infrastructure Program Manager, AWS Data Center', 'amazon', 'excluded'],
+    ['Program Manager, Sr.', 'amazon', 'target'],
+    ['Program Manager - Senior', 'amazon', 'target'],
+    ['Sr. Technical Program Manager', 'amazon', 'target'],
+    ['Program Manager, Head of Ops', 'amazon', 'target'],
+  ])('%s at %s -> %s', (title, employer, tier) => {
+    expect(classifyRole(title, undefined, employer).tier).toBe(tier);
+  });
+});
