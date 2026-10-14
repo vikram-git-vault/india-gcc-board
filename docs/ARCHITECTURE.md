@@ -89,7 +89,7 @@ Do not scrape pages behind a login. Do not collect personal data. Do not scrape 
 | Sitemaps | The scrapers use `/sitemap.xml` job URLs when a site has them. |
 | Crawl delay | 5 to 10 seconds between requests to the same domain (`crawl_delay_seconds` for each employer). The refresh does not send parallel requests to one host. |
 | User-Agent | `india-gcc-board-bot/1.0 (+github repository URL)`. The scrapers do not use a browser User-Agent to hide. |
-| Blocks | When an employer site answers 429 or 403, the refresh records an error for that employer and continues with the next employer. The next daily refresh tries again. The refresh does not repeat requests to a host that blocks it. |
+| Blocks | When an employer site answers 429 or 403, the refresh records an error and continues with the next employer. The next daily refresh tries again. The refresh does not repeat requests to a host that blocks it. |
 | Data use | Use the data only for your personal search. Do not sell the data. Do not give the data to other persons. |
 | Authentication | Scrape only public pages. |
 | Terms of use | Read the terms of use of a site before you add it. If the terms prohibit automated access, do not scrape the site, also when robots.txt permits it. |
@@ -367,6 +367,8 @@ The board runs on your own computer. Only your own devices can open it. This was
 3. It catches up a missed daily refresh. `node-cron` does not run a missed time again after the computer wakes. Thus the server checks every 5 minutes and 30 seconds after it starts. `isRefreshMissed()` in `lib/schedule.js` compares the most recent due time with the latest refresh time. If the refresh is missed, the server starts it. The server makes one attempt for each due time.
 4. It records the progress of a refresh. `refresh.js` sends a message to the server through the Node IPC channel at each step (`lib/progress.js`). The steps are: each employer, each description, the classification and the publication. The server keeps the last message in `progress` in `GET /api/refresh/status` and writes one log line each minute. When you run `node refresh.js` by hand, there is no IPC channel and the script does not send messages.
 5. It continues a refresh that stopped. Refer to section 6.1.
+6. It keeps the Mac awake during a refresh. On macOS, the server starts `caffeinate -i -s -w <pid>` with the refresh. `caffeinate` stops when the refresh stops. Then the Mac can sleep again. A MacBook with a closed lid on battery power can still sleep.
+7. It limits the time for each employer. If one employer takes more than 20 minutes, the refresh records an error and continues with the next employer. `EMPLOYER_TIME_LIMIT_MINUTES` in `.env` changes the limit. After the limit, the scraper starts no new requests (`cancel()` in `lib/scrapers/BaseScraper.js`). A request that is in progress can continue for not more than 30 seconds. The next resumed run or the next full run scrapes the employer again.
 
 ### 6.1 Refresh checkpoint
 
@@ -381,7 +383,7 @@ The refresh saves each employer to the database immediately after it scrapes tha
 - **Retry.** If an error or a signal stops a refresh early, the server starts it again one time after 10 minutes. The retry run uses `--resume`. The server does not try a failed retry run again. A run that completes with some failed employers does not stop with an error. The next scheduled run scrapes these employers again.
 - **Completion.** Before the last publication step, the refresh writes `completed_at` in the checkpoint. If the publication fails, the refresh removes `completed_at` again. Thus the retry continues the run and does not scrape all employers again.
 - **Run record.** The `scrape_runs` row of a resumed run includes the employers from before the stop. If a resumed run records the same `run_id` again, the new row replaces the old row. A complete run also sets `last_refresh` in `meta`. An `--only` run does not change `last_refresh`.
-- **The board.** The publisher adds `meta.refresh` to `data/roles.json`: `complete`, `total`, `refreshed`, `failed` and the times. The "Updated" text on the board always shows the end of the last complete run. Its tooltip tells you if the data is complete or partial. When the data is partial, the board also shows a **Partial** label. While a refresh runs, the label is **Refreshing**.
+- **The board.** The publisher adds `meta.refresh` to `data/roles.json`: `complete`, `total`, `refreshed`, `failed` and the times. The "Updated" text on the board always shows the end of the last complete run. Its tooltip tells you if the data is complete or partial. When the data is partial, the board also shows a **Partial** label. While a refresh runs, the label shows the progress, for example **Refreshing 14 of 56**. The footer shows the current step. Each 15 seconds, the board reads `GET /api/refresh/status`. When the scrape completes a new employer, the board loads the roles again, not more than one time each minute.
 - **The board file.** The publisher writes `data/roles.json` to a temporary file first and then renames it. Thus the board never reads half a file during a refresh.
 
 To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:

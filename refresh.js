@@ -24,6 +24,25 @@ const logger = createLogger('refresh');
 
 const EMPLOYERS_CONFIG = path.join('config', 'employers.json');
 const FILTERS_CONFIG = path.join('config', 'filters.json');
+// Time limit for one employer. After it, the employer counts as failed and
+// the refresh goes on with the next one (the next run tries it again).
+const limitMinutes = Number(process.env.EMPLOYER_TIME_LIMIT_MINUTES);
+const EMPLOYER_TIME_LIMIT_MS = (limitMinutes > 0 ? limitMinutes : 20) * 60 * 1000;
+
+async function scrapeWithTimeLimit(scraper, employer) {
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      scraper.cancel();
+      reject(new Error(`time limit of ${EMPLOYER_TIME_LIMIT_MS / 60000} min reached for ${employer.name}`));
+    }, EMPLOYER_TIME_LIMIT_MS);
+  });
+  try {
+    return await Promise.race([scraper.scrape(), limit]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function loadJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
@@ -53,7 +72,7 @@ async function scrapeEmployers(employers, filters, cp, save) {
     try {
       logger.info(`Scraping ${employer.name} (${employer.ats_type})`);
       const scraper = ScraperFactory.create(employer);
-      const rawListings = await scraper.scrape();
+      const rawListings = await scrapeWithTimeLimit(scraper, employer);
       const roles = parseRoles(rawListings, employer, filters);
       const { added, updated } = await syncRoles(employer.id, roles);
       recordEmployer(cp, employer.id, { status: 'ok', count: roles.length, added, updated });

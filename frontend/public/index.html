@@ -347,6 +347,7 @@
     coverage: { fetchedCount: 0, totalTracked: 0, manualCount: 0 },
     targeting: null,
     refreshRunning: false,  // from /api/refresh/status
+    refreshProgress: null,  // the last step of the running refresh
     marks: loadMarks(),   // roleId -> status, persisted in this browser only
     query: '',
     grades: new Set(),
@@ -623,6 +624,16 @@
     render();
   }
 
+  // "Refreshing: employer 14 of 56 (EY GDS)" from lib/progress.js messages.
+  function progressText(p) {
+    if (!p) return 'Refreshing: starting';
+    if (p.stage === 'scrape') return 'Refreshing: employer ' + p.done + ' of ' + p.total + ' (' + p.item + ')';
+    if (p.stage === 'descriptions') return 'Refreshing: job description ' + p.done + ' of ' + p.total + ' (' + p.item + ')';
+    if (p.stage === 'classify') return 'Refreshing: classifying roles';
+    if (p.stage === 'publish') return 'Refreshing: publishing roles';
+    return 'Refreshing';
+  }
+
   // Tooltip on "Updated …": was the last run complete, or did it stop
   // partway (lib/checkpoint.js)? "Updated" is always the last complete run.
   function renderRefreshCompleteness() {
@@ -632,7 +643,7 @@
     var text;
     var tag = document.getElementById('freshPartial');
     if (state.refreshRunning) {
-      text = 'A refresh is running now. ' + (r && !r.complete ? r.refreshed + ' of ' + r.total + ' employers are saved so far. ' : '') +
+      text = progressText(state.refreshProgress) + '. ' + (r && !r.complete ? r.refreshed + ' of ' + r.total + ' employers are saved so far. ' : '') +
         'Until it finishes, some roles are from the last complete refresh (' + last + ').';
     } else if (!r) {
       text = 'Last complete refresh: ' + last + '.';
@@ -647,7 +658,9 @@
     }
     el.title = text;
     el.setAttribute('aria-label', 'Updated ' + document.getElementById('freshTime').textContent + '. ' + text);
-    tag.textContent = state.refreshRunning ? 'Refreshing' : 'Partial';
+    var p = state.refreshProgress;
+    tag.textContent = !state.refreshRunning ? 'Partial'
+      : (p && p.stage === 'scrape' ? 'Refreshing ' + p.done + ' of ' + p.total : 'Refreshing');
     tag.hidden = !state.refreshRunning && !(r && !r.complete);
   }
 
@@ -743,17 +756,30 @@
   var refreshStatusEl = document.getElementById('refreshStatus');
   var pollTimer = null;
   var wasRunning = false;
+  var lastLiveReload = Date.now();  // loadRoles() runs at page load
+  var reloadedAt = null;            // progress key of the last live reload
 
   function pollRefreshStatus() {
     fetch('/api/refresh/status').then(function (r) { return r.json(); }).then(function (s) {
-      var changed = state.refreshRunning !== Boolean(s.running);
       state.refreshRunning = Boolean(s.running);
-      if (changed && state.meta) renderRefreshCompleteness();
+      state.refreshProgress = s.running ? (s.progress || null) : null;
+      renderRefreshCompleteness();
       if (s.running) {
         wasRunning = true;
         refreshBtn.disabled = true;
         refreshBtn.textContent = 'Refreshing…';
-        refreshStatusEl.textContent = 'A refresh started ' + relativeTime(s.lastStartedAt) + '. A full refresh takes 30 to 45 minutes.';
+        refreshStatusEl.textContent = progressText(s.progress) + '. The refresh started ' + relativeTime(s.lastStartedAt) + '.';
+        // Each finished employer is already on the board: reload the roles
+        // when the employer count (or the stage) moved since the last
+        // reload, at most once a minute.
+        var p = s.progress;
+        var key = p ? p.stage + ':' + (p.stage === 'scrape' ? p.done : '') : null;
+        if (key && reloadedAt === null) reloadedAt = key;
+        if (key && key !== reloadedAt && Date.now() - lastLiveReload > 60000) {
+          lastLiveReload = Date.now();
+          reloadedAt = key;
+          loadRoles();
+        }
         if (!pollTimer) pollTimer = setInterval(pollRefreshStatus, 15000);
       } else {
         refreshBtn.disabled = false;

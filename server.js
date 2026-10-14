@@ -60,6 +60,13 @@ function runRefresh(trigger) {
   const args = trigger === 'manual' ? ['refresh.js'] : ['refresh.js', '--resume'];
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
   const child = spawn('node', args, { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
+  // Keep the Mac awake until the refresh ends (-i idle sleep; -s system
+  // sleep on mains power). A closed lid on battery can still sleep.
+  let awake = null;
+  if (process.platform === 'darwin') {
+    awake = spawn('caffeinate', ['-i', '-s', '-w', String(child.pid)], { stdio: 'ignore' });
+    awake.on('error', (err) => logger.warn(`caffeinate not started: ${err.message}`));
+  }
   child.on('message', (msg) => {
     if (msg && msg.type === 'progress') {
       const { type, ...progress } = msg;
@@ -72,6 +79,7 @@ function runRefresh(trigger) {
 
   child.on('exit', (code, signal) => {
     clearInterval(progressTimer);
+    if (awake && awake.exitCode === null) awake.kill();
     fs.closeSync(out);
     refreshState.running = false;
     refreshState.lastFinishedAt = new Date().toISOString();
