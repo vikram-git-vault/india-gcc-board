@@ -192,6 +192,8 @@ describe('junior levels and employer rules (owner decision 2026-10-14)', () => {
     ['Program Manager - Senior', 'amazon', 'target'],
     ['Sr. Technical Program Manager', 'amazon', 'target'],
     ['Program Manager, Head of Ops', 'amazon', 'target'],
+    // Underscore separators (Morgan Stanley).
+    ['Engineering Manager_Vice President_Software Engineering', 'morgan-stanley', 'target'],
   ])('%s at %s -> %s', (title, employer, tier) => {
     expect(classifyRole(title, undefined, employer).tier).toBe(tier);
   });

@@ -26,6 +26,8 @@ describe('mapLocation', () => {
     expect(mapLocation('Ind – Blr Sez 1 (3Rd, 6Th & 7Th Floor)', filters)).toBe('Bengaluru');
     expect(mapLocation('Ind – Pune Sez 1 (All Floors Except 9Th And 10Th)', filters)).toBe('Pune');
     expect(mapLocation('USA - IN (Remote)', filters)).toBe('USA - IN (Remote)');
+    expect(mapLocation('RMZ Ecoworld - Campus 6A', filters)).toBe('Bengaluru');
+    expect(mapLocation('COMMERZ III, OBEROI GARDEN CITY', filters)).toBe('Mumbai');
   });
 
   test('a multi-location list takes the first listed city, not the longest name', () => {

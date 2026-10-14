@@ -28,7 +28,7 @@ The specification gives Monday and Thursday at 08:00 IST. This change was a deci
 ### 1.1 Data flow
 
 ```
-Career sites (88 automated employers)
+Career sites (92 automated employers)
         ↓
 Scrapers (one class for each ATS type; robots.txt, crawl delay)
         ↓
@@ -99,9 +99,9 @@ Do not scrape pages behind a login. Do not collect personal data. Do not scrape 
 
 ### 2.1 Site classification
 
-- **Automated (88 employers):** robots.txt permits the careers paths, and the site does not need a login.
+- **Automated (92 employers):** robots.txt permits the careers paths, and the site does not need a login.
 - **Excluded by policy (3 employers):** Citigroup (robots.txt: `Disallow: /search-jobs/`), JPMorgan Chase (403 login wall), Charles Schwab (robots.txt: `Disallow: /` for all user agents). These are in `config/employers.json`, list `excluded`.
-- **Inactive (58 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
+- **Inactive (54 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
 
 If a site later prohibits scraping, add the employer to the `excluded` list and set `active: false`.
 Do not remove the employer from the configuration. Do not write logic that evades a block.
@@ -110,7 +110,7 @@ Do not remove the employer from the configuration. Do not write logic that evade
 
 | ATS type | Active employers | Method |
 |---|---|---|
-| Workday | 48 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
+| Workday | 51 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
 | Oracle Fusion Recruiting Cloud | 3 | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
 | Greenhouse | 2 | The public API `boards-api.greenhouse.io`. |
 | Avature | 2 | The server-rendered search result pages, and the location block on each detail page. `custom.search_params` adds a server filter (MetLife: `semanticSearch=India`). When the list has no total, the scraper reads pages until a page is empty. When a detail page has no title, location or description block, the scraper uses the banner title, the location on the list card and the "Description" block. |
@@ -118,7 +118,7 @@ Do not remove the employer from the configuration. Do not write logic that evade
 | Eightfold | 4 | Two APIs. HSBC uses `/api/apply/v2/jobs`. PayPal, NAB and HP use `/api/pcsx/search` (`eightfold.api: "pcsx"`), because there the older API answers 403. Both take `domain` and `location=India`, with 10 positions on each page. The descriptions stage uses `/api/apply/v2/jobs/<id>` or `/api/pcsx/position_details`. |
 | Jibe | 7 | `GET /api/jobs?location=India`, 100 jobs on each page, with the full description. Jibe is a front end for iCIMS (AMD, Gallagher, Aon, ICE, Schneider Electric, DocuSign, Publicis). The location filter removes the jobs outside India. |
 | Amazon | 1 | `GET /en/search.json` with `normalized_country_code[]=IND`, 100 jobs on each page, with the description and the qualifications. |
-| Custom | 13 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD, also inside `@graph`, or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). The scraper reads first the job URLs that contain an Indian city name. Radancy sites (Moody's, Intuit), SuccessFactors career sites (ANZ) and sites with a vacancy sitemap (Experian, Wise) use this method. |
+| Custom | 14 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD, also inside `@graph`, or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). The scraper reads first the job URLs that contain an Indian city name. Radancy sites (Moody's, Intuit), SuccessFactors career sites (ANZ, Nomura) and sites with a vacancy sitemap (Experian, Wise) use this method. |
 
 For the list of employers for each ATS type, refer to `docs/EMPLOYERS.md`.
 
@@ -580,6 +580,8 @@ Example entry in `config/employers.json`:
 
 `lib/targeting.js` classifies each role from its title only. The rules are in `config/targets.json`. You can change the rules without a code change.
 After you change the rules, run `node refresh.js --reclassify`. This command applies the rules to all stored roles. It does not scrape.
+
+First, the classifier changes each underscore in the title to a separator. Some titles use underscores, for example "Program Manager_Vice President_Delivery" (Morgan Stanley).
 
 The classifier does these steps in this sequence:
 
