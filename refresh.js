@@ -76,7 +76,7 @@ async function scrapeEmployers(employers, filters, cp, save) {
 
 // One aggregate scrape_runs row per run, from the checkpoint, so a resumed
 // run counts the employers saved before the interruption too.
-async function recordRun(cp) {
+async function recordRun(cp, options) {
   const { recordScrapeRun } = await import('./lib/database.js');
   const entries = Object.entries(cp.employers);
   const ok = entries.filter(([, e]) => e.status === 'ok');
@@ -93,7 +93,7 @@ async function recordRun(cp) {
     roles_updated: ok.reduce((sum, [, e]) => sum + (e.updated || 0), 0),
     errors: JSON.stringify(failed.map(([id, e]) => ({ employer: id, message: e.error }))),
     status: 'completed',
-  });
+  }, options);
 }
 
 // Detail requests for shortlisted roles only (lib/descriptions.js), one
@@ -215,8 +215,9 @@ async function main() {
   if (!only && args.includes('--resume')) {
     cp = resumableCheckpoint(loadCheckpoint());
     if (cp) {
-      const done = Object.values(cp.employers).filter((e) => e.status === 'ok').length;
-      const total = toScrape.filter((e) => e.active).length;
+      const active = toScrape.filter((e) => e.active);
+      const done = active.filter((e) => cp.employers[e.id] && cp.employers[e.id].status === 'ok').length;
+      const total = active.length;
       logger.info(`Resuming ${cp.run_id}: ${done} of ${total} employers already saved, continuing with the rest`);
     }
   }
@@ -228,10 +229,18 @@ async function main() {
   await fetchDescriptions(employers);
   const counts = await reclassify();
   logger.info(`Classified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
-  await recordRun(cp);
+  await recordRun(cp, { updateLastRefresh: !only });
+  // Mark complete before the last publish so the board shows "complete";
+  // if the publish fails, unmark it so the retry resumes, not rescrapes.
   cp.completed_at = new Date().toISOString();
   save(cp);
-  await publishRoles();
+  try {
+    await publishRoles();
+  } catch (err) {
+    cp.completed_at = null;
+    save(cp);
+    throw err;
+  }
 
   const results = Object.values(cp.employers);
   const okCount = results.filter((r) => r.status === 'ok').length;

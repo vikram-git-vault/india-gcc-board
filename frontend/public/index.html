@@ -346,6 +346,7 @@
     meta: {},
     coverage: { fetchedCount: 0, totalTracked: 0, manualCount: 0 },
     targeting: null,
+    refreshRunning: false,  // from /api/refresh/status
     marks: loadMarks(),   // roleId -> status, persisted in this browser only
     query: '',
     grades: new Set(),
@@ -629,7 +630,11 @@
     var el = document.getElementById('freshStatus');
     var last = state.meta.last_refresh ? exactTime(state.meta.last_refresh) : 'unknown';
     var text;
-    if (!r) {
+    var tag = document.getElementById('freshPartial');
+    if (state.refreshRunning) {
+      text = 'A refresh is running now. ' + (r && !r.complete ? r.refreshed + ' of ' + r.total + ' employers are saved so far. ' : '') +
+        'Until it finishes, some roles are from the last complete refresh (' + last + ').';
+    } else if (!r) {
       text = 'Last complete refresh: ' + last + '.';
     } else if (r.complete) {
       text = 'Complete refresh: ' + r.refreshed + ' of ' + r.total + ' employers refreshed, finished ' + exactTime(r.completed_at) + '.';
@@ -637,12 +642,13 @@
     } else {
       text = 'Partial refresh: ' + r.refreshed + ' of ' + r.total + ' employers refreshed in the run that started ' + exactTime(r.started_at) + '. ' +
         'The other ' + (r.total - r.refreshed) + ' show data from the last complete refresh (' + last + '). ' +
-        'The next scheduled run continues from where this run stopped.';
-      if (r.failed.length) text += ' Failed in this run: ' + r.failed.join(', ') + '. The next run tries them again.';
+        'A scheduled or automatic run in the 12 hours after the start continues from where this run stopped. Refresh now starts a full refresh.';
+      if (r.failed.length) text += ' Failed in this run: ' + r.failed.join(', ') + '.';
     }
     el.title = text;
     el.setAttribute('aria-label', 'Updated ' + document.getElementById('freshTime').textContent + '. ' + text);
-    document.getElementById('freshPartial').hidden = !(r && !r.complete);
+    tag.textContent = state.refreshRunning ? 'Refreshing' : 'Partial';
+    tag.hidden = !state.refreshRunning && !(r && !r.complete);
   }
 
   function renderFreshbar() {
@@ -740,6 +746,9 @@
 
   function pollRefreshStatus() {
     fetch('/api/refresh/status').then(function (r) { return r.json(); }).then(function (s) {
+      var changed = state.refreshRunning !== Boolean(s.running);
+      state.refreshRunning = Boolean(s.running);
+      if (changed && state.meta) renderRefreshCompleteness();
       if (s.running) {
         wasRunning = true;
         refreshBtn.disabled = true;
