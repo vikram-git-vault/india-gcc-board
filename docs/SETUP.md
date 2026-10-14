@@ -152,7 +152,15 @@ The board shows two scores on each role:
 The board also shows the recommended resume (Product Owner or Engineering Leader), a reason, the matched keywords and the gaps.
 Exception roles (AVP, Senior Manager) stay on the board only when the fit score is 75 or more.
 
-The scorer is Claude Code. Do this procedure after each refresh that finds new roles.
+The scorer is Claude Code. After each successful refresh, the server scores the new roles automatically (`autoscore.js`). While the scores are in progress, the board footer shows "Scoring the new roles with Claude Code…". Each batch of 10 roles takes approximately 30 to 60 seconds.
+
+Automatic scoring needs these conditions:
+
+- You installed Claude Code on this computer, and you logged in to it.
+- The three resume files are in the `Resume/` folder.
+
+To stop automatic scoring, set `AUTO_SCORE=off` in `.env` and restart the server.
+To score by hand, run `node autoscore.js`, or use the procedure that follows.
 
 > **CAUTION:** Keep the resume files only in `Resume/`. Do not copy resume text into a file that git tracks. The resume files contain personal data. Git ignores the `Resume/` folder.
 
@@ -164,6 +172,8 @@ The scorer is Claude Code. Do this procedure after each refresh that finds new r
 3. Type: "score the new roles".
 4. Wait until Claude Code shows the number of stored scores.
 5. Reload the board.
+
+> **NOTE:** Automatic scoring uses your Claude plan usage. If you reach the usage limit, the roles stay without a score. The next refresh tries again.
 
 > **NOTE:** In step 4, Claude Code does these tasks:
 > - It runs `node score.js --pending`. This command writes the roles that need a score to `.cache/scoring/pending.json`.

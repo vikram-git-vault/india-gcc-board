@@ -72,7 +72,7 @@ To change the schedule, use the **Auto refresh** control in the board header: **
 4. **Score.** A scorer compares each role with the two resume variants. The scorer uses the rubric in `config/scoring-rubric.md`. Each role gets an ATS score, a fit score, the recommended resume and a short reason.
 5. **Show.** The board shows the scores on each role. You can sort and filter the roles by score.
 
-To score new roles, ask Claude Code: "score the new roles". Refer to [`docs/SETUP.md`](docs/SETUP.md), section 6.
+After each refresh, the server scores the new roles with Claude Code (`autoscore.js`). To score by hand, run `node autoscore.js`. Refer to [`docs/SETUP.md`](docs/SETUP.md), section 6.
 
 > **CAUTION:** The resumes are personal data. Keep them only in the `Resume/` folder. Git ignores this folder. Do not copy resume text into a file that git tracks.
 

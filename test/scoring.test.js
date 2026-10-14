@@ -23,6 +23,13 @@ describe('validateScoreRecord', () => {
     expect(r.errors[0]).toMatch(/PO has the higher fit/);
   });
 
+  test('a keyword or gap longer than 120 characters is rejected', () => {
+    const r = validateScoreRecord({ ...good(), gaps: ['x'.repeat(121)] });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/longer than 120/);
+    expect(validateScoreRecord({ ...good(), matched_keywords: ['y'.repeat(120)] }).ok).toBe(true);
+  });
+
   test('equal fit: the higher ATS wins', () => {
     const rec = { ...good(), scores: { PO: { ats: 60, fit: 80 }, EM: { ats: 65, fit: 80 } }, recommended: 'EM' };
     expect(validateScoreRecord(rec).ok).toBe(true);

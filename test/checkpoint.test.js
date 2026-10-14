@@ -21,7 +21,7 @@ describe('save and load', () => {
     const cp = recordEmployer(newCheckpoint('run1', start), 'a', { status: 'ok', count: 3 }, new Date(start));
     saveCheckpoint(cp, file);
     expect(loadCheckpoint(file)).toEqual(cp);
-    expect(fs.existsSync(`${file}.tmp`)).toBe(false);
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toEqual([]);
   });
   test('missing or damaged file gives null', () => {
     expect(loadCheckpoint(path.join(dir, 'none.json'))).toBeNull();

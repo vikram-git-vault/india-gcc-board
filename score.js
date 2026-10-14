@@ -5,10 +5,12 @@
  *   node score.js --status                 counts: scored, pending, stale
  *   node score.js --pending [--out FILE]   roles that need a score, as JSON
  *                           [--limit N]    (default FILE: .cache/scoring/pending.json)
+ *                           [--exclude ID,ID]  skip these role ids
  *   node score.js --import FILE            validate and store scores, then republish
  *                 [--scorer NAME]          (default scorer: claude-code)
  *
- * Option B (current): ask Claude Code to "score the new roles". It runs
+ * autoscore.js runs this automatically after each refresh (claude -p).
+ * By hand: ask Claude Code to "score the new roles". It runs
  * --pending, scores each role against the two resume variants in Resume/
  * (gitignored), writes the records to a file and runs --import.
  */
@@ -43,10 +45,10 @@ async function status(version) {
   logger.info(`Rubric v${version}: ${roles.length} shortlisted, ${counts.scored} scored, ${counts.new} new, ${counts.stale} stale`);
 }
 
-async function pending(version, outFile, limit) {
+async function pending(version, outFile, limit, exclude = new Set()) {
   const roles = (await getRolesForScoring())
     .map((r) => ({ ...r, ...classify(r, version) }))
-    .filter((r) => r.state !== 'scored')
+    .filter((r) => r.state !== 'scored' && !exclude.has(r.id))
     .slice(0, limit)
     .map((r) => ({
       role_id: r.id,
@@ -112,7 +114,8 @@ async function main() {
   if (args.includes('--pending')) {
     const limit = Number(argValue(args, '--limit', Infinity));
     if (!(limit > 0)) throw new Error('--limit must be a positive number');
-    await pending(version, argValue(args, '--out', DEFAULT_PENDING), limit);
+    const exclude = new Set(String(argValue(args, '--exclude', '')).split(',').filter(Boolean).map(Number));
+    await pending(version, argValue(args, '--out', DEFAULT_PENDING), limit, exclude);
   } else if (args.includes('--import')) {
     const file = argValue(args, '--import');
     if (!file) throw new Error('--import needs a file path');

@@ -35,7 +35,30 @@ const refreshState = {
   lastFinishedAt: null,
   lastExitCode: null,
   progress: null,
+  scoring: false,
 };
+// After a successful refresh, score the new roles with Claude Code
+// (autoscore.js). AUTO_SCORE=off turns this off.
+const AUTO_SCORE = (process.env.AUTO_SCORE || 'on').toLowerCase() !== 'off';
+
+let scoringChild = null;
+
+function runAutoScore() {
+  if (!AUTO_SCORE || refreshState.scoring) return;
+  refreshState.scoring = true;
+  logger.info('Automatic scoring started (autoscore.js)');
+  const out = fs.openSync(REFRESH_LOG_PATH, 'a');
+  const child = spawn('node', ['autoscore.js'], { cwd: process.cwd(), stdio: ['ignore', out, out] });
+  scoringChild = child;
+  const done = (code) => {
+    fs.closeSync(out);
+    refreshState.scoring = false;
+    scoringChild = null;
+    logger.info(`Automatic scoring finished (exit code: ${code}); details in logs/combined.log`);
+  };
+  child.on('error', (err) => { logger.warn(`Automatic scoring not started: ${err.message}`); });
+  child.on('close', done);
+}
 const PROGRESS_LOG_EVERY_MS = 60 * 1000;
 // A refresh that stops with an error is tried again once, after this
 // delay; with --resume it continues from the last saved employer.
@@ -45,6 +68,12 @@ let retryTimer = null;
 function runRefresh(trigger) {
   if (refreshState.running) {
     return { started: false, reason: 'already running' };
+  }
+  // The refresh and the scorer both write the database and roles.json:
+  // stop the scorer. The next successful refresh starts it again.
+  if (scoringChild) {
+    logger.info('Stopping automatic scoring: a refresh starts');
+    scoringChild.kill('SIGTERM');
   }
   refreshState.running = true;
   refreshState.lastStartedAt = new Date().toISOString();
@@ -86,6 +115,7 @@ function runRefresh(trigger) {
     refreshState.lastExitCode = code;
     const took = formatMinutes(new Date(refreshState.lastFinishedAt) - new Date(refreshState.lastStartedAt));
     logger.info(`Refresh finished (trigger: ${trigger}, exit code: ${code}${signal ? `, signal: ${signal}` : ''}, took ${took})`);
+    if (code === 0) runAutoScore();
     if (code !== 0 && trigger !== 'retry') {
       logger.warn(`Refresh stopped before the end; trying again in ${RETRY_AFTER_MS / 60000} min from the last saved employer`);
       retryTimer = setTimeout(() => { retryTimer = null; runRefresh('retry'); }, RETRY_AFTER_MS);

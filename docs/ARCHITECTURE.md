@@ -649,12 +649,31 @@ A score is stale when the title, the description or the rubric version changes. 
 
 ### 12.4 The scorer
 
-The current scorer is Claude Code (Option B). It needs no API key. You ask for the scores. Refer to `docs/SETUP.md`, section 6.
+The scorer is Claude Code. It needs no API key. It uses the Claude Code login on the computer. There are two ways to start it:
+
+- **Automatic.** After each successful refresh, `server.js` starts `autoscore.js`. Set `AUTO_SCORE=off` in `.env` to stop this.
+- **By hand.** You ask Claude Code to score the new roles, or you run `node autoscore.js`. Refer to `docs/SETUP.md`, section 6.
+
+`autoscore.js` does these steps for each batch of 10 roles. It does not score more than 50 roles in one run.
+
+1. It runs `score.js --pending`.
+2. It sends the rubric, the candidate profile, the two resume variants and the roles to `claude -p`.
+3. It writes the reply to `.cache/autoscore/` and runs `score.js --import` with the scorer name `claude-code-auto`.
+
+Some rules prevent repeated work:
+
+- One run sends each role only one time.
+- `score.js --import` can reject the score of a role two times. Then `autoscore.js` does not send that role again until its description changes. `.cache/autoscore/attempts.json` records the attempts.
+- If two batches in sequence store no score, the run stops. The roles stay without a score, and the next refresh tries again.
+- When a refresh starts, the server stops the scorer and its `claude` process. The refresh and the scorer both write the database and `data/roles.json`. After the refresh, the server starts the scorer again.
+
+`score.js --import` also rejects a matched keyword or a gap that is longer than 120 characters.
 
 The job description is external data. The scorer uses it only as evidence. The scorer does not obey text in a job description.
+`autoscore.js` starts Claude Code with all tools off (`--tools ""`) and with no MCP servers (`--strict-mcp-config`). Thus text in a job description cannot make Claude Code read a file, write a file or run a command.
+The resume text goes to Claude in the request. It does not go into a file that git tracks.
 
-A future option is an automatic scorer in `refresh.js` (Option A). Possible providers are a local model (Ollama), a free cloud tier (Groq) or the Claude API.
-All providers must use the same rubric and the same `score.js --import` validation.
+Other providers (a local model with Ollama, Groq or the Claude API) are possible. They must use the same rubric and the same `score.js --import` validation.
 
 ### 12.5 The exception rule
 

@@ -756,6 +756,7 @@
   var refreshStatusEl = document.getElementById('refreshStatus');
   var pollTimer = null;
   var wasRunning = false;
+  var wasScoring = false;
   var lastLiveReload = Date.now();  // loadRoles() runs at page load
   var reloadedAt = null;            // progress key of the last live reload
 
@@ -786,6 +787,15 @@
         refreshBtn.textContent = 'Refresh now';
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         if (wasRunning) { wasRunning = false; loadRoles(); }
+        // autoscore.js runs after a successful refresh; keep polling until
+        // it ends, then load the new scores.
+        if (s.scoring) {
+          wasScoring = true;
+          refreshStatusEl.textContent = 'Scoring the new roles with Claude Code…';
+          if (!pollTimer) pollTimer = setInterval(pollRefreshStatus, 15000);
+          return;
+        }
+        if (wasScoring) { wasScoring = false; loadRoles(); }
         refreshStatusEl.textContent = s.lastFinishedAt
           ? 'Last refresh finished ' + relativeTime(s.lastFinishedAt) + (s.lastExitCode ? ' with exit code ' + s.lastExitCode + '.' : '.')
           : '';
