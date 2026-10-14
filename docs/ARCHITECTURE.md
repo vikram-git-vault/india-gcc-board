@@ -67,8 +67,8 @@ User (search, filter, sort by score, mark roles)
 
 1. **06:00 IST:** the scheduler starts the refresh.
 2. **06:00 to 06:30:** the scrapers get the roles of all active employers, one employer at a time, with a crawl delay.
-3. **06:30 to 06:35:** the parser normalizes and filters the roles. The targeting rules classify each role.
-4. **06:35:** the refresh writes the roles to the database.
+3. **For each employer:** the parser normalizes and filters the roles, and the targeting rules classify each role. The refresh then writes the roles of that employer to the database and to `data/roles.json`. Thus the board shows the new roles while the refresh continues.
+4. **06:35:** the refresh starts the next stage.
 5. **06:35 to 06:40:** the refresh gets the new job descriptions (approximately 5 seconds for each role).
 6. **06:40:** the publisher writes `data/roles.json`. The board shows the new data.
 
@@ -366,6 +366,22 @@ The board runs on your own computer. Only your own devices can open it. This was
    - When `data/schedule.json` does not exist, `REFRESH_CRON` gives the daily time (default `0 6 * * *`). `TZ` sets the time zone (default `Asia/Kolkata`).
 3. It catches up a missed daily refresh. `node-cron` does not run a missed time again after the computer wakes. Thus the server checks every 5 minutes and 30 seconds after it starts. `isRefreshMissed()` in `lib/schedule.js` compares the most recent due time with the latest refresh time. If the refresh is missed, the server starts it. The server makes one attempt for each due time.
 4. It records the progress of a refresh. `refresh.js` sends a message to the server through the Node IPC channel at each step (`lib/progress.js`). The steps are: each employer, each description, the classification and the publication. The server keeps the last message in `progress` in `GET /api/refresh/status` and writes one log line each minute. When you run `node refresh.js` by hand, there is no IPC channel and the script does not send messages.
+5. It continues a refresh that stopped. Refer to section 6.1.
+
+### 6.1 Refresh checkpoint
+
+The refresh saves each employer to the database immediately after it scrapes that employer. `data/refresh-checkpoint.json` records the run and the result of each employer: `ok` or `error` (`lib/checkpoint.js`). The refresh writes this file to a temporary file first and then renames it. Thus a stop never leaves half a file.
+
+- **Resume.** With `--resume`, `refresh.js` continues the run in the checkpoint, if these two conditions are true:
+  - The run did not complete.
+  - The run started less than 12 hours before.
+
+  The refresh skips the employers with the result `ok`. It scrapes the employers with the result `error` again. The employer that was in progress when the run stopped starts again from its first role. If the conditions are not true, a new run starts.
+- **Which runs resume.** The server adds `--resume` to the scheduled run, to the catch-up run and to the retry run. **Refresh now** and `node refresh.js` always start a new, full run. `node refresh.js --only=...` does not read or write the checkpoint.
+- **Retry.** If a refresh stops with an error or a signal, the server starts it again one time after 10 minutes. The retry run uses `--resume`. The server does not try a failed retry run again.
+- **Completion.** After the publication step, the refresh writes `completed_at` in the checkpoint. The `scrape_runs` row of a resumed run includes the employers from before the stop.
+- **The board.** The publisher adds `meta.refresh` to `data/roles.json`: `complete`, `total`, `refreshed`, `failed` and the times. The "Updated" text on the board always shows the end of the last complete run. Its tooltip tells you if the data is complete or partial. When the data is partial, the board also shows a **Partial** label.
+- **The board file.** The publisher writes `data/roles.json` to a temporary file first and then renames it. Thus the board never reads half a file during a refresh.
 
 To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:
 

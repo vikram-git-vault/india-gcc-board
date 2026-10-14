@@ -92,6 +92,9 @@
   .stats strong.pulse { animation: stat-pulse 0.7s ease-out; }
   .fresh-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--on-ink-muted); display: inline-block; margin-right: 8px; vertical-align: middle; }
   .fresh-dot.live { background: var(--high); }
+  /* Same colours in light and dark mode: the header is always navy. */
+  .partial-tag { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; font-size: 14px; font-weight: 600; background: #F0B357; color: #11284B; vertical-align: 1px; }
+  #freshStatus[title] { cursor: help; }
   @keyframes stat-pulse { 0% { color: var(--mid-fill); } 100% { color: var(--on-ink); } }
 
   .search-row { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -267,7 +270,7 @@
     </div>
 
     <ul class="stats" id="freshbar">
-      <li><span class="fresh-dot"></span>Updated <strong id="freshTime">—</strong><span id="freshTimeExact"></span></li>
+      <li id="freshStatus" tabindex="0"><span class="fresh-dot"></span>Updated <strong id="freshTime">—</strong><span id="freshTimeExact"></span><span class="partial-tag" id="freshPartial" hidden>Partial</span></li>
       <li><strong id="freshCount">—</strong>roles on your board<span id="freshTargetDetail"></span></li>
       <li id="freshScoring"></li>
       <li><strong id="freshEmployers">—</strong>employers scraped<span id="freshEmployersDetail"></span></li>
@@ -619,11 +622,35 @@
     render();
   }
 
+  // Tooltip on "Updated …": was the last run complete, or did it stop
+  // partway (lib/checkpoint.js)? "Updated" is always the last complete run.
+  function renderRefreshCompleteness() {
+    var r = state.meta.refresh;
+    var el = document.getElementById('freshStatus');
+    var last = state.meta.last_refresh ? exactTime(state.meta.last_refresh) : 'unknown';
+    var text;
+    if (!r) {
+      text = 'Last complete refresh: ' + last + '.';
+    } else if (r.complete) {
+      text = 'Complete refresh: ' + r.refreshed + ' of ' + r.total + ' employers refreshed, finished ' + exactTime(r.completed_at) + '.';
+      if (r.failed.length) text += ' Failed: ' + r.failed.join(', ') + '. These show data from an earlier refresh.';
+    } else {
+      text = 'Partial refresh: ' + r.refreshed + ' of ' + r.total + ' employers refreshed in the run that started ' + exactTime(r.started_at) + '. ' +
+        'The other ' + (r.total - r.refreshed) + ' show data from the last complete refresh (' + last + '). ' +
+        'The next scheduled run continues from where this run stopped.';
+      if (r.failed.length) text += ' Failed in this run: ' + r.failed.join(', ') + '. The next run tries them again.';
+    }
+    el.title = text;
+    el.setAttribute('aria-label', 'Updated ' + document.getElementById('freshTime').textContent + '. ' + text);
+    document.getElementById('freshPartial').hidden = !(r && !r.complete);
+  }
+
   function renderFreshbar() {
     document.getElementById('freshTime').textContent = state.meta.last_refresh ? relativeTime(state.meta.last_refresh) : 'unknown';
     document.getElementById('freshTimeExact').textContent = state.meta.last_refresh
       ? ' (' + exactTime(state.meta.last_refresh) + ')'
       : '';
+    renderRefreshCompleteness();
     flashStat(document.getElementById('freshCount'), state.roles.length);
     var t = state.targeting;
     var scoringEl = document.getElementById('freshScoring');

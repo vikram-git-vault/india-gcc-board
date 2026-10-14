@@ -2,9 +2,11 @@
 /**
  * refresh.js — main orchestrator for the BFSI job board.
  *
- * Pipeline: init db -> scrape employers -> parse roles -> sync to db
+ * Pipeline: init db -> for each employer: scrape, parse, save to db,
+ *           write data/roles.json -> descriptions -> classify -> publish.
  *           (--only=id1,id2 limits the scrape to those employers)
- *           -> write data/roles.json for the local server to serve.
+ *           --resume continues an unfinished run (lib/checkpoint.js):
+ *           employers already saved in that run are skipped.
  *
  * data/roles.json is read live by server.js's GET /api/roles — there is
  * no separate publish/sync step. See docs/ARCHITECTURE.md §5.
@@ -14,6 +16,9 @@ import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
 import { reportProgress } from './lib/progress.js';
+import {
+  newCheckpoint, loadCheckpoint, saveCheckpoint, resumableCheckpoint, recordEmployer, pendingEmployers,
+} from './lib/checkpoint.js';
 
 const logger = createLogger('refresh');
 
@@ -31,66 +36,64 @@ async function initDatabase() {
   logger.info('Database initialized');
 }
 
-async function scrapeEmployers(employers, filters) {
+// Each employer is saved to the database (and the board updated) as soon
+// as it finishes, so an interrupted run keeps its work. `save` writes the
+// checkpoint; it is a no-op for --only runs.
+async function scrapeEmployers(employers, filters, cp, save) {
   const { ScraperFactory } = await import('./lib/scrapers/ScraperFactory.js');
   const { parseRoles } = await import('./lib/parser.js');
-  const results = [];
+  const { syncRoles } = await import('./lib/database.js');
+  const { publish } = await import('./lib/publisher.js');
+  const allActive = employers.filter((e) => e.active).length;
+  const pending = pendingEmployers(cp, employers);
+  const offset = allActive - pending.length;
 
-  const active = employers.filter((e) => e.active);
-  for (const [index, employer] of active.entries()) {
-    const startedAt = new Date().toISOString();
-    reportProgress('scrape', { done: index + 1, total: active.length, item: employer.name });
+  for (const [index, employer] of pending.entries()) {
+    reportProgress('scrape', { done: offset + index + 1, total: allActive, item: employer.name });
     try {
       logger.info(`Scraping ${employer.name} (${employer.ats_type})`);
       const scraper = ScraperFactory.create(employer);
       const rawListings = await scraper.scrape();
       const roles = parseRoles(rawListings, employer, filters);
-      results.push({ employer: employer.id, status: 'ok', count: roles.length, roles, startedAt });
-      logger.info(`  -> ${roles.length} matching roles`);
+      const { added, updated } = await syncRoles(employer.id, roles);
+      recordEmployer(cp, employer.id, { status: 'ok', count: roles.length, added, updated });
+      logger.info(`  -> ${roles.length} matching roles (${added} new), saved`);
     } catch (err) {
       logger.error(`Failed scraping ${employer.name}: ${err.message}`);
-      results.push({ employer: employer.id, status: 'error', error: err.message, startedAt });
+      recordEmployer(cp, employer.id, { status: 'error', error: err.message });
+    }
+    save(cp);
+    try {
+      await publish();
+    } catch (err) {
+      logger.warn(`Could not update the board after ${employer.name}: ${err.message}`);
     }
 
     const delayMs = (employer.crawl_delay_seconds || 8) * 1000;
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
-
-  return results;
 }
 
-async function syncToDatabase(runId, startTime, results) {
-  const { syncRoles, recordScrapeRun } = await import('./lib/database.js');
-  logger.info('Syncing scraped roles to database');
-
-  let rolesAdded = 0;
-  let rolesUpdated = 0;
-  for (const result of results) {
-    if (result.status === 'ok') {
-      const { added, updated } = await syncRoles(result.employer, result.roles);
-      rolesAdded += added;
-      rolesUpdated += updated;
-    }
-  }
-
-  // One aggregate scrape_runs row per run; per-employer detail lives in the
-  // structured request logs (see docs/ARCHITECTURE.md §2.3/§7.2), not in the DB.
+// One aggregate scrape_runs row per run, from the checkpoint, so a resumed
+// run counts the employers saved before the interruption too.
+async function recordRun(cp) {
+  const { recordScrapeRun } = await import('./lib/database.js');
+  const entries = Object.entries(cp.employers);
+  const ok = entries.filter(([, e]) => e.status === 'ok');
+  const failed = entries.filter(([, e]) => e.status === 'error');
   await recordScrapeRun({
-    run_id: runId,
-    start_time: startTime,
+    run_id: cp.run_id,
+    start_time: cp.started_at,
     end_time: new Date().toISOString(),
-    total_sites_targeted: results.length,
-    sites_succeeded: results.filter((r) => r.status === 'ok').length,
-    sites_failed: results.filter((r) => r.status === 'error').length,
-    total_roles_found: results.reduce((sum, r) => sum + (r.count || 0), 0),
-    roles_added: rolesAdded,
-    roles_updated: rolesUpdated,
-    errors: JSON.stringify(
-      results.filter((r) => r.status === 'error').map((r) => ({ employer: r.employer, message: r.error }))
-    ),
+    total_sites_targeted: entries.length,
+    sites_succeeded: ok.length,
+    sites_failed: failed.length,
+    total_roles_found: ok.reduce((sum, [, e]) => sum + (e.count || 0), 0),
+    roles_added: ok.reduce((sum, [, e]) => sum + (e.added || 0), 0),
+    roles_updated: ok.reduce((sum, [, e]) => sum + (e.updated || 0), 0),
+    errors: JSON.stringify(failed.map(([id, e]) => ({ employer: id, message: e.error }))),
     status: 'completed',
   });
-  logger.info('Sync complete');
 }
 
 // Detail requests for shortlisted roles only (lib/descriptions.js), one
@@ -205,13 +208,32 @@ async function main() {
   if (only) logger.info(`Scraping only: ${toScrape.map((e) => e.id).join(', ')}`);
 
   await initDatabase();
-  const results = await scrapeEmployers(toScrape, filters);
-  await syncToDatabase(runId, runStart.toISOString(), results);
+
+  // --resume (scheduled, catch-up and retry runs) continues an unfinished
+  // run; anything else starts fresh. --only runs never touch the checkpoint.
+  let cp = null;
+  if (!only && args.includes('--resume')) {
+    cp = resumableCheckpoint(loadCheckpoint());
+    if (cp) {
+      const done = Object.values(cp.employers).filter((e) => e.status === 'ok').length;
+      const total = toScrape.filter((e) => e.active).length;
+      logger.info(`Resuming ${cp.run_id}: ${done} of ${total} employers already saved, continuing with the rest`);
+    }
+  }
+  cp = cp || newCheckpoint(runId, runStart.toISOString());
+  const save = only ? () => {} : (checkpoint) => saveCheckpoint(checkpoint);
+  save(cp);
+
+  await scrapeEmployers(toScrape, filters, cp, save);
   await fetchDescriptions(employers);
   const counts = await reclassify();
   logger.info(`Classified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
+  await recordRun(cp);
+  cp.completed_at = new Date().toISOString();
+  save(cp);
   await publishRoles();
 
+  const results = Object.values(cp.employers);
   const okCount = results.filter((r) => r.status === 'ok').length;
   const errCount = results.filter((r) => r.status === 'error').length;
   logger.info(`=== Refresh complete: ${okCount} succeeded, ${errCount} failed ===`);

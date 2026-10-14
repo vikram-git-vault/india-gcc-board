@@ -37,6 +37,10 @@ const refreshState = {
   progress: null,
 };
 const PROGRESS_LOG_EVERY_MS = 60 * 1000;
+// A refresh that stops with an error is tried again once, after this
+// delay; with --resume it continues from the last saved employer.
+const RETRY_AFTER_MS = 10 * 60 * 1000;
+let retryTimer = null;
 
 function runRefresh(trigger) {
   if (refreshState.running) {
@@ -51,7 +55,11 @@ function runRefresh(trigger) {
   fs.mkdirSync(path.dirname(REFRESH_LOG_PATH), { recursive: true });
   const out = fs.openSync(REFRESH_LOG_PATH, 'a');
   // The 'ipc' channel carries progress messages (lib/progress.js).
-  const child = spawn('node', ['refresh.js'], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
+  // Refresh now always starts a full run; scheduled, catch-up and retry
+  // runs continue an unfinished run (lib/checkpoint.js).
+  const args = trigger === 'manual' ? ['refresh.js'] : ['refresh.js', '--resume'];
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+  const child = spawn('node', args, { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
   child.on('message', (msg) => {
     if (msg && msg.type === 'progress') {
       const { type, ...progress } = msg;
@@ -62,14 +70,18 @@ function runRefresh(trigger) {
     logger.info(formatProgress(refreshState.progress, refreshState.lastStartedAt));
   }, PROGRESS_LOG_EVERY_MS);
 
-  child.on('exit', (code) => {
+  child.on('exit', (code, signal) => {
     clearInterval(progressTimer);
     fs.closeSync(out);
     refreshState.running = false;
     refreshState.lastFinishedAt = new Date().toISOString();
     refreshState.lastExitCode = code;
     const took = formatMinutes(new Date(refreshState.lastFinishedAt) - new Date(refreshState.lastStartedAt));
-    logger.info(`Refresh finished (trigger: ${trigger}, exit code: ${code}, took ${took})`);
+    logger.info(`Refresh finished (trigger: ${trigger}, exit code: ${code}${signal ? `, signal: ${signal}` : ''}, took ${took})`);
+    if (code !== 0 && trigger !== 'retry') {
+      logger.warn(`Refresh stopped before the end; trying again in ${RETRY_AFTER_MS / 60000} min from the last saved employer`);
+      retryTimer = setTimeout(() => { retryTimer = null; runRefresh('retry'); }, RETRY_AFTER_MS);
+    }
   });
 
   return { started: true };

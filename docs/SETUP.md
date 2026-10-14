@@ -66,6 +66,8 @@ A full refresh does these steps:
 4. It gets the full job description for each target role and each exception role.
 5. It writes `data/roles.json`. The server shows this file.
 
+The refresh saves each employer immediately. If the refresh stops, `node refresh.js --resume` continues it from the employer that stopped. Refer to `docs/ARCHITECTURE.md`, section 6.1.
+
 A full refresh takes approximately 30 to 45 minutes.
 Most of this time is the crawl delay between requests to each employer site. The delay is intentional.
 The logs go to the shell and to `logs/combined.log` and `logs/error.log`.
@@ -75,6 +77,7 @@ The logs go to the shell and to `logs/combined.log` and `logs/error.log`.
 | Command | Function | Time |
 |---|---|---|
 | `node refresh.js --reclassify` | Applies `config/targets.json` again to all stored roles. Use it after you change the targeting rules. It does not scrape. | Seconds |
+| `node refresh.js --resume` | Continues the last refresh if it did not complete and started less than 12 hours before. Otherwise it starts a full refresh. | The remaining employers |
 | `node refresh.js --descriptions` | Gets the missing job descriptions. It does not scrape the role lists. | Approximately 5 seconds for each role |
 
 ## 5. Start the server
@@ -116,6 +119,7 @@ If the computer sleeps at the daily time, the refresh does not start at that tim
 The server checks every 5 minutes, and 30 seconds after it starts. If a daily refresh was due and no refresh started after that time, the server starts the refresh immediately.
 For example, when you open the computer at 08:30, the refresh starts within approximately 5 minutes.
 The server makes only one catch-up attempt for each due time. The check does nothing in the **On demand only** mode.
+If a refresh stops with an error, the server tries it again one time after 10 minutes. The new attempt continues from the employer that stopped.
 
 > **NOTE:** To refresh before you start work, you can also wake the computer before the daily time. On macOS, run `sudo pmset repeat wakeorpoweron MTWRFSU 05:55:00`. A MacBook with a closed lid on battery power can stay asleep.
 
