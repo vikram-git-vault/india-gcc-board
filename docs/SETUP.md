@@ -128,6 +128,12 @@ The server makes only one catch-up attempt for each due time. The check does not
 5. After a change to the code, run `pm2 restart india-gcc-board`.
 
 To see the server messages, run `pm2 logs india-gcc-board`.
+During a refresh, the server writes one progress line each minute. For example:
+
+`Refresh running 12 min: scraping employer 14 of 56 (EY GDS), 3 min on this step`
+
+When the refresh stops, the server writes the exit code and the total time.
+`GET /api/refresh/status` also gives the progress in the `progress` field.
 
 > **NOTE:** The daily refresh occurs only while the server runs. To keep the server running after you close the shell, use a process manager. For example: `pm2 start server.js --name india-gcc-board`, or a `launchd` agent on macOS.
 

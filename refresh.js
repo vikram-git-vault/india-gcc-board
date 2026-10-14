@@ -13,6 +13,7 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
+import { reportProgress } from './lib/progress.js';
 
 const logger = createLogger('refresh');
 
@@ -35,8 +36,10 @@ async function scrapeEmployers(employers, filters) {
   const { parseRoles } = await import('./lib/parser.js');
   const results = [];
 
-  for (const employer of employers.filter((e) => e.active)) {
+  const active = employers.filter((e) => e.active);
+  for (const [index, employer] of active.entries()) {
     const startedAt = new Date().toISOString();
+    reportProgress('scrape', { done: index + 1, total: active.length, item: employer.name });
     try {
       logger.info(`Scraping ${employer.name} (${employer.ats_type})`);
       const scraper = ScraperFactory.create(employer);
@@ -110,10 +113,13 @@ async function fetchDescriptions(employers) {
     groups.get(role.employer_slug).push(role);
   });
 
+  let position = 0;
   for (const [slug, group] of groups) {
     const employer = bySlug.get(slug);
     const results = [];
     for (const role of group) {
+      position += 1;
+      reportProgress('descriptions', { done: position, total: roles.length, item: employer ? employer.name : slug });
       const result = employer
         ? await fetchDescription(role, employer)
         : { status: 'skipped', message: `employer ${slug} not in config` };
@@ -148,6 +154,7 @@ async function fetchDescriptions(employers) {
 // descriptions are fetched, so the description check sees the full text.
 async function reclassify() {
   const { reclassifyRoles } = await import('./lib/database.js');
+  reportProgress('classify');
   const { classifyRole, nonItReason } = await import('./lib/targeting.js');
   const { detectLevel } = await import('./lib/parser.js');
   return reclassifyRoles(classifyRole, detectLevel, nonItReason);
@@ -155,6 +162,7 @@ async function reclassify() {
 
 async function publishRoles() {
   const { publish } = await import('./lib/publisher.js');
+  reportProgress('publish');
   const { rolesWritten, outputPath } = await publish();
   logger.info(`Wrote ${rolesWritten} active roles to ${outputPath} — served live by server.js`);
 }
@@ -212,4 +220,7 @@ async function main() {
 main().catch((err) => {
   logger.error(`Fatal error in refresh run: ${err.stack || err.message}`);
   process.exitCode = 1;
+}).finally(() => {
+  // The IPC channel from server.js keeps the process alive; close it.
+  if (process.connected) process.disconnect();
 });

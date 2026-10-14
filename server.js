@@ -15,6 +15,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
+import { formatProgress, formatMinutes } from './lib/progress.js';
 import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
 
 const logger = createLogger('server');
@@ -33,7 +34,9 @@ const refreshState = {
   lastStartedAt: null,
   lastFinishedAt: null,
   lastExitCode: null,
+  progress: null,
 };
+const PROGRESS_LOG_EVERY_MS = 60 * 1000;
 
 function runRefresh(trigger) {
   if (refreshState.running) {
@@ -42,18 +45,31 @@ function runRefresh(trigger) {
   refreshState.running = true;
   refreshState.lastStartedAt = new Date().toISOString();
   refreshState.lastExitCode = null;
+  refreshState.progress = null;
   logger.info(`Refresh started (trigger: ${trigger})`);
 
   fs.mkdirSync(path.dirname(REFRESH_LOG_PATH), { recursive: true });
   const out = fs.openSync(REFRESH_LOG_PATH, 'a');
-  const child = spawn('node', ['refresh.js'], { cwd: process.cwd(), stdio: ['ignore', out, out] });
+  // The 'ipc' channel carries progress messages (lib/progress.js).
+  const child = spawn('node', ['refresh.js'], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
+  child.on('message', (msg) => {
+    if (msg && msg.type === 'progress') {
+      const { type, ...progress } = msg;
+      refreshState.progress = progress;
+    }
+  });
+  const progressTimer = setInterval(() => {
+    logger.info(formatProgress(refreshState.progress, refreshState.lastStartedAt));
+  }, PROGRESS_LOG_EVERY_MS);
 
   child.on('exit', (code) => {
+    clearInterval(progressTimer);
     fs.closeSync(out);
     refreshState.running = false;
     refreshState.lastFinishedAt = new Date().toISOString();
     refreshState.lastExitCode = code;
-    logger.info(`Refresh finished (trigger: ${trigger}, exit code: ${code})`);
+    const took = formatMinutes(new Date(refreshState.lastFinishedAt) - new Date(refreshState.lastStartedAt));
+    logger.info(`Refresh finished (trigger: ${trigger}, exit code: ${code}, took ${took})`);
   });
 
   return { started: true };
