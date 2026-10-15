@@ -25,6 +25,13 @@ The specification gives Monday and Thursday at 08:00 IST. This change was a deci
 
 ## 1. System architecture
 
+Two interactive diagrams show this section. Open them in a browser:
+
+- [`diagrams/architecture.html`](diagrams/architecture.html): the components and the connections between them.
+- [`diagrams/dataflow.html`](diagrams/dataflow.html): the data flow, from the career sites to the board.
+
+Each box in the diagrams has links to the source lines at commit `f06d0c0`.
+
 ### 1.1 Data flow
 
 ```
