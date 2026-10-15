@@ -17,6 +17,7 @@ import path from 'path';
 import { createLogger } from './lib/logger.js';
 import { formatProgress, formatMinutes } from './lib/progress.js';
 import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
+import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
 
 const logger = createLogger('server');
 
@@ -36,6 +37,9 @@ const refreshState = {
   lastExitCode: null,
   progress: null,
   scoring: false,
+  // An unfinished run waits for the Mac to stay awake (lib/power.js):
+  // the reason, e.g. "on battery with the lid closed", or null.
+  paused: null,
 };
 // After a successful refresh, score the new roles with Claude Code
 // (autoscore.js). AUTO_SCORE=off turns this off.
@@ -87,10 +91,13 @@ function runRefresh(trigger) {
   // Refresh now always starts a full run; scheduled, catch-up and retry
   // runs continue an unfinished run (lib/checkpoint.js).
   const args = trigger === 'manual' ? ['refresh.js'] : ['refresh.js', '--resume'];
+  args.push('--pause-on-sleep');
+  refreshState.paused = null;
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
   const child = spawn('node', args, { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
   // Keep the Mac awake until the refresh ends (-i idle sleep; -s system
-  // sleep on mains power). A closed lid on battery can still sleep.
+  // sleep on mains power). A closed lid on battery can still sleep, so
+  // refresh.js pauses then (--pause-on-sleep, lib/power.js).
   let awake = null;
   if (process.platform === 'darwin') {
     awake = spawn('caffeinate', ['-i', '-s', '-w', String(child.pid)], { stdio: 'ignore' });
@@ -116,13 +123,38 @@ function runRefresh(trigger) {
     const took = formatMinutes(new Date(refreshState.lastFinishedAt) - new Date(refreshState.lastStartedAt));
     logger.info(`Refresh finished (trigger: ${trigger}, exit code: ${code}${signal ? `, signal: ${signal}` : ''}, took ${took})`);
     if (code === 0) runAutoScore();
+    if (code === PAUSED_EXIT_CODE) {
+      // catchUpIfMissed() continues the run when the Mac can stay awake.
+      refreshState.paused = 'the Mac can sleep (on battery with the lid closed)';
+      logger.info('Refresh paused; it continues when the Mac is on mains power or the lid is open');
+      return;
+    }
     if (code !== 0 && trigger !== 'retry') {
       logger.warn(`Refresh stopped before the end; trying again in ${RETRY_AFTER_MS / 60000} min from the last saved employer`);
-      retryTimer = setTimeout(() => { retryTimer = null; runRefresh('retry'); }, RETRY_AFTER_MS);
+      retryTimer = setTimeout(() => { retryTimer = null; startWhenAwake('retry'); }, RETRY_AFTER_MS);
     }
   });
 
   return { started: true };
+}
+
+// Scheduled, catch-up, retry and resume runs start only when the Mac can
+// stay awake. A Refresh now click always starts. Resolves to true when the
+// refresh started. A held-back cron run is started later by catch-up; a
+// held-back retry or resume waits until catch-up sees the Mac can stay awake.
+let lastWaitReason = null;
+
+async function startWhenAwake(trigger) {
+  if (refreshState.running) return false;
+  const risk = await checkSleepRisk();
+  if (risk) {
+    if (trigger === 'retry') refreshState.paused = refreshState.paused || `the Mac can sleep (${risk})`;
+    if (risk !== lastWaitReason) logger.info(`Refresh (${trigger}) not started: the Mac is ${risk} and can sleep; waiting`);
+    lastWaitReason = risk;
+    return false;
+  }
+  lastWaitReason = null;
+  return runRefresh(trigger).started;
 }
 
 function loadSchedule() {
@@ -142,7 +174,7 @@ let cronTask = null;
 function applySchedule() {
   if (cronTask) { cronTask.stop(); cronTask = null; }
   if (schedule.mode === 'daily') {
-    cronTask = cron.schedule(timeToCron(schedule.time), () => runRefresh('cron'), { timezone: REFRESH_TIMEZONE });
+    cronTask = cron.schedule(timeToCron(schedule.time), () => startWhenAwake('cron'), { timezone: REFRESH_TIMEZONE });
     logger.info(`Refresh schedule: daily at ${schedule.time} (${REFRESH_TIMEZONE})`);
   } else {
     logger.info('Refresh schedule: on demand only (Refresh now button)');
@@ -168,14 +200,23 @@ function lastRefreshAt() {
   return valid.length ? new Date(Math.max(...valid)).toISOString() : null;
 }
 
-function catchUpIfMissed() {
+async function catchUpIfMissed() {
+  if (refreshState.running) return;
+  // A paused run (or a held-back retry) continues first.
+  if (refreshState.paused) {
+    if (await startWhenAwake('resume')) logger.info('The Mac can stay awake again; continuing the paused refresh');
+    return;
+  }
   const now = new Date();
-  if (refreshState.running || !isRefreshMissed(schedule, lastRefreshAt(), now, REFRESH_TIMEZONE)) return;
+  if (!isRefreshMissed(schedule, lastRefreshAt(), now, REFRESH_TIMEZONE)) return;
   const due = lastScheduledTime(now, schedule.time, REFRESH_TIMEZONE).toISOString();
   if (catchUpTriedFor === due) return;
-  catchUpTriedFor = due;
-  logger.info(`Missed the refresh due at ${due} (computer asleep or server off); starting it now`);
-  runRefresh('catch-up');
+  // Count the attempt only when the refresh starts: while the Mac can
+  // sleep, the next check tries again.
+  if (await startWhenAwake('catch-up')) {
+    catchUpTriedFor = due;
+    logger.info(`Missed the refresh due at ${due} (computer asleep or server off); started it now`);
+  }
 }
 
 setTimeout(catchUpIfMissed, 30 * 1000);
