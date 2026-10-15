@@ -33,3 +33,6 @@ logs/
 
 # Personal — resumes and any tailored versions (never commit)
 Resume/
+
+# Diagram working folders (archify); published copies live in docs/diagrams/
+.archify/
