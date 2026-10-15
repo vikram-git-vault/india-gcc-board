@@ -5,8 +5,8 @@
  * data directly, with no external publish step and no Claude dependency
  * in the runtime loop. See docs/ARCHITECTURE.md §5.
  *
- * Run locally: node server.js  (binds 0.0.0.0 — reachable from other
- * devices on the same network, or over Tailscale, with zero changes).
+ * Run locally: node server.js  (binds 127.0.0.1 by default; set HOST and
+ * ALLOWED_HOSTS in .env to open it from other devices, docs/SETUP.md §7).
  */
 import 'dotenv/config';
 import express from 'express';
@@ -18,11 +18,14 @@ import { createLogger } from './lib/logger.js';
 import { formatProgress, formatMinutes, formatScoringProgress, formatScoringSummary } from './lib/progress.js';
 import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
 import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
+import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security.js';
 
 const logger = createLogger('server');
 
 const PORT = process.env.PORT || 4000;
-const HOST = process.env.HOST || '0.0.0.0';
+// Only this computer can open the board by default. Set HOST=0.0.0.0 in
+// .env to let other devices on the network open it (docs/SETUP.md §7).
+const HOST = process.env.HOST || '127.0.0.1';
 const ROLES_PATH = path.join('data', 'roles.json');
 const REFRESH_LOG_PATH = path.join('logs', 'refresh.log');
 const REFRESH_TIMEZONE = process.env.TZ || 'Asia/Kolkata';
@@ -246,6 +249,10 @@ setTimeout(catchUpIfMissed, 30 * 1000);
 setInterval(catchUpIfMissed, CATCH_UP_EVERY_MS);
 
 const app = express();
+// Host and Origin checks (lib/security.js) run before every route.
+app.use(requestGuard({ allowedHosts: parseAllowedHosts(process.env.ALLOWED_HOSTS), logger }));
+// Security headers and the Content-Security-Policy (lib/security.js).
+app.use(securityHeaders());
 
 app.get('/api/roles', (_req, res) => {
   if (!fs.existsSync(ROLES_PATH)) {

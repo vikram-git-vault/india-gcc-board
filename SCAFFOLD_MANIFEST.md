@@ -26,6 +26,7 @@ Last update: 2026-10-13.
 | `lib/discovery.js` | 8 | Parses sitemap job URLs; detects the ATS of a careers page. |
 | `lib/schedule.js` | 7 | Validates the refresh schedule (daily at a time, or on demand only). |
 | `lib/publisher.js` | 3b, 5, 6 | Writes `data/roles.json`: target roles, exception roles with fit 75 or more, and the scores. |
+| `lib/security.js` | 9 | The Host check, the cross-site check and the security headers (Content-Security-Policy) for `server.js`. |
 
 ## Scrapers (`lib/scrapers/`)
 
@@ -52,7 +53,10 @@ Last update: 2026-10-13.
 
 | File | Phase | Function |
 |---|---|---|
-| `frontend/public/index.html` | 3b, 5, 6 | The board web page. |
+| `frontend/public/index.html` | 3b, 5, 6 | The board web page (HTML only). |
+| `frontend/public/js/board.js`, `css/board.css` | 3b, 5, 6 | The script and the styles of the board. |
+| `frontend/public/employers.html`, `js/employers.js`, `css/employers.css` | 8 | The employer list page. |
+| `frontend/public/fonts/` | 9 | The Source Sans 3 font (SIL Open Font License, `OFL.txt`). |
 | `test/targeting.test.js` | 5 | Tests for the targeting rules. |
 | `test/descriptions.test.js` | 6 | Tests for the description fetcher (nock, no real requests). |
 | `test/scoring.test.js` | 6 | Tests for the score validation. |

@@ -68,7 +68,7 @@ User (search, filter, sort by score, mark roles)
 | Database | SQLite (`data/jobs.db`) | Stores the employers, the roles and the scores. |
 | Publisher | `lib/publisher.js` | Writes `data/roles.json` for the board. |
 | Server | Express, node-cron (`server.js`) | Shows the board and the API. Runs the daily refresh. |
-| Frontend | Static HTML and JavaScript (`frontend/public/index.html`) | The board: search, filters, scores, marks. |
+| Frontend | Static HTML, CSS and JavaScript (`frontend/public/`: `index.html`, `js/board.js`, `css/board.css`) | The board: search, filters, scores, marks. |
 
 ### 1.3 Refresh timeline (approximate)
 
@@ -411,11 +411,20 @@ The refresh saves each employer to the database immediately after it scrapes tha
 - **The board.** The publisher adds `meta.refresh` to `data/roles.json`: `complete`, `total`, `refreshed`, `failed` and the times. The "Updated" text on the board always shows the end of the last complete run. Point to it, or tap it, to open the refresh status panel. The panel shows the status: complete or partial. It also shows the finished, pending and failed employers, and the number of scored roles. When the data is partial, the board also shows a **Partial** label. While a refresh runs, the label shows the progress, for example **Refreshing 14 of 56**. The footer shows the current step. Each 15 seconds, the board reads `GET /api/refresh/status`. When the scrape completes a new employer, the board loads the roles again, not more than one time each minute.
 - **The board file.** The publisher writes `data/roles.json` to a temporary file first and then renames it. Thus the board never reads half a file during a refresh.
 
-To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:
+By default, the server listens on `127.0.0.1`. Thus only this computer can open the board. To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:
 
-- **Same Wi-Fi network:** `http://<LAN-IP>:4000`.
+- **Same Wi-Fi network:** set `HOST=0.0.0.0` in `.env`, then open `http://<LAN-IP>:4000`.
 - **Other networks:** Tailscale (a private network between your devices).
-- **An unlisted URL:** `cloudflared tunnel --url http://localhost:4000`. This needs no change to the project.
+- **An unlisted URL:** `cloudflared tunnel --url http://localhost:4000`. Add the tunnel host name to `ALLOWED_HOSTS`.
+
+**Request checks (`lib/security.js`).** The board has no login. Thus, before each route, the server does two checks:
+
+- **Host check.** The `Host` header must be `localhost`, an IP address, or a name in `ALLOWED_HOSTS`. This stops DNS rebinding: a hostile domain name that points to `127.0.0.1` cannot read the API.
+- **Cross-site check.** For `POST` and `PUT`, the `Origin` header must be the board itself or a name in `ALLOWED_HOSTS`. Without `Origin`, the server rejects `Sec-Fetch-Site: cross-site` and `same-site`. This stops a hostile web page from starting a refresh or changing the schedule. A request without browser headers, for example from `curl`, passes this check.
+
+The server answers `403` to a rejected request and writes a warning to the log.
+
+**Security headers (`helmet`).** The server sends a Content-Security-Policy. The policy lets the pages load scripts, styles, fonts and data only from the server itself. Thus the board does not run inline scripts, and an injected script cannot run. The pages keep their scripts in `frontend/public/js/`, their styles in `frontend/public/css/` and the Source Sans 3 font in `frontend/public/fonts/`. The board sends no requests to Google or to other sites. The policy does not let other sites show the board in a frame. The server does not send `X-Powered-By`.
 
 The workflow `.github/workflows/refresh-schedule.yml` is from an earlier cloud setup. Its schedule is in a comment, so it runs only when a person starts it. Do not enable the schedule.
 The workflow is a possible start point for a future cloud phase.

@@ -57,7 +57,7 @@ Do these steps one time:
 By default, the server refreshes the roles each day at 06:00 IST.
 To change the schedule, use the **Auto refresh** control in the board header: **Daily at** a time, or **On demand only**.
 
-> **NOTE:** The server listens on `0.0.0.0`. Other devices on the same Wi-Fi network can open `http://<LAN-IP-of-this-computer>:4000`.
+> **NOTE:** The server listens on `127.0.0.1`. Thus only this computer can open the board. To open the board from other devices, refer to [`docs/SETUP.md`](docs/SETUP.md), section 7.
 > For access from other networks, use Tailscale. Refer to [`docs/SETUP.md`](docs/SETUP.md).
 
 ## How the board selects and scores roles
@@ -80,7 +80,7 @@ After each refresh, the server scores the new roles with Claude Code (`autoscore
 
 ## Status
 
-Current status: Phase 8 is complete. The refresh scrapes 92 of 149 employers.
+Current status: Phase 9 is complete. The refresh scrapes 92 of 149 employers.
 
 | Phase | Status |
 |---|---|
@@ -94,6 +94,7 @@ Current status: Phase 8 is complete. The refresh scrapes 92 of 149 employers.
 | 6: Job descriptions and AI scoring | Complete. `lib/descriptions.js`, `score.js`, `config/scoring-rubric.md`. The scorer is Claude Code. An automatic scorer is a future option. |
 | 7: Board redesign and schedule control | Complete. Wide layout, ATS score and RM score on each role, **Auto refresh** control (daily or on demand only). |
 | 8: Employer discovery | Complete. `discover.js` finds companies and their ATS. 113 employers added (BFSI and other industries). Refer to `docs/ARCHITECTURE.md`, section 15. |
+| 9: Security | Complete. The server listens on `127.0.0.1`. It checks the `Host` and `Origin` headers and sends a strict Content-Security-Policy. Refer to `docs/ARCHITECTURE.md`, section 6. |
 
 ## Project structure
 
@@ -105,7 +106,7 @@ refresh.js          refresh: scrape, classify, get descriptions, publish
 score.js            scoring: export roles to score, import scores
 discover.js         discovery: find companies and detect their ATS (manual run)
 server.js           server: shows the board, gives the API, runs the daily refresh
-frontend/public/    the board web page (index.html)
+frontend/public/    the board web page (index.html, js/, css/, fonts/)
 test/               Jest tests
 docs/               documents
 .github/workflows/  workflow from an earlier cloud setup (schedule off)

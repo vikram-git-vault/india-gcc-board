@@ -29,7 +29,8 @@ This guide gives the procedures to install, start, refresh and score the board.
 | Variable | Default | Function |
 |---|---|---|
 | `PORT` | `4000` | The port that `server.js` listens on. |
-| `HOST` | `0.0.0.0` | The address that `server.js` listens on. `0.0.0.0` lets other devices on your network open the board. |
+| `HOST` | `127.0.0.1` | The address that `server.js` listens on. With `127.0.0.1`, only this computer can open the board. To let other devices open the board, refer to section 7. |
+| `ALLOWED_HOSTS` | (empty) | More host names that can open the board, with a comma between names. For example: your Tailscale name. The server always accepts `localhost` and IP addresses. It rejects other host names with `403`. Refer to section 7. |
 | `REFRESH_CRON` | `0 6 * * *` | The first default for the daily refresh time (cron format). The board can change the schedule. Refer to section 5.1. |
 | `TZ` | `Asia/Kolkata` | The time zone of the refresh schedule. |
 | `LOG_LEVEL` | `info` | The minimum level of log messages. |
@@ -38,6 +39,17 @@ This guide gives the procedures to install, start, refresh and score the board.
 | `USER_AGENT` | `india-gcc-board-bot/1.0 (...)` | The name that the scrapers send to the employer sites. |
 | `DB_PATH` | `./data/jobs.db` | The location of the database. |
 | `SLACK_WEBHOOK` | (empty) | Not used. Notifications are a Phase 4 item. |
+
+3. Make your private files and folders readable only by your macOS user:
+
+   ```bash
+   mkdir -p data logs .cache Resume
+   chmod 600 .env
+   chmod 700 data logs .cache Resume
+   chmod 700 ~/.pm2/logs   # after the first pm2 start (section 5.3)
+   ```
+
+   `data/` contains the database and the scores. `Resume/` contains your resumes. `.cache/`, `logs/` and the pm2 logs can contain parts of the scores. The server writes new files in these folders. A folder with mode `700` keeps all of its files private.
 
 ## 3. Make the database
 
@@ -194,10 +206,18 @@ The board shows a stale score with the label "score out of date".
 
 ## 7. Open the board from other devices
 
+By default, the server listens on `127.0.0.1`. Thus only this computer can open the board.
+
+> **WARNING:** The board has no login. A device that can open the board can see your scores and the reasons. The reasons contain details from your resume. That device can also start a refresh and change the schedule.
+
 ### Devices on the same Wi-Fi network
 
-1. Run `ipconfig getifaddr en0` to find the LAN IP address of this computer (macOS, Wi-Fi).
-2. On the other device, open `http://<LAN-IP>:4000`.
+Do these steps only on a network that you trust, for example your home network. Do not do them on a public network.
+
+1. In `.env`, set `HOST=0.0.0.0`.
+2. Restart the server: `pm2 restart india-gcc-board --update-env`.
+3. Run `ipconfig getifaddr en0` to find the LAN IP address of this computer (macOS, Wi-Fi).
+4. On the other device, open `http://<LAN-IP>:4000`.
 
 ### Devices on other networks
 
@@ -207,8 +227,13 @@ Use Tailscale. Tailscale makes a private network between your devices only. It d
 2. Sign in to Tailscale.
 3. Install Tailscale on each other device.
 4. Sign in on each device with the same account.
-5. On this computer, run `tailscale status` to find the Tailscale host name.
-6. On the other device, open `http://<tailscale-host-name>:4000`.
+5. On this computer, run `tailscale serve --bg 4000`. Tailscale then sends requests from your devices to the board on `127.0.0.1`. Thus `HOST` can stay `127.0.0.1`.
+6. Run `tailscale serve status` to find the board URL, for example `https://<host-name>.<tailnet>.ts.net`.
+7. In `.env`, set `ALLOWED_HOSTS=<host-name>.<tailnet>.ts.net`.
+8. Restart the server: `pm2 restart india-gcc-board --update-env`.
+9. On the other device, open the URL.
+
+> **NOTE:** If the board shows "Host not allowed", add the host name in the address bar to `ALLOWED_HOSTS`. If **Refresh now** or **Auto refresh** shows an error, do the same. The server log shows each rejected request.
 
 ## 8. Optional: an unlisted public URL
 
@@ -224,6 +249,8 @@ You can share the board with a URL that no search engine or list shows. The proj
    ```
 
 3. Copy the `https://*.trycloudflare.com` URL that `cloudflared` shows.
+4. In `.env`, set `ALLOWED_HOSTS` to the host name of that URL, for example `ALLOWED_HOSTS=abc-def.trycloudflare.com`.
+5. Restart the server: `pm2 restart india-gcc-board --update-env`.
 
 The URL works while the tunnel runs. A person can open the board only with the exact URL.
 
