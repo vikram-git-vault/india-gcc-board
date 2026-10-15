@@ -153,7 +153,7 @@ The board shows two scores on each role:
 The board also shows the recommended resume (Product Owner or Engineering Leader), a reason, the matched keywords and the gaps.
 Exception roles (AVP, Senior Manager) stay on the board only when the fit score is 75 or more.
 
-The scorer is Claude Code. After each successful refresh, the server scores the new roles automatically (`autoscore.js`). While the scores are in progress, the board footer shows "Scoring the new roles with Claude Code…". Each batch of 10 roles takes approximately 30 to 60 seconds.
+The scorer is Claude Code. After each successful refresh, the server scores the new roles automatically (`autoscore.js`). While the scores are in progress, the board footer shows the counts: the roles done, the scores stored, the scores rejected, the roles left and the model. The server log (`pm2 logs india-gcc-board`) shows the same counts after each batch and one time each minute. Each batch of 10 roles takes approximately 30 to 60 seconds.
 
 Automatic scoring needs these conditions:
 

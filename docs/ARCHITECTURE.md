@@ -685,6 +685,7 @@ The scorer is Claude Code. It needs no API key. It uses the Claude Code login on
 Some rules prevent repeated work:
 
 - One run sends each role only one time.
+- `autoscore.js` sends the counts to the server through the Node IPC channel (`lib/progress.js`): the roles to score, the roles done, the scores stored and the scores rejected. It also sends the model that did the scores. It reads the model from `modelUsage` in the reply of `claude -p`. The server writes these counts to the log after each batch and one time each minute. When the scores stop, the server writes a summary. `GET /api/refresh/status` gives the counts in `scoringProgress`.
 - `score.js --import` can reject the score of a role two times. Then `autoscore.js` does not send that role again until its description changes. `.cache/autoscore/attempts.json` records the attempts.
 - If two batches in sequence store no score, the run stops. The roles stay without a score, and the next refresh tries again.
 - When a refresh starts, the server stops the scorer and its `claude` process. The refresh and the scorer both write the database and `data/roles.json`. After the refresh, the server starts the scorer again.

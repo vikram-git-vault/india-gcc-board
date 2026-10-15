@@ -21,6 +21,7 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createLogger } from './lib/logger.js';
+import { reportProgress } from './lib/progress.js';
 
 const logger = createLogger('autoscore');
 const WORK_DIR = path.join('.cache', 'autoscore');
@@ -132,7 +133,7 @@ async function scoreBatch(batchNo, texts, tried, attempts) {
   if (exported.code !== 0) throw new Error(`score.js --pending failed: ${(exported.stdout + exported.stderr).slice(-300)}`);
   const { roles } = JSON.parse(fs.readFileSync(pendingFile, 'utf-8'));
   fs.unlinkSync(pendingFile);
-  if (!roles.length) return { asked: 0, stored: 0 };
+  if (!roles.length) return { asked: 0, stored: 0, rejected: 0, models: [] };
   roles.forEach((r) => tried.add(r.role_id));
 
   logger.info(`Batch ${batchNo}: asking Claude Code to score ${roles.length} roles`);
@@ -143,6 +144,8 @@ async function scoreBatch(batchNo, texts, tried, attempts) {
   const envelope = JSON.parse(reply.stdout);
   if (envelope.is_error) throw new Error(`claude reported an error: ${String(envelope.result).slice(0, 300)}`);
 
+  // The model that scored the batch (keys of modelUsage, e.g. claude-opus-5-5).
+  const models = Object.keys(envelope.modelUsage || {});
   const records = extractJsonArray(envelope.result);
   const scoresFile = path.join(WORK_DIR, `scores-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
   fs.writeFileSync(scoresFile, JSON.stringify(records, null, 1));
@@ -150,7 +153,7 @@ async function scoreBatch(batchNo, texts, tried, attempts) {
   const imported = await run('node', ['score.js', '--import', scoresFile, '--scorer', 'claude-code-auto']);
   const summary = (imported.stdout + imported.stderr).match(/Stored (\d+) scores, rejected (\d+)/);
   if (!summary) throw new Error(`score.js --import failed: ${(imported.stdout + imported.stderr).slice(-300)}`);
-  logger.info(`Batch ${batchNo}: stored ${summary[1]}, rejected ${summary[2]}`);
+  logger.info(`Batch ${batchNo}: stored ${summary[1]}, rejected ${summary[2]} (model: ${models.join(', ') || 'unknown'})`);
 
   // Count an attempt for each role that is still without a score.
   const status = await run('node', ['score.js', '--pending', '--out', pendingFile]);
@@ -164,7 +167,18 @@ async function scoreBatch(batchNo, texts, tried, attempts) {
     if (attempts[r.role_id].count >= MAX_ATTEMPTS) logger.warn(`Role ${r.role_id} (${r.title}) rejected ${MAX_ATTEMPTS} times; not sent again until its description changes`);
   });
   fs.writeFileSync(ATTEMPTS_FILE, JSON.stringify(attempts, null, 1));
-  return { asked: roles.length, stored: Number(summary[1]) };
+  return { asked: roles.length, stored: Number(summary[1]), rejected: Number(summary[2]), models };
+}
+
+// How many roles need a score now, without the roles given up.
+async function countPending(attempts) {
+  const file = path.join(WORK_DIR, `count-${process.pid}.json`);
+  const exclude = excludedIds([], attempts);
+  const result = await run('node', ['score.js', '--pending', '--out', file, ...(exclude.length ? ['--exclude', exclude.join(',')] : [])]);
+  if (result.code !== 0) return null;
+  const { roles } = JSON.parse(fs.readFileSync(file, 'utf-8'));
+  fs.unlinkSync(file);
+  return roles.length;
 }
 
 async function main() {
@@ -186,17 +200,37 @@ async function main() {
   const attempts = loadAttempts();
   const tried = new Set();
   const maxBatches = Math.ceil(max / BATCH_SIZE);
+  const needed = await countPending(attempts);
+  const toScore = needed === null ? null : Math.min(needed, maxBatches * BATCH_SIZE);
+  const more = needed === null ? 0 : needed - toScore;
+  const givenUp = Object.values(attempts).filter((a) => a.count >= MAX_ATTEMPTS).length;
+  if (needed !== null) {
+    logger.info(`${needed} roles need a score${more ? `; this run scores ${toScore}` : ''}`
+      + `${givenUp ? ` (${givenUp} not sent: rejected ${MAX_ATTEMPTS} times)` : ''}`);
+  }
+  const counts = { done: 0, scored: 0, rejected: 0 };
+  const usedModels = new Set();
+  const report = (item) => reportProgress('score', { total: toScore, item, more, model: [...usedModels].join(', ') || null, ...counts });
+  report(null);
+
   let total = 0;
   let emptyBatches = 0;
   for (let batchNo = 1; batchNo <= maxBatches; batchNo += 1) {
-    const { asked, stored } = await scoreBatch(batchNo, texts, tried, attempts);
+    report(`batch ${batchNo}`);
+    const { asked, stored, rejected, models } = await scoreBatch(batchNo, texts, tried, attempts);
     if (asked === 0) break;
+    models.forEach((m) => usedModels.add(m));
+    counts.done += asked;
+    counts.scored += stored;
+    counts.rejected += rejected;
+    report(`batch ${batchNo}`);
+    if (toScore) logger.info(`Progress: ${counts.done} of ${toScore} done, ${counts.scored} scored, ${counts.rejected} rejected, ${Math.max(0, toScore - counts.done)} left`);
     total += stored;
     emptyBatches = stored === 0 ? emptyBatches + 1 : 0;
     // Two batches with no score: more likely a problem with Claude than with the roles.
     if (emptyBatches >= 2) throw new Error(`two batches stored no scores; check ${WORK_DIR}`);
   }
-  logger.info(total ? `Scored ${total} roles` : 'No roles need a score');
+  logger.info(total ? `Scored ${total} roles (model: ${[...usedModels].join(', ') || 'unknown'})` : 'No roles need a score');
 }
 
 const isMain = () => {
@@ -212,5 +246,8 @@ if (process.argv[1] && isMain()) {
   main().catch((err) => {
     logger.error(`Automatic scoring stopped: ${err.message}`);
     process.exitCode = 1;
+  }).finally(() => {
+    // The IPC channel from server.js keeps the process alive; close it.
+    if (process.connected) process.disconnect();
   });
 }

@@ -15,7 +15,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
-import { formatProgress, formatMinutes } from './lib/progress.js';
+import { formatProgress, formatMinutes, formatScoringProgress, formatScoringSummary } from './lib/progress.js';
 import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
 import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
 
@@ -37,6 +37,9 @@ const refreshState = {
   lastExitCode: null,
   progress: null,
   scoring: false,
+  scoringStartedAt: null,
+  // Counts from autoscore.js: total, done (sent), scored, rejected.
+  scoringProgress: null,
   // An unfinished run waits for the Mac to stay awake (lib/power.js):
   // the reason, e.g. "on battery with the lid closed", or null.
   paused: null,
@@ -50,15 +53,35 @@ let scoringChild = null;
 function runAutoScore() {
   if (!AUTO_SCORE || refreshState.scoring) return;
   refreshState.scoring = true;
+  refreshState.scoringStartedAt = new Date().toISOString();
+  refreshState.scoringProgress = null;
   logger.info('Automatic scoring started (autoscore.js)');
   const out = fs.openSync(REFRESH_LOG_PATH, 'a');
-  const child = spawn('node', ['autoscore.js'], { cwd: process.cwd(), stdio: ['ignore', out, out] });
+  // The 'ipc' channel carries the counts (lib/progress.js).
+  const child = spawn('node', ['autoscore.js'], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
   scoringChild = child;
+  let lastLogged = null;
+  child.on('message', (msg) => {
+    if (!msg || msg.type !== 'progress') return;
+    const { type, ...progress } = msg;
+    refreshState.scoringProgress = progress;
+    // Log when the count of roles to score is known and after each batch.
+    const key = `${progress.total}:${progress.done}`;
+    if (progress.total != null && key !== lastLogged) {
+      lastLogged = key;
+      logger.info(formatScoringProgress(progress, refreshState.scoringStartedAt));
+    }
+  });
+  const progressTimer = setInterval(() => {
+    logger.info(formatScoringProgress(refreshState.scoringProgress, refreshState.scoringStartedAt));
+  }, PROGRESS_LOG_EVERY_MS);
   const done = (code) => {
+    clearInterval(progressTimer);
     fs.closeSync(out);
     refreshState.scoring = false;
     scoringChild = null;
-    logger.info(`Automatic scoring finished (exit code: ${code}); details in logs/combined.log`);
+    const took = formatMinutes(Date.now() - new Date(refreshState.scoringStartedAt));
+    logger.info(`Automatic scoring finished (exit code: ${code}, took ${took}): ${formatScoringSummary(refreshState.scoringProgress)}; details in logs/combined.log`);
   };
   child.on('error', (err) => { logger.warn(`Automatic scoring not started: ${err.message}`); });
   child.on('close', done);

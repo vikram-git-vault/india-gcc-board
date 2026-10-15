@@ -870,7 +870,11 @@
         // it ends, then load the new scores.
         if (s.scoring) {
           wasScoring = true;
-          refreshStatusEl.textContent = 'Scoring the new roles with Claude Code…';
+          var sp = s.scoringProgress;
+          refreshStatusEl.textContent = sp && sp.total
+            ? 'Scoring the new roles with Claude Code: ' + sp.done + ' of ' + sp.total + ' done, ' + sp.scored + ' scored, '
+              + sp.rejected + ' rejected, ' + Math.max(0, sp.total - sp.done) + ' left' + (sp.model ? ' (' + sp.model + ').' : '.')
+            : 'Scoring the new roles with Claude Code…';
           if (!pollTimer) pollTimer = setInterval(pollRefreshStatus, 15000);
           return;
         }
