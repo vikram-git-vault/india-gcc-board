@@ -125,7 +125,7 @@ Do not remove the employer from the configuration. Do not write logic that evade
 | Eightfold | 4 | Two APIs. HSBC uses `/api/apply/v2/jobs`. PayPal, NAB and HP use `/api/pcsx/search` (`eightfold.api: "pcsx"`), because there the older API answers 403. Both take `domain` and `location=India`, with 10 positions on each page. The descriptions stage uses `/api/apply/v2/jobs/<id>` or `/api/pcsx/position_details`. |
 | Jibe | 7 | `GET /api/jobs?location=India`, 100 jobs on each page, with the full description. Jibe is a front end for iCIMS (AMD, Gallagher, Aon, ICE, Schneider Electric, DocuSign, Publicis). The location filter removes the jobs outside India. |
 | Amazon | 1 | `GET /en/search.json` with `normalized_country_code[]=IND`, 100 jobs on each page, with the description and the qualifications. |
-| Custom | 14 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD, also inside `@graph`, or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). The scraper reads first the job URLs that contain an Indian city name. Radancy sites (Moody's, Intuit), SuccessFactors career sites (ANZ, Nomura) and sites with a vacancy sitemap (Experian, Wise) use this method. |
+| Custom | 14 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD, also inside `@graph`, or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). The scraper reads first the job URLs that contain an Indian city name. It does not read a known page again unless the sitemap `lastmod` is newer (refer to section 3). Radancy sites (Moody's, Intuit), SuccessFactors career sites (ANZ, Nomura) and sites with a vacancy sitemap (Experian, Wise) use this method. |
 
 For the list of employers for each ATS type, refer to `docs/EMPLOYERS.md`.
 
@@ -197,7 +197,7 @@ CREATE TABLE roles (
   job_type TEXT,
   salary_range TEXT,
   posted_date DATE,
-  deadline DATE,
+  deadline DATE,                    -- the closing date (JSON-LD validThrough, Oracle PostingEndDate)
   job_url TEXT NOT NULL,
   source_updated TIMESTAMP,
   scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -215,6 +215,46 @@ CREATE TABLE roles (
   UNIQUE(employer_id, external_job_id)
 );
 ```
+
+The key of a role is the employer and the job ID (`external_job_id`). `syncRoles` in `lib/database.js` sets a role to inactive only for one of these reasons:
+
+- The closing date (`deadline`) is before today (UTC).
+- The job ID is no longer on the employer site. The scraper must read the full list to know this (refer to section 3.0.1).
+- The scraper read the detail page, and the page shows that the role is closed.
+
+A role that a run did not read stays active. When a role is on the site again, it becomes active again. A role with a past closing date does not become active again.
+
+#### 3.0.1 The full list for each scraper type
+
+| Scraper | Full list | Result |
+|---|---|---|
+| Workday, Oracle, Greenhouse | All pages of the API search | A job ID that is not in the list becomes inactive. |
+| Eightfold, Phenom, Jibe, Amazon | All pages, if the total is not more than `max_pages` | Not more than `max_pages`: as for Workday. More than `max_pages`: no role becomes inactive because it is not in the list. |
+| Custom (sitemap) | The job URLs in the sitemap | A stored role whose URL is not in the sitemap becomes inactive. A stored role whose URL is in the sitemap stays active, or becomes active again. |
+| Avature | The search pages, only when the scraper reads all of them | The scraper stops when it has `max_detail_fetches` new URLs. Then no role becomes inactive because it is not in the list. The scraper uses the remaining fetches to read the known roles again, the oldest first. A page with no title is a closed role. |
+
+> **NOTE:** An empty sitemap list does not make roles inactive. An empty list usually shows a broken sitemap or URL pattern, not closed roles.
+
+### `source_urls`
+
+```sql
+CREATE TABLE source_urls (
+  employer_id INTEGER NOT NULL REFERENCES employers(id),
+  url TEXT NOT NULL,
+  lastmod TEXT,                     -- the sitemap lastmod when the scraper read the page
+  fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (employer_id, url)
+);
+```
+
+This table records each detail page that `CustomScraper` or `AvatureScraper` read, with or without a role. A role outside India is not stored in `roles`. Without this table, the scraper reads its page again in each run.
+
+Before each employer, `refresh.js` gives the scraper the known URLs (`getKnownUrls`). The scraper reads these pages in this sequence, up to `max_detail_fetches`:
+
+1. The pages that it did not read before.
+2. The known pages with a sitemap `lastmod` that is newer than the last read.
+
+The scraper does not read a known page again if its `lastmod` did not change. Thus the coverage of a large employer increases in each run.
 
 ### `role_scores`
 

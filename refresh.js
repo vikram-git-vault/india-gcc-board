@@ -65,7 +65,7 @@ async function initDatabase() {
 async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = false } = {}) {
   const { ScraperFactory } = await import('./lib/scrapers/ScraperFactory.js');
   const { parseRoles } = await import('./lib/parser.js');
-  const { syncRoles } = await import('./lib/database.js');
+  const { syncRoles, getKnownUrls, recordFetchedUrls } = await import('./lib/database.js');
   const { publish } = await import('./lib/publisher.js');
   const allActive = employers.filter((e) => e.active).length;
   const pending = pendingEmployers(cp, employers);
@@ -75,11 +75,16 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
     try {
       logger.info(`Scraping ${employer.name} (${employer.ats_type})`);
       const scraper = ScraperFactory.create(employer);
+      // Sitemap and Avature scrapers skip pages they read before.
+      scraper.known = await getKnownUrls(employer.id);
       const rawListings = await scrapeWithTimeLimit(scraper, employer);
       const roles = parseRoles(rawListings, employer, filters);
-      const { added, updated } = await syncRoles(employer.id, roles);
-      logger.info(`  -> ${roles.length} matching roles (${added} new), saved`);
-      return { status: 'ok', count: roles.length, added, updated };
+      const { added, updated, closed } = await syncRoles(employer.id, roles, {
+        presence: scraper.presence, goneUrls: scraper.goneUrls,
+      });
+      await recordFetchedUrls(employer.id, scraper.fetchedUrls);
+      logger.info(`  -> ${roles.length} matching roles read (${added} new, ${closed} closed), saved`);
+      return { status: 'ok', count: roles.length, added, updated, closed };
     } catch (err) {
       logger.error(`Failed scraping ${employer.name}: ${err.message}`);
       return { status: 'error', error: err.message };
@@ -281,6 +286,10 @@ async function main() {
     process.exitCode = PAUSED_EXIT_CODE;
     return;
   }
+  // Closing dates also pass for employers whose scrape failed in this run.
+  const { deactivateExpiredRoles } = await import('./lib/database.js');
+  const expired = await deactivateExpiredRoles();
+  if (expired) logger.info(`${expired} roles past their closing date set to inactive`);
   await fetchDescriptions(employers);
   const counts = await reclassify();
   logger.info(`Classified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
