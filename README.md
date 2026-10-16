@@ -36,7 +36,7 @@ Do these steps one time:
    cp .env.example .env
    ```
 
-3. If necessary, change the values in `.env`.
+3. If necessary, change the values in `config/settings.json`. Put only secrets and private host names in `.env` (refer to `docs/SETUP.md`, section 2).
 
 4. Make the database:
 

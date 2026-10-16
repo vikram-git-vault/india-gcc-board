@@ -2,9 +2,10 @@
 /**
  * refresh.js — main orchestrator for the BFSI job board.
  *
- * Pipeline: init db -> employers in parallel (SCRAPE_CONCURRENCY, default
- *           6): scrape, parse, save to db; data/roles.json at most every
- *           30 s -> descriptions -> classify -> publish.
+ * Pipeline: init db -> employers in parallel (refresh.scrape_concurrency
+ *           in config/settings.json): scrape, parse, save to db;
+ *           data/roles.json at most every publish_interval_seconds ->
+ *           descriptions -> classify -> publish.
  *           (--only=id1,id2 limits the scrape to those employers)
  *           --resume continues an unfinished run (lib/checkpoint.js):
  *           employers already saved in that run are skipped.
@@ -18,6 +19,7 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
+import { settings } from './lib/settings.js';
 import { reportProgress } from './lib/progress.js';
 import {
   newCheckpoint, loadCheckpoint, saveCheckpoint, resumableCheckpoint, recordEmployer, pendingEmployers,
@@ -28,10 +30,10 @@ const logger = createLogger('refresh');
 
 const EMPLOYERS_CONFIG = path.join('config', 'employers.json');
 const FILTERS_CONFIG = path.join('config', 'filters.json');
-// Time limit for one employer. After it, the employer counts as failed and
-// the refresh goes on with the next one (the next run tries it again).
-const limitMinutes = Number(process.env.EMPLOYER_TIME_LIMIT_MINUTES);
-const EMPLOYER_TIME_LIMIT_MS = (limitMinutes > 0 ? limitMinutes : 20) * 60 * 1000;
+// Time limit for one employer (config/settings.json). After it, the
+// employer counts as failed and the refresh goes on with the next one (the
+// next run tries it again).
+const EMPLOYER_TIME_LIMIT_MS = settings.refresh.employer_time_limit_minutes * 60 * 1000;
 
 async function scrapeWithTimeLimit(scraper, employer) {
   let timer;
@@ -62,21 +64,21 @@ async function initDatabase() {
 // Each employer is saved to the database as soon as it finishes, so an
 // interrupted run keeps its work; the board is updated at most every
 // PUBLISH_INTERVAL_MS. `save` writes the checkpoint; it is a no-op for
-// --only runs. Up to SCRAPE_CONCURRENCY employers run at once (lib/pool.js),
+// --only runs. Up to scrape_concurrency employers run at once (lib/pool.js),
 // longest first by the time each took in the last run (previousSeconds).
 // With pauseOnSleep no new employer starts when the Mac can sleep
 // (lib/power.js); the ones in progress finish, then it returns { paused: true }.
-const PUBLISH_INTERVAL_MS = 30 * 1000;
+const PUBLISH_INTERVAL_MS = settings.refresh.publish_interval_seconds * 1000;
 
 async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = false, previousSeconds = {} } = {}) {
   const { ScraperFactory } = await import('./lib/scrapers/ScraperFactory.js');
   const { parseRoles } = await import('./lib/parser.js');
   const { syncRoles, getKnownUrls, recordFetchedUrls } = await import('./lib/database.js');
   const { publish } = await import('./lib/publisher.js');
-  const { runPool, scrapeOrder, scrapeConcurrency, createThrottle } = await import('./lib/pool.js');
+  const { runPool, scrapeOrder, createThrottle } = await import('./lib/pool.js');
   const allActive = employers.filter((e) => e.active).length;
   const pending = scrapeOrder(pendingEmployers(cp, employers), previousSeconds);
-  const concurrency = scrapeConcurrency();
+  const concurrency = settings.refresh.scrape_concurrency;
   let finished = allActive - pending.length;
   const running = new Set();
   logger.info(`Scraping ${pending.length} employers, ${concurrency} at a time`);
@@ -201,7 +203,7 @@ async function fetchDescriptions(employers) {
         : { status: 'skipped', message: `employer ${slug} not in config` };
       results.push([role, result]);
       if (result.status !== 'skipped') {
-        const delayMs = ((employer && employer.crawl_delay_seconds) || 5) * 1000;
+        const delayMs = ((employer && employer.crawl_delay_seconds) || settings.scraping.default_crawl_delay_seconds) * 1000;
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }

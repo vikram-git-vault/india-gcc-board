@@ -16,7 +16,14 @@ This guide gives the procedures to install, start, refresh and score the board.
    npm install
    ```
 
-## 2. Configure the environment
+## 2. Configure the settings
+
+The settings are in two files:
+
+- `config/settings.json` contains all settings that git can keep. Git keeps this file.
+- `.env` contains only the values that must not be in git: secrets and private host names. Git ignores this file.
+
+`lib/settings.js` gives a default value for each property in `config/settings.json`. The file overrides the default. If a property is missing, the default applies. If a value has a wrong type or is out of range, the program writes a warning and uses the default. An unknown property also gives a warning.
 
 1. Copy the example file:
 
@@ -24,21 +31,51 @@ This guide gives the procedures to install, start, refresh and score the board.
    cp .env.example .env
    ```
 
-2. Examine the values in `.env`. The default values are correct for most installations.
+2. If other devices must open the board, set `ALLOWED_HOSTS` in `.env`. Refer to section 7.
+3. Examine the values in `config/settings.json`. The default values are correct for most installations.
+4. After a change to `config/settings.json`, restart the server.
+
+### 2.1 `.env`
 
 | Variable | Default | Function |
 |---|---|---|
-| `PORT` | `4000` | The port that `server.js` listens on. |
-| `HOST` | `127.0.0.1` | The address that `server.js` listens on. With `127.0.0.1`, only this computer can open the board. To let other devices open the board, refer to section 7. |
 | `ALLOWED_HOSTS` | (empty) | More host names that can open the board, with a comma between names. For example: your Tailscale name. The server always accepts `localhost` and IP addresses. It rejects other host names with `403`. Refer to section 7. |
-| `REFRESH_CRON` | `0 6 * * *` | The first default for the daily refresh time (cron format). The board can change the schedule. Refer to section 5.1. |
-| `TZ` | `Asia/Kolkata` | The time zone of the refresh schedule. |
-| `LOG_LEVEL` | `info` | The minimum level of log messages. |
-| `CRAWL_DELAY_MS` | `8000` | Not used. The scrapers use `crawl_delay_seconds` for each employer in `config/employers.json`. |
-| `SCRAPE_CONCURRENCY` | `6` | The number of employers that the refresh scrapes at the same time (1 to 16). Refer to section 4.1 of `docs/ARCHITECTURE.md`. |
-| `USER_AGENT` | `india-gcc-board-bot/1.0 (...)` | The name that the scrapers send to the employer sites. |
-| `DB_PATH` | `./data/jobs.db` | The location of the database. |
-| `SLACK_WEBHOOK` | (empty) | Not used. Notifications are a Phase 4 item. |
+| `SLACK_WEBHOOK` | (empty) | Not used by local code. The GitHub workflow reads it from the repository secrets. Notifications are a Phase 4 item. |
+
+> **CAUTION:** Do not put API keys, personal data or private host names in `config/settings.json`. Git keeps this file.
+
+### 2.2 `config/settings.json`
+
+| Property | Default | Function |
+|---|---|---|
+| `server.port` | `4000` | The port that `server.js` listens on. |
+| `server.host` | `127.0.0.1` | The address that `server.js` listens on. With `127.0.0.1`, only this computer can open the board. To let other devices open the board, refer to section 7. |
+| `server.progress_log_minutes` | `1` | The minutes between the progress lines in the server log during a refresh. |
+| `schedule.refresh_cron` | `0 6 * * *` | The first default for the daily refresh time (cron format). The board can change the schedule. Refer to section 5.1. |
+| `schedule.timezone` | `Asia/Kolkata` | The time zone of the refresh schedule. |
+| `schedule.catch_up_check_minutes` | `5` | The minutes between the checks for a missed refresh. |
+| `schedule.retry_after_minutes` | `10` | The minutes before the server tries a failed refresh again (one time). |
+| `refresh.scrape_concurrency` | `6` | The number of employers that the refresh scrapes at the same time (1 to 16). Refer to section 4.1 of `docs/ARCHITECTURE.md`. |
+| `refresh.employer_time_limit_minutes` | `20` | The time limit for one employer. After the limit, the employer counts as failed. |
+| `refresh.publish_interval_seconds` | `30` | The minimum time between two writes of `data/roles.json` during a refresh. |
+| `refresh.checkpoint_max_age_hours` | `12` | A resumed refresh continues an unfinished run only if the run is younger than this. |
+| `scraping.user_agent` | `india-gcc-board-bot/1.0 (...)` | The name that the scrapers send to the employer sites. |
+| `scraping.request_timeout_seconds` | `30` | The time limit for one request. |
+| `scraping.default_crawl_delay_seconds` | `5` | The crawl delay for an employer that has no `crawl_delay_seconds` in `config/employers.json`. |
+| `descriptions.min_full_chars` | `1000` | A scraped description with this length or more is the full text. The refresh does not get the description again. |
+| `descriptions.max_chars` | `50000` | The maximum length of a stored description. |
+| `descriptions.refetch_ok_days` | `14` | The age after which the refresh gets a description again. |
+| `descriptions.retry_error_hours` | `20` | The time before the refresh tries a failed description again. |
+| `descriptions.retry_skipped_days` | `7` | The time before the refresh tries a skipped description again. |
+| `scoring.auto_score` | `true` | Score new roles with Claude Code after each refresh. Refer to section 6. |
+| `scoring.max_roles_per_run` | `50` | The maximum number of roles that one automatic scoring run scores. |
+| `scoring.batch_size` | `10` | The number of roles in one request to Claude Code. |
+| `scoring.claude_timeout_minutes` | `15` | The time limit for one request to Claude Code. |
+| `scoring.max_attempts` | `2` | After this number of rejected scores, the role is not sent again until its description changes. |
+| `scoring.keep_score_files` | `10` | The number of score files that `.cache/autoscore/` keeps. |
+| `discovery.delay_seconds` | `5` | The delay between requests of `discover.js`. |
+| `logging.level` | `info` | The minimum level of log messages: `error`, `warn`, `info` or `debug`. |
+| `database.path` | `./data/jobs.db` | The location of the database. |
 
 3. Make your private files and folders readable only by your macOS user:
 
@@ -123,7 +160,7 @@ To change the schedule:
 
 The change has an effect immediately. You do not have to restart the server.
 The server keeps the setting in `data/schedule.json`. Git ignores this file.
-If the file does not exist, the server uses `REFRESH_CRON` in `.env` as the daily time.
+If the file does not exist, the server uses `schedule.refresh_cron` in `config/settings.json` as the daily time.
 
 ### 5.2 Missed refreshes (the computer was asleep)
 
@@ -172,7 +209,7 @@ Automatic scoring needs these conditions:
 - You installed Claude Code on this computer, and you logged in to it.
 - The three resume files are in the `Resume/` folder.
 
-To stop automatic scoring, set `AUTO_SCORE=off` in `.env` and restart the server.
+To stop automatic scoring, set `scoring.auto_score` to `false` in `config/settings.json` and restart the server.
 To score by hand, run `node autoscore.js`, or use the procedure that follows.
 
 > **CAUTION:** Keep the resume files only in `Resume/`. Do not copy resume text into a file that git tracks. The resume files contain personal data. Git ignores the `Resume/` folder.
@@ -214,7 +251,7 @@ By default, the server listens on `127.0.0.1`. Thus only this computer can open 
 
 Do these steps only on a network that you trust, for example your home network. Do not do them on a public network.
 
-1. In `.env`, set `HOST=0.0.0.0`.
+1. In `config/settings.json`, set `server.host` to `0.0.0.0`.
 2. Restart the server: `pm2 restart india-gcc-board --update-env`.
 3. Run `ipconfig getifaddr en0` to find the LAN IP address of this computer (macOS, Wi-Fi).
 4. On the other device, open `http://<LAN-IP>:4000`.

@@ -8,10 +8,9 @@ import { selectDetailUrls } from '../lib/scrapers/CustomScraper.js';
 import { AvatureScraper } from '../lib/scrapers/AvatureScraper.js';
 import { JibeScraper } from '../lib/scrapers/JibeScraper.js';
 
-// lib/database.js reads DB_PATH when it loads: set it first.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lifecycle-'));
-process.env.DB_PATH = path.join(dir, 'jobs.db');
 const db = await import('../lib/database.js');
+db.useDatabasePath(path.join(dir, 'jobs.db'));
 await db.initDb();
 
 const SLUG = 'nomura'; // any employer in config/employers.json
@@ -26,7 +25,7 @@ function role(id, extra = {}) {
 }
 
 async function activeIds() {
-  const conn = new sqlite3.Database(process.env.DB_PATH);
+  const conn = new sqlite3.Database(db.databasePath());
   const rows = await new Promise((resolve, reject) => {
     conn.all(`SELECT r.external_job_id AS id FROM roles r JOIN employers e ON e.id = r.employer_id
       WHERE e.slug = ? AND r.is_active = 1 ORDER BY 1`, [SLUG], (err, out) => (err ? reject(err) : resolve(out)));

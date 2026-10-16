@@ -374,7 +374,7 @@ CustomScraper     (6 employers; sitemap and JobPosting data; optional Puppeteer)
 
 ### 4.1 Concurrency
 
-The refresh scrapes not more than 6 employers at the same time (`lib/pool.js`). `SCRAPE_CONCURRENCY` in `.env` changes the number (1 to 16).
+The refresh scrapes not more than 6 employers at the same time (`lib/pool.js`). `refresh.scrape_concurrency` in `config/settings.json` changes the number (1 to 16).
 
 - Each active employer has its own host. Thus each host gets one request at a time, with the crawl delay of the employer between requests.
 - The refresh starts the slowest employers first. It uses the time of each employer in the last run (`seconds` in the checkpoint). For an employer with no time, it uses an estimate: `max_detail_fetches` multiplied by the crawl delay, plus 2 seconds for each page.
@@ -384,7 +384,7 @@ The refresh scrapes not more than 6 employers at the same time (`lib/pool.js`). 
 
 The first full run with 6 employers at the same time (2026-10-16, on a copy of the database) took 14 minutes for 92 employers. The run before it took 96 minutes. The total work of the employers was 83 minutes in both runs. Nomura was the longest employer (9.5 minutes).
 
-> **NOTE:** If two employers use the same host in the future, set a lower `SCRAPE_CONCURRENCY` or give them a larger crawl delay. The pool does not limit requests for each host.
+> **NOTE:** If two employers use the same host in the future, set a lower `refresh.scrape_concurrency` or give them a larger crawl delay. The pool does not limit requests for each host.
 
 ---
 
@@ -433,7 +433,7 @@ The board runs on your own computer. Only your own devices can open it. This was
 2. It runs the refresh schedule with `node-cron`. The schedule has two modes: `daily` at a time, or `manual` (on demand only).
    - `GET /api/schedule` gives the current schedule.
    - `PUT /api/schedule` changes the schedule. `lib/schedule.js` validates the data. The server saves it in `data/schedule.json` and replaces the cron job immediately.
-   - When `data/schedule.json` does not exist, `REFRESH_CRON` gives the daily time (default `0 6 * * *`). `TZ` sets the time zone (default `Asia/Kolkata`).
+   - When `data/schedule.json` does not exist, `schedule.refresh_cron` in `config/settings.json` gives the daily time (default `0 6 * * *`). `schedule.timezone` sets the time zone (default `Asia/Kolkata`).
 3. It catches up a missed daily refresh. `node-cron` does not run a missed time again after the computer wakes. Thus the server checks every 5 minutes and 30 seconds after it starts. `isRefreshMissed()` in `lib/schedule.js` compares the most recent due time with the latest refresh time. If the refresh is missed, the server starts it. The server makes one attempt for each due time.
 4. It records the progress of a refresh. `refresh.js` sends a message to the server through the Node IPC channel at each step (`lib/progress.js`). The steps are: each employer, each description, the classification and the publication. The server keeps the last message in `progress` in `GET /api/refresh/status` and writes one log line each minute. When you run `node refresh.js` by hand, there is no IPC channel and the script does not send messages.
 5. It continues a refresh that stopped. Refer to section 6.1.
@@ -442,7 +442,7 @@ The board runs on your own computer. Only your own devices can open it. This was
    - A scheduled, catch-up or retry refresh does not start on battery power with a closed lid. The server tries again at each catch-up check. A **Refresh now** click always starts.
    - The server starts `refresh.js` with `--pause-on-sleep`. Before it starts each employer, `refresh.js` does the power check. On battery power with a closed lid, it starts no new employer. When the employers in progress finish, it saves the checkpoint and stops with exit code 75. The server sets `paused` in `GET /api/refresh/status`. At each catch-up check, the server continues the run with `--resume` when the Mac can stay awake.
    - If an employer fails and the computer slept during that employer, `refresh.js` tries that employer again one time. A timer ticks every 5 seconds. A gap of more than 35 seconds between two ticks shows a sleep.
-7. It limits the time for each employer. If one employer takes more than 20 minutes, the refresh records an error and continues with the next employer. `EMPLOYER_TIME_LIMIT_MINUTES` in `.env` changes the limit. After the limit, the scraper starts no new requests (`cancel()` in `lib/scrapers/BaseScraper.js`). A request that is in progress can continue for not more than 30 seconds. The next resumed run or the next full run scrapes the employer again.
+7. It limits the time for each employer. If one employer takes more than 20 minutes, the refresh records an error and continues with the next employer. `refresh.employer_time_limit_minutes` in `config/settings.json` changes the limit. After the limit, the scraper starts no new requests (`cancel()` in `lib/scrapers/BaseScraper.js`). A request that is in progress can continue for not more than 30 seconds. The next resumed run or the next full run scrapes the employer again.
 
 ### 6.1 Refresh checkpoint
 
@@ -462,7 +462,7 @@ The refresh saves each employer to the database immediately after it scrapes tha
 
 By default, the server listens on `127.0.0.1`. Thus only this computer can open the board. To open the board from other devices, refer to `docs/SETUP.md`, sections 7 and 8:
 
-- **Same Wi-Fi network:** set `HOST=0.0.0.0` in `.env`, then open `http://<LAN-IP>:4000`.
+- **Same Wi-Fi network:** set `server.host` to `0.0.0.0` in `config/settings.json`, then open `http://<LAN-IP>:4000`.
 - **Other networks:** Tailscale (a private network between your devices).
 - **An unlisted URL:** `cloudflared tunnel --url http://localhost:4000`. Add the tunnel host name to `ALLOWED_HOSTS`.
 
@@ -615,7 +615,8 @@ A future phase can add a scraper with CSS selectors for each site (refer to sect
 | `config/filters.json` | The location lists, the job types and `exclude_keywords`. |
 | `config/targets.json` | The targeting rules (section 11). |
 | `config/scoring-rubric.md` | The scoring rubric and its version (section 12). |
-| `.env` | Runtime settings. Git ignores this file. Copy it from `.env.example`. |
+| `config/settings.json` | All settings that git can keep, for example the port, the schedule and the refresh limits. `lib/settings.js` gives the default for each property. Refer to `docs/SETUP.md`, section 2. |
+| `.env` | Only secrets and private host names (`ALLOWED_HOSTS`, `SLACK_WEBHOOK`). Git ignores this file. Copy it from `.env.example`. |
 
 Example entry in `config/employers.json`:
 
@@ -738,7 +739,7 @@ A score is stale when the title, the description or the rubric version changes. 
 
 The scorer is Claude Code. It needs no API key. It uses the Claude Code login on the computer. There are two ways to start it:
 
-- **Automatic.** After each successful refresh, `server.js` starts `autoscore.js`. Set `AUTO_SCORE=off` in `.env` to stop this.
+- **Automatic.** After each successful refresh, `server.js` starts `autoscore.js`. Set `scoring.auto_score` to `false` in `config/settings.json` to stop this.
 - **By hand.** You ask Claude Code to score the new roles, or you run `node autoscore.js`. Refer to `docs/SETUP.md`, section 6.
 
 `autoscore.js` does these steps for each batch of 10 roles. It does not score more than 50 roles in one run.

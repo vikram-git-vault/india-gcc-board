@@ -1,0 +1,48 @@
+{
+  "server": {
+    "port": 4000,
+    "host": "127.0.0.1",
+    "progress_log_minutes": 1
+  },
+  "schedule": {
+    "refresh_cron": "0 6 * * *",
+    "timezone": "Asia/Kolkata",
+    "catch_up_check_minutes": 5,
+    "retry_after_minutes": 10
+  },
+  "refresh": {
+    "scrape_concurrency": 6,
+    "employer_time_limit_minutes": 20,
+    "publish_interval_seconds": 30,
+    "checkpoint_max_age_hours": 12
+  },
+  "scraping": {
+    "user_agent": "india-gcc-board-bot/1.0 (+https://github.com/vikram-git-vault/india-gcc-board)",
+    "request_timeout_seconds": 30,
+    "default_crawl_delay_seconds": 5
+  },
+  "descriptions": {
+    "min_full_chars": 1000,
+    "max_chars": 50000,
+    "refetch_ok_days": 14,
+    "retry_error_hours": 20,
+    "retry_skipped_days": 7
+  },
+  "scoring": {
+    "auto_score": true,
+    "max_roles_per_run": 50,
+    "batch_size": 10,
+    "claude_timeout_minutes": 15,
+    "max_attempts": 2,
+    "keep_score_files": 10
+  },
+  "discovery": {
+    "delay_seconds": 5
+  },
+  "logging": {
+    "level": "info"
+  },
+  "database": {
+    "path": "./data/jobs.db"
+  }
+}

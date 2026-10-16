@@ -1,17 +1,7 @@
-import { scrapeConcurrency, estimateSeconds, scrapeOrder, runPool, createThrottle, DEFAULT_CONCURRENCY } from '../lib/pool.js';
+import { estimateSeconds, scrapeOrder, runPool, createThrottle } from '../lib/pool.js';
 import { createSleepWatch } from '../lib/power.js';
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
-
-describe('scrapeConcurrency', () => {
-  test('default, valid value, cap, junk', () => {
-    expect(scrapeConcurrency(undefined)).toBe(DEFAULT_CONCURRENCY);
-    expect(scrapeConcurrency('3')).toBe(3);
-    expect(scrapeConcurrency('100')).toBe(16);
-    expect(scrapeConcurrency('0')).toBe(DEFAULT_CONCURRENCY);
-    expect(scrapeConcurrency('two')).toBe(DEFAULT_CONCURRENCY);
-  });
-});
 
 describe('scrapeOrder', () => {
   const nomura = { id: 'nomura', ats_type: 'custom', crawl_delay_seconds: 8, custom: { max_detail_fetches: 60 } };

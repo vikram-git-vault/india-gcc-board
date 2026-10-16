@@ -2,10 +2,10 @@
 /**
  * autoscore.js — score new roles automatically with Claude Code (headless).
  *
- *   node autoscore.js [--max N]     score up to N roles (default 50)
+ *   node autoscore.js [--max N]     score up to N roles (default: scoring.max_roles_per_run)
  *
- * server.js runs this after each successful refresh (AUTO_SCORE=off turns
- * it off). It uses the Claude Code login on this computer: no API key is
+ * server.js runs this after each successful refresh (scoring.auto_score:
+ * false in config/settings.json turns it off). It uses the Claude Code login on this computer: no API key is
  * stored. For each batch it:
  *   1. exports the roles that need a score (score.js --pending),
  *   2. sends the rubric, the resume variants and the roles to `claude -p`
@@ -21,17 +21,18 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createLogger } from './lib/logger.js';
+import { settings } from './lib/settings.js';
 import { reportProgress } from './lib/progress.js';
 
 const logger = createLogger('autoscore');
 const WORK_DIR = path.join('.cache', 'autoscore');
-const BATCH_SIZE = 10;
-const CLAUDE_TIMEOUT_MS = 15 * 60 * 1000;
+const BATCH_SIZE = settings.scoring.batch_size;
+const CLAUDE_TIMEOUT_MS = settings.scoring.claude_timeout_minutes * 60 * 1000;
 // A role that Claude scored but import rejected is not sent again after
 // this many tries with the same description (so it cannot block the rest).
-const MAX_ATTEMPTS = 2;
+const MAX_ATTEMPTS = settings.scoring.max_attempts;
 const ATTEMPTS_FILE = path.join(WORK_DIR, 'attempts.json');
-const KEEP_SCORE_FILES = 10;
+const KEEP_SCORE_FILES = settings.scoring.keep_score_files;
 const RESUME_FILES = {
   profile: path.join('Resume', 'candidate_profile.txt'),
   PO: path.join('Resume', 'profile_product_owner.txt'),
@@ -184,7 +185,8 @@ async function countPending(attempts) {
 async function main() {
   const args = process.argv.slice(2);
   const maxIndex = args.indexOf('--max');
-  const max = maxIndex !== -1 ? Number(args[maxIndex + 1]) || 50 : 50;
+  const defaultMax = settings.scoring.max_roles_per_run;
+  const max = maxIndex !== -1 ? Number(args[maxIndex + 1]) || defaultMax : defaultMax;
 
   const missing = Object.values(RESUME_FILES).filter((f) => !fs.existsSync(f));
   if (missing.length) throw new Error(`missing resume files: ${missing.join(', ')}`);

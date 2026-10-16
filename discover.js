@@ -20,16 +20,18 @@ import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
 import { createLogger } from './lib/logger.js';
+import { settings } from './lib/settings.js';
 import { isPathAllowed } from './lib/scrapers/BaseScraper.js';
 import { sitemapLocs, summarizeCompanies, detectAts } from './lib/discovery.js';
 
 const logger = createLogger('discover');
-const USER_AGENT = process.env.USER_AGENT
-  || 'india-gcc-board-bot/1.0 (+https://github.com/vikram-git-vault/india-gcc-board)';
 const OUT_DIR = path.join('.cache', 'discovery');
-const DELAY_MS = 5000;
+const DELAY_MS = settings.discovery.delay_seconds * 1000;
 
-const client = axios.create({ timeout: 30000, headers: { 'User-Agent': USER_AGENT } });
+const client = axios.create({
+  timeout: settings.scraping.request_timeout_seconds * 1000,
+  headers: { 'User-Agent': settings.scraping.user_agent },
+});
 const pause = () => new Promise((resolve) => setTimeout(resolve, DELAY_MS));
 
 // Employers already in config/employers.json (active or excluded), matched

@@ -5,8 +5,9 @@
  * data directly, with no external publish step and no Claude dependency
  * in the runtime loop. See docs/ARCHITECTURE.md §5.
  *
- * Run locally: node server.js  (binds 127.0.0.1 by default; set HOST and
- * ALLOWED_HOSTS in .env to open it from other devices, docs/SETUP.md §7).
+ * Run locally: node server.js  (binds 127.0.0.1 by default; set server.host
+ * in config/settings.json and ALLOWED_HOSTS in .env to open it from other
+ * devices, docs/SETUP.md §7).
  */
 import 'dotenv/config';
 import express from 'express';
@@ -15,6 +16,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
+import { settings } from './lib/settings.js';
 import { formatProgress, formatMinutes, formatScoringProgress, formatScoringSummary } from './lib/progress.js';
 import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
 import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
@@ -22,15 +24,15 @@ import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security
 
 const logger = createLogger('server');
 
-const PORT = process.env.PORT || 4000;
-// Only this computer can open the board by default. Set HOST=0.0.0.0 in
-// .env to let other devices on the network open it (docs/SETUP.md §7).
-const HOST = process.env.HOST || '127.0.0.1';
+const PORT = settings.server.port;
+// Only this computer can open the board by default. Set server.host to
+// 0.0.0.0 to let other devices on the network open it (docs/SETUP.md §7).
+const HOST = settings.server.host;
 const ROLES_PATH = path.join('data', 'roles.json');
 const REFRESH_LOG_PATH = path.join('logs', 'refresh.log');
-const REFRESH_TIMEZONE = process.env.TZ || 'Asia/Kolkata';
+const REFRESH_TIMEZONE = settings.schedule.timezone;
 // The board can change the schedule (daily at a time, or on demand only);
-// the choice is saved here. REFRESH_CRON in .env is only the first default.
+// the choice is saved here. schedule.refresh_cron is only the first default.
 const SCHEDULE_PATH = path.join('data', 'schedule.json');
 
 const refreshState = {
@@ -48,8 +50,8 @@ const refreshState = {
   paused: null,
 };
 // After a successful refresh, score the new roles with Claude Code
-// (autoscore.js). AUTO_SCORE=off turns this off.
-const AUTO_SCORE = (process.env.AUTO_SCORE || 'on').toLowerCase() !== 'off';
+// (autoscore.js). scoring.auto_score: false turns this off.
+const AUTO_SCORE = settings.scoring.auto_score;
 
 let scoringChild = null;
 
@@ -89,10 +91,10 @@ function runAutoScore() {
   child.on('error', (err) => { logger.warn(`Automatic scoring not started: ${err.message}`); });
   child.on('close', done);
 }
-const PROGRESS_LOG_EVERY_MS = 60 * 1000;
+const PROGRESS_LOG_EVERY_MS = settings.server.progress_log_minutes * 60 * 1000;
 // A refresh that stops with an error is tried again once, after this
 // delay; with --resume it continues from the last saved employer.
-const RETRY_AFTER_MS = 10 * 60 * 1000;
+const RETRY_AFTER_MS = settings.schedule.retry_after_minutes * 60 * 1000;
 let retryTimer = null;
 
 function runRefresh(trigger) {
@@ -191,7 +193,7 @@ function loadSchedule() {
   } catch (err) {
     if (err.code !== 'ENOENT') logger.warn(`Ignoring ${SCHEDULE_PATH}: ${err.message}`);
   }
-  return defaultSchedule(process.env.REFRESH_CRON);
+  return defaultSchedule(settings.schedule.refresh_cron);
 }
 
 let schedule = loadSchedule();
@@ -213,7 +215,7 @@ applySchedule();
 // node-cron does not replay it. Every few minutes (and soon after start),
 // run the refresh if one was due and none has run since. One attempt for
 // each due time, so a failing refresh does not repeat every check.
-const CATCH_UP_EVERY_MS = 5 * 60 * 1000;
+const CATCH_UP_EVERY_MS = settings.schedule.catch_up_check_minutes * 60 * 1000;
 let catchUpTriedFor = null;
 
 function lastRefreshAt() {
