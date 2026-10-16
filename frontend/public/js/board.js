@@ -26,6 +26,7 @@
     employers: new Set(),
     sort: 'fit',
     scoreBands: new Set(),
+    posted: null,         // one POSTED_BANDS id, or null for any date
     tab: 'all',
   };
 
@@ -38,6 +39,18 @@
     { id: 'fit50', label: '50 to 74', test: function (r) { return r.score && r.score.fit >= 50 && r.score.fit < 75; } },
     { id: 'fitlow', label: 'Below 50', test: function (r) { return r.score && r.score.fit < 50; } },
     { id: 'unscored', label: 'Not scored', test: function (r) { return !r.score; } },
+  ];
+  // "Within" bands include the newer ones; a role open more than a month
+  // is less likely to still be hiring, so it has its own band.
+  var POSTED_BANDS = [
+    { id: 'd1', label: 'Within 1 day', test: function (d) { return d !== null && d <= 1; } },
+    { id: 'd3', label: 'Within 3 days', test: function (d) { return d !== null && d <= 3; } },
+    { id: 'd5', label: 'Within 5 days', test: function (d) { return d !== null && d <= 5; } },
+    { id: 'w1', label: 'Within 1 week', test: function (d) { return d !== null && d <= 7; } },
+    { id: 'w2', label: 'Within 2 weeks', test: function (d) { return d !== null && d <= 14; } },
+    { id: 'm1', label: 'Within 1 month', test: function (d) { return d !== null && d <= 30; } },
+    { id: 'older', label: 'More than a month', test: function (d) { return d !== null && d > 30; } },
+    { id: 'unknown', label: 'Date unknown', test: function (d) { return d === null; } },
   ];
   var RESUME_LABEL = { PO: 'Product Owner', EM: 'Engineering Leader' };
 
@@ -77,6 +90,40 @@
     } catch (e) { return d.toString(); }
   }
 
+  // Whole days from the posting date to today (the viewer's calendar), or
+  // null when the site gave no date.
+  function postedAgeDays(role) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(role.posted_date || '')) return null;
+    var now = new Date();
+    var today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.max(0, Math.round((today - Date.parse(role.posted_date + 'T00:00:00Z')) / 86400000));
+  }
+
+  // One band at a time: the bands overlap, so more than one has no use.
+  // A second click on the selected band removes the filter.
+  function buildPostedChips() {
+    var container = document.getElementById('facetPosted');
+    container.innerHTML = '';
+    var ages = state.roles.map(postedAgeDays);
+    POSTED_BANDS.forEach(function (b) {
+      var n = ages.filter(b.test).length;
+      if (!n && b.id === 'unknown') return;
+      var btn = document.createElement('button');
+      btn.className = 'chip';
+      btn.textContent = b.label + ' (' + n + ')';
+      btn.setAttribute('data-posted', b.id);
+      btn.setAttribute('aria-pressed', state.posted === b.id ? 'true' : 'false');
+      btn.addEventListener('click', function () {
+        state.posted = state.posted === b.id ? null : b.id;
+        Array.prototype.forEach.call(container.querySelectorAll('.chip'), function (c) {
+          c.setAttribute('aria-pressed', c.getAttribute('data-posted') === state.posted ? 'true' : 'false');
+        });
+        render();
+      });
+      container.appendChild(btn);
+    });
+  }
+
   function buildFacetChips(containerId, values, activeSet, labelFn) {
     var container = document.getElementById(containerId);
     container.innerHTML = '';
@@ -101,6 +148,7 @@
     buildFacetChips('facetGrade', orderedPresent(GRADE_ORDER, state.roles.map(function (r) { return r.grade; })), state.grades);
     buildFacetChips('facetFamily', orderedPresent(FAMILY_ORDER, state.roles.map(function (r) { return r.family; })), state.families);
     buildFacetChips('facetLocation', uniqueSorted(state.roles.map(function (r) { return r.location; })), state.locations);
+    buildPostedChips();
     buildFacetChips('facetEmployer', uniqueSorted(state.roles.map(function (r) { return r.employer; })), state.employers);
   }
 
@@ -110,6 +158,10 @@
     if (state.families.size && !state.families.has(role.family)) return false;
     if (state.locations.size && !state.locations.has(role.location)) return false;
     if (state.employers.size && !state.employers.has(role.employer)) return false;
+    if (state.posted) {
+      var postedBand = POSTED_BANDS.filter(function (b) { return b.id === state.posted; })[0];
+      if (postedBand && !postedBand.test(postedAgeDays(role))) return false;
+    }
     if (state.query) {
       var q = state.query.toLowerCase();
       if (role.title.toLowerCase().indexOf(q) === -1 && role.employer.toLowerCase().indexOf(q) === -1) return false;
@@ -449,6 +501,7 @@
 
   function resetFacets() {
     state.scoreBands.clear(); state.grades.clear(); state.families.clear(); state.locations.clear(); state.employers.clear();
+    state.posted = null;
     state.query = ''; document.getElementById('search').value = '';
     Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', 'false'); });
     render();

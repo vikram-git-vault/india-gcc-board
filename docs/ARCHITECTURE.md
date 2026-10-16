@@ -406,7 +406,7 @@ The board has these functions:
 - **Recommended resume:** each role shows the resume to send (Product Owner or Engineering Leader).
 - **Why this score:** a panel shows the reason, the matched keywords, the gaps, and the scores for both resumes.
 - **Sort:** best RM score (the default), best ATS score, newest, employer, title.
-- **Filters:** RM score band, grade, role family, city, employer. The filters use AND between groups and OR in one group.
+- **Filters:** RM score band, grade, role family, city, posting date, employer. The filters use AND between groups and OR in one group. The posting date filter is different: you select one band at a time (within 1 day, 3 days, 5 days, 1 week, 2 weeks or 1 month, more than a month, or date unknown). The "within" bands include the newer roles. Each band shows its number of roles.
 - **Search:** by title or employer.
 - **Tabs:** All, Interested, Applied, Rejected, Closed.
 - **Marks:** Interested, Applied, Rejected, Closed. The browser keeps the marks in `localStorage`. The marks do not move to other browsers or devices.
