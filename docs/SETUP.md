@@ -35,7 +35,7 @@ This guide gives the procedures to install, start, refresh and score the board.
 | `TZ` | `Asia/Kolkata` | The time zone of the refresh schedule. |
 | `LOG_LEVEL` | `info` | The minimum level of log messages. |
 | `CRAWL_DELAY_MS` | `8000` | Not used. The scrapers use `crawl_delay_seconds` for each employer in `config/employers.json`. |
-| `MAX_CONCURRENT_SCRAPERS` | `3` | Not used. The refresh scrapes one employer at a time. |
+| `SCRAPE_CONCURRENCY` | `6` | The number of employers that the refresh scrapes at the same time (1 to 16). Refer to section 4.1 of `docs/ARCHITECTURE.md`. |
 | `USER_AGENT` | `india-gcc-board-bot/1.0 (...)` | The name that the scrapers send to the employer sites. |
 | `DB_PATH` | `./data/jobs.db` | The location of the database. |
 | `SLACK_WEBHOOK` | (empty) | Not used. Notifications are a Phase 4 item. |

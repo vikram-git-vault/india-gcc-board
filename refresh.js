@@ -2,8 +2,9 @@
 /**
  * refresh.js — main orchestrator for the BFSI job board.
  *
- * Pipeline: init db -> for each employer: scrape, parse, save to db,
- *           write data/roles.json -> descriptions -> classify -> publish.
+ * Pipeline: init db -> employers in parallel (SCRAPE_CONCURRENCY, default
+ *           6): scrape, parse, save to db; data/roles.json at most every
+ *           30 s -> descriptions -> classify -> publish.
  *           (--only=id1,id2 limits the scrape to those employers)
  *           --resume continues an unfinished run (lib/checkpoint.js):
  *           employers already saved in that run are skipped.
@@ -58,18 +59,27 @@ async function initDatabase() {
   logger.info('Database initialized');
 }
 
-// Each employer is saved to the database (and the board updated) as soon
-// as it finishes, so an interrupted run keeps its work. `save` writes the
-// checkpoint; it is a no-op for --only runs. With pauseOnSleep it returns
-// { paused: true } early when the Mac can sleep (lib/power.js).
-async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = false } = {}) {
+// Each employer is saved to the database as soon as it finishes, so an
+// interrupted run keeps its work; the board is updated at most every
+// PUBLISH_INTERVAL_MS. `save` writes the checkpoint; it is a no-op for
+// --only runs. Up to SCRAPE_CONCURRENCY employers run at once (lib/pool.js),
+// longest first by the time each took in the last run (previousSeconds).
+// With pauseOnSleep no new employer starts when the Mac can sleep
+// (lib/power.js); the ones in progress finish, then it returns { paused: true }.
+const PUBLISH_INTERVAL_MS = 30 * 1000;
+
+async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = false, previousSeconds = {} } = {}) {
   const { ScraperFactory } = await import('./lib/scrapers/ScraperFactory.js');
   const { parseRoles } = await import('./lib/parser.js');
   const { syncRoles, getKnownUrls, recordFetchedUrls } = await import('./lib/database.js');
   const { publish } = await import('./lib/publisher.js');
+  const { runPool, scrapeOrder, scrapeConcurrency, createThrottle } = await import('./lib/pool.js');
   const allActive = employers.filter((e) => e.active).length;
-  const pending = pendingEmployers(cp, employers);
-  const offset = allActive - pending.length;
+  const pending = scrapeOrder(pendingEmployers(cp, employers), previousSeconds);
+  const concurrency = scrapeConcurrency();
+  let finished = allActive - pending.length;
+  const running = new Set();
+  logger.info(`Scraping ${pending.length} employers, ${concurrency} at a time`);
 
   const scrapeOne = async (employer) => {
     try {
@@ -83,7 +93,7 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
         presence: scraper.presence, goneUrls: scraper.goneUrls,
       });
       await recordFetchedUrls(employer.id, scraper.fetchedUrls);
-      logger.info(`  -> ${roles.length} matching roles read (${added} new, ${closed} closed), saved`);
+      logger.info(`  ${employer.name}: ${roles.length} matching roles read (${added} new, ${closed} closed), saved`);
       return { status: 'ok', count: roles.length, added, updated, closed };
     } catch (err) {
       logger.error(`Failed scraping ${employer.name}: ${err.message}`);
@@ -91,41 +101,50 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
     }
   };
 
+  const progress = () => reportProgress('scrape', { done: finished, total: allActive, item: [...running].join(', ') });
+  const board = createThrottle(publish, PUBLISH_INTERVAL_MS,
+    (err) => logger.warn(`Could not update the board: ${err.message}`));
   const watch = createSleepWatch();
-  try {
-    for (const [index, employer] of pending.entries()) {
-      // A Mac on battery with the lid closed sleeps even with caffeinate:
-      // stop here, and server.js continues the run (--resume) later.
-      const risk = pauseOnSleep ? await checkSleepRisk() : null;
-      if (risk) {
-        logger.warn(`Refresh paused before ${employer.name}: the Mac is ${risk} and can sleep; it continues when the Mac can stay awake`);
-        return { paused: true };
-      }
-      reportProgress('scrape', { done: offset + index + 1, total: allActive, item: employer.name });
-      watch.reset();
-      let result = await scrapeOne(employer);
-      // A failure while the computer slept is most likely a timeout, not a
-      // scraper fault: try once more, unless the Mac can sleep again.
-      if (result.status === 'error' && watch.slept() && !(pauseOnSleep && await checkSleepRisk())) {
-        logger.warn(`The computer slept while scraping ${employer.name}; trying it again`);
-        watch.reset();
-        result = await scrapeOne(employer);
-      }
-      recordEmployer(cp, employer.id, result);
-      save(cp);
-      try {
-        await publish();
-      } catch (err) {
-        logger.warn(`Could not update the board after ${employer.name}: ${err.message}`);
-      }
 
-      const delayMs = (employer.crawl_delay_seconds || 8) * 1000;
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+  const runEmployer = async (employer) => {
+    running.add(employer.name);
+    progress();
+    const startedAt = Date.now();
+    let result = await scrapeOne(employer);
+    // A failure while the computer slept is most likely a timeout, not a
+    // scraper fault: try once more, unless the Mac can sleep again.
+    if (result.status === 'error' && watch.sleptSince(startedAt) && !(pauseOnSleep && await checkSleepRisk())) {
+      logger.warn(`The computer slept while scraping ${employer.name}; trying it again`);
+      result = await scrapeOne(employer);
     }
+    result.seconds = Math.round((Date.now() - startedAt) / 1000);
+    running.delete(employer.name);
+    finished += 1;
+    recordEmployer(cp, employer.id, result);
+    save(cp);
+    progress();
+    board.request();
+  };
+
+  // A Mac on battery with the lid closed sleeps even with caffeinate:
+  // start no new employer, and server.js continues the run (--resume) later.
+  let warned = false;
+  const shouldStop = async () => {
+    const risk = pauseOnSleep ? await checkSleepRisk() : null;
+    if (risk && !warned) {
+      warned = true;
+      logger.warn(`Refresh paused: the Mac is ${risk} and can sleep; it continues when the Mac can stay awake`);
+    }
+    return Boolean(risk);
+  };
+
+  try {
+    const { stopped } = await runPool(pending, concurrency, runEmployer, shouldStop);
+    return { paused: stopped };
   } finally {
     watch.stop();
+    await board.flush();
   }
-  return { paused: false };
 }
 
 // One aggregate scrape_runs row per run, from the checkpoint, so a resumed
@@ -265,9 +284,13 @@ async function main() {
 
   // --resume (scheduled, catch-up and retry runs) continues an unfinished
   // run; anything else starts fresh. --only runs never touch the checkpoint.
+  // The time of each employer in the last run orders this one (lib/pool.js).
+  const previous = loadCheckpoint();
+  const previousSeconds = Object.fromEntries(Object.entries((previous && previous.employers) || {})
+    .filter(([, e]) => e.seconds > 0).map(([id, e]) => [id, e.seconds]));
   let cp = null;
   if (!only && args.includes('--resume')) {
-    cp = resumableCheckpoint(loadCheckpoint());
+    cp = resumableCheckpoint(previous);
     if (cp) {
       const active = toScrape.filter((e) => e.active);
       const done = active.filter((e) => cp.employers[e.id] && cp.employers[e.id].status === 'ok').length;
@@ -281,7 +304,7 @@ async function main() {
 
   // server.js passes --pause-on-sleep; a run by hand never pauses.
   const pauseOnSleep = !only && args.includes('--pause-on-sleep');
-  const { paused } = await scrapeEmployers(toScrape, filters, cp, save, { pauseOnSleep });
+  const { paused } = await scrapeEmployers(toScrape, filters, cp, save, { pauseOnSleep, previousSeconds });
   if (paused) {
     process.exitCode = PAUSED_EXIT_CODE;
     return;

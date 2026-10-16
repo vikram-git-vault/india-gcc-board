@@ -73,11 +73,11 @@ User (search, filter, sort by score, mark roles)
 ### 1.3 Refresh timeline (approximate)
 
 1. **06:00 IST:** the scheduler starts the refresh.
-2. **06:00 to 06:30:** the scrapers get the roles of all active employers, one employer at a time, with a crawl delay.
-3. **For each employer:** the parser normalizes and filters the roles, and the targeting rules classify each role. The refresh then writes the roles of that employer to the database and to `data/roles.json`. Thus the board shows the new roles while the refresh continues.
-4. **06:35:** the refresh starts the next stage.
-5. **06:35 to 06:40:** the refresh gets the new job descriptions (approximately 5 seconds for each role).
-6. **06:40:** the publisher writes `data/roles.json`. The board shows the new data.
+2. **06:00 to 06:15:** the scrapers get the roles of all active employers, 6 employers at the same time (refer to section 4.1).
+3. **For each employer:** the parser normalizes and filters the roles, and the targeting rules classify each role. The refresh then writes the roles of that employer to the database. It writes `data/roles.json` not more than one time in 30 seconds. Thus the board shows the new roles while the refresh continues.
+4. **06:15:** the refresh starts the next stage.
+5. **06:15 to 06:20:** the refresh gets the new job descriptions (approximately 5 seconds for each role).
+6. **06:20:** the publisher writes `data/roles.json`. The board shows the new data.
 
 Scoring is a separate step. Refer to section 13.
 
@@ -374,8 +374,17 @@ CustomScraper     (6 employers; sitemap and JobPosting data; optional Puppeteer)
 
 ### 4.1 Concurrency
 
-The refresh scrapes one employer at a time. It waits for the crawl delay between employers.
-A worker pool with one request at a time for each domain is a possible future change.
+The refresh scrapes not more than 6 employers at the same time (`lib/pool.js`). `SCRAPE_CONCURRENCY` in `.env` changes the number (1 to 16).
+
+- Each active employer has its own host. Thus each host gets one request at a time, with the crawl delay of the employer between requests.
+- The refresh starts the slowest employers first. It uses the time of each employer in the last run (`seconds` in the checkpoint). For an employer with no time, it uses an estimate: `max_detail_fetches` multiplied by the crawl delay, plus 2 seconds for each page.
+- The refresh writes each employer to the database when it finishes. It writes `data/roles.json` not more than one time in 30 seconds, and one time at the end of the scrape stage.
+- If the Mac can sleep (refer to section 6), the refresh starts no new employer. The employers in progress finish. Then the refresh pauses.
+- If an employer fails and the Mac slept after the employer started, the refresh tries that employer one more time.
+
+The first full run with 6 employers at the same time (2026-10-16, on a copy of the database) took 14 minutes for 92 employers. The run before it took 96 minutes. The total work of the employers was 83 minutes in both runs. Nomura was the longest employer (9.5 minutes).
+
+> **NOTE:** If two employers use the same host in the future, set a lower `SCRAPE_CONCURRENCY` or give them a larger crawl delay. The pool does not limit requests for each host.
 
 ---
 
@@ -431,7 +440,7 @@ The board runs on your own computer. Only your own devices can open it. This was
 6. It keeps the Mac awake during a refresh. On macOS, the server starts `caffeinate -i -s -w <pid>` with the refresh. `caffeinate` stops when the refresh stops. Then the Mac can sleep again. A MacBook with a closed lid on battery power can still sleep.
    - `caffeinate` cannot keep a MacBook awake on battery power with a closed lid. Thus `lib/power.js` reads the power source (`pmset -g batt`) and the lid state (`ioreg -k AppleClamshellState`). If the two checks fail, the refresh runs.
    - A scheduled, catch-up or retry refresh does not start on battery power with a closed lid. The server tries again at each catch-up check. A **Refresh now** click always starts.
-   - The server starts `refresh.js` with `--pause-on-sleep`. Before each employer, `refresh.js` does the power check. On battery power with a closed lid, it saves the checkpoint and stops with exit code 75. The server sets `paused` in `GET /api/refresh/status`. At each catch-up check, the server continues the run with `--resume` when the Mac can stay awake.
+   - The server starts `refresh.js` with `--pause-on-sleep`. Before it starts each employer, `refresh.js` does the power check. On battery power with a closed lid, it starts no new employer. When the employers in progress finish, it saves the checkpoint and stops with exit code 75. The server sets `paused` in `GET /api/refresh/status`. At each catch-up check, the server continues the run with `--resume` when the Mac can stay awake.
    - If an employer fails and the computer slept during that employer, `refresh.js` tries that employer again one time. A timer ticks every 5 seconds. A gap of more than 35 seconds between two ticks shows a sleep.
 7. It limits the time for each employer. If one employer takes more than 20 minutes, the refresh records an error and continues with the next employer. `EMPLOYER_TIME_LIMIT_MINUTES` in `.env` changes the limit. After the limit, the scraper starts no new requests (`cancel()` in `lib/scrapers/BaseScraper.js`). A request that is in progress can continue for not more than 30 seconds. The next resumed run or the next full run scrapes the employer again.
 

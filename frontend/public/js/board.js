@@ -296,10 +296,11 @@
     render();
   }
 
-  // "Refreshing: employer 14 of 56 (EY GDS)" from lib/progress.js messages.
+  // "Refreshing: 14 of 56 employers done (now: Nomura, Intuit)" from
+  // lib/progress.js messages; several employers run at once.
   function progressText(p) {
     if (!p) return 'Refreshing: starting';
-    if (p.stage === 'scrape') return 'Refreshing: employer ' + p.done + ' of ' + p.total + ' (' + p.item + ')';
+    if (p.stage === 'scrape') return 'Refreshing: ' + p.done + ' of ' + p.total + ' employers done' + (p.item ? ' (now: ' + p.item + ')' : '');
     if (p.stage === 'descriptions') return 'Refreshing: job description ' + p.done + ' of ' + p.total + ' (' + p.item + ')';
     if (p.stage === 'classify') return 'Refreshing: classifying roles';
     if (p.stage === 'publish') return 'Refreshing: publishing roles';
