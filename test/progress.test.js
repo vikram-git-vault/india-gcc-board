@@ -1,4 +1,4 @@
-import { formatMinutes, formatProgress, reportProgress, formatScoringProgress, formatScoringSummary } from '../lib/progress.js';
+import { formatMinutes, formatProgress, reportProgress, formatScoringProgress, formatScoringSummary, formatRefreshSummary } from '../lib/progress.js';
 
 const start = '2026-10-14T00:30:00Z';
 const now = new Date('2026-10-14T02:19:30Z');
@@ -63,5 +63,43 @@ describe('formatScoringSummary', () => {
   test('no counts', () => {
     expect(formatScoringSummary(null)).toBe('no counts reported');
     expect(formatScoringSummary({ total: 0 })).toBe('no roles needed a score');
+  });
+});
+
+describe('formatRefreshSummary', () => {
+  const cp = {
+    run_id: 'refresh_20261017T021211',
+    started_at: '2026-10-17T02:12:11Z',
+    employers: {
+      nomura: { status: 'ok', count: 40, added: 3, updated: 37, closed: 2, seconds: 572 },
+      chubb: { status: 'error', error: 'Request failed with status code 503', seconds: 30 },
+      wise: { status: 'ok', count: 10, added: 1, updated: 9, closed: 0, seconds: 45 },
+    },
+  };
+  const names = { nomura: 'Nomura', chubb: 'Chubb', wise: 'Wise' };
+
+  test('all lines', () => {
+    expect(formatRefreshSummary({
+      cp, names, finishedAt: '2026-10-17T02:28:35Z', expired: 4,
+      descriptions: { ok: 19, gone: 1, error: 0, skipped: 2 },
+      classified: { total: 100, target: 20, exception: 5, excluded: 75 },
+      rolesOnBoard: 24,
+    })).toEqual([
+      '=== Refresh complete in 16 min: 2 of 3 employers succeeded, 1 failed ===',
+      '  Failed: Chubb (Request failed with status code 503)',
+      '  Roles: 50 matching roles read, 4 new, 46 seen again, 2 closed (left the site), 4 closed (closing date passed)',
+      '  Descriptions: 19 fetched, 1 closed postings, 0 errors, 2 skipped',
+      '  Classified: 100 roles, 20 target, 5 exception, 75 excluded',
+      '  Board: 24 roles in data/roles.json',
+      '  Slowest employers: Nomura 9 min 32 s, Wise 45 s, Chubb 30 s',
+    ]);
+  });
+
+  test('resumed run with no failures leaves out the optional lines', () => {
+    const lines = formatRefreshSummary({
+      cp: { ...cp, employers: { wise: cp.employers.wise } }, names, finishedAt: '2026-10-17T03:30:00Z', resumed: true,
+    });
+    expect(lines[0]).toBe('=== Refresh complete in 1 h 17 min (resumed run): 1 of 1 employers succeeded, 0 failed ===');
+    expect(lines.some((l) => l.includes('Failed:') || l.includes('Board:'))).toBe(false);
   });
 });

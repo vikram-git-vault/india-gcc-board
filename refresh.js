@@ -243,6 +243,7 @@ async function publishRoles() {
   reportProgress('publish');
   const { rolesWritten, outputPath } = await publish();
   logger.info(`Wrote ${rolesWritten} active roles to ${outputPath} — served live by server.js`);
+  return rolesWritten;
 }
 
 async function main() {
@@ -315,7 +316,7 @@ async function main() {
   const { deactivateExpiredRoles } = await import('./lib/database.js');
   const expired = await deactivateExpiredRoles();
   if (expired) logger.info(`${expired} roles past their closing date set to inactive`);
-  await fetchDescriptions(employers);
+  const descriptions = await fetchDescriptions(employers);
   const counts = await reclassify();
   logger.info(`Classified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
   await recordRun(cp, { updateLastRefresh: !only });
@@ -323,18 +324,20 @@ async function main() {
   // if the publish fails, unmark it so the retry resumes, not rescrapes.
   cp.completed_at = new Date().toISOString();
   save(cp);
+  let rolesOnBoard;
   try {
-    await publishRoles();
+    rolesOnBoard = await publishRoles();
   } catch (err) {
     cp.completed_at = null;
     save(cp);
     throw err;
   }
 
-  const results = Object.values(cp.employers);
-  const okCount = results.filter((r) => r.status === 'ok').length;
-  const errCount = results.filter((r) => r.status === 'error').length;
-  logger.info(`=== Refresh complete: ${okCount} succeeded, ${errCount} failed ===`);
+  const { formatRefreshSummary } = await import('./lib/progress.js');
+  const names = Object.fromEntries(employers.map((e) => [e.id, e.name]));
+  formatRefreshSummary({
+    cp, names, resumed: cp.run_id !== runId, expired, descriptions, classified: counts, rolesOnBoard,
+  }).forEach((line) => logger.info(line));
 }
 
 main().catch((err) => {

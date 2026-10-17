@@ -513,6 +513,20 @@ The workflow is a possible start point for a future cloud phase.
 `lib/logger.js` (winston) writes to the console, to `logs/combined.log` and to `logs/error.log`.
 Each log file has a maximum size of 10 MB. The logger keeps 5 files.
 
+At the end of a complete refresh, `refresh.js` writes a summary (`formatRefreshSummary` in `lib/progress.js`):
+
+```
+=== Refresh complete in 16 min: 90 of 92 employers succeeded, 2 failed ===
+  Failed: Chubb (Request failed with status code 503); BNY (Request failed with status code 503)
+  Roles: 5845 matching roles read, 383 new, 5462 seen again, 336 closed (left the site), 0 closed (closing date passed)
+  Descriptions: 19 fetched, 0 closed postings, 0 errors, 0 skipped
+  Classified: 8687 roles, 447 target, 73 exception, 8167 excluded
+  Board: 244 roles in data/roles.json
+  Slowest employers: Nomura 9 min 32 s, Experian 5 min 53 s, Intuit 5 min 21 s
+```
+
+The time starts when the run started. For a resumed run, the time includes the pause, and the counts include the employers that were saved before the pause.
+
 ### 7.3 Health checks
 
 **Each day:**
