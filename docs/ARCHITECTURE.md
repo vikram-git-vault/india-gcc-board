@@ -544,6 +544,14 @@ The time starts when the run started. For a resumed run, the time includes the p
 
 The summary is in `logs/refresh.log` and `logs/combined.log`. `refresh.js` also sends the summary to the server through the IPC channel (`reportSummary`). The server writes it after the line "Refresh finished", so `pm2 logs` also shows it.
 
+When nothing more runs, the server writes one last line, for example:
+
+```
+=== Refresh and scoring complete; server idle (next refresh daily at 06:00 Asia/Kolkata) ===
+```
+
+The line comes after the scoring, or after the refresh when no scoring follows. It also tells about a failed scoring, a pause or a retry, for example `=== Refresh stopped before the end; server idle (retry in 10 min) ===`.
+
 ### 7.3 Health checks
 
 **Each day:**

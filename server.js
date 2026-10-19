@@ -67,8 +67,21 @@ function keepAwake(pid) {
   return awake;
 }
 
+// The last line of a refresh cycle (refresh, then scoring): what ended,
+// and that nothing runs until the next refresh.
+function logIdle(what) {
+  if (refreshState.running || refreshState.scoring) return;
+  let next;
+  if (retryTimer) next = `retry in ${RETRY_AFTER_MS / 60000} min`;
+  else if (refreshState.paused) next = `paused: ${refreshState.paused}`;
+  else if (schedule.mode === 'daily') next = `next refresh daily at ${schedule.time} ${REFRESH_TIMEZONE}`;
+  else next = 'next refresh on demand';
+  logger.info(`=== ${what}; server idle (${next}) ===`);
+}
+
+// Returns true when scoring started.
 function runAutoScore() {
-  if (!AUTO_SCORE || refreshState.scoring) return;
+  if (!AUTO_SCORE || refreshState.scoring) return false;
   refreshState.scoring = true;
   refreshState.scoringStartedAt = new Date().toISOString();
   refreshState.scoringProgress = null;
@@ -104,9 +117,12 @@ function runAutoScore() {
     scoringChild = null;
     const took = formatMinutes(Date.now() - new Date(refreshState.scoringStartedAt));
     logger.info(`Automatic scoring finished (exit code: ${code}, took ${took}): ${formatScoringSummary(refreshState.scoringProgress)}; details in logs/combined.log`);
+    // A refresh that starts stops the scoring: then the cycle is not over.
+    logIdle(code === 0 ? 'Refresh and scoring complete' : `Refresh complete, scoring failed (exit code: ${code})`);
   };
   child.on('error', (err) => { logger.warn(`Automatic scoring not started: ${err.message}`); });
   child.on('close', done);
+  return true;
 }
 const PROGRESS_LOG_EVERY_MS = settings.server.progress_log_minutes * 60 * 1000;
 // A refresh that stops with an error is tried again once, after this
@@ -170,23 +186,31 @@ function runRefresh(trigger) {
     logger.info(`Refresh finished (trigger: ${trigger}, exit code: ${code}${signal ? `, signal: ${signal}` : ''}, took ${took})`);
     if (summary) summary.forEach((line) => (code === 0 ? logger.info(line) : logger.warn(line)));
     else if (code === 0) logger.info('No refresh summary received; see logs/refresh.log');
-    if (code === 0) runAutoScore();
+    if (code === 0) {
+      if (!runAutoScore()) logIdle(AUTO_SCORE ? 'Refresh complete' : 'Refresh complete (automatic scoring off)');
+      return;
+    }
     if (code === PAUSED_EXIT_CODE) {
       // catchUpIfMissed() continues the run when the Mac can stay awake.
       refreshState.paused = waitText('on battery with the lid closed');
       logger.info('Refresh paused; it continues when the Mac is on mains power or the lid is open');
+      logIdle('Refresh paused');
       return;
     }
     if (code === NETWORK_EXIT_CODE) {
       // catchUpIfMissed() continues the run when the network is back.
       refreshState.paused = waitText('no network');
       logger.info('Refresh paused: no network; it continues when the network is back');
+      logIdle('Refresh paused');
       return;
     }
-    if (code !== 0 && trigger !== 'retry') {
+    if (trigger !== 'retry') {
       logger.warn(`Refresh stopped before the end; trying again in ${RETRY_AFTER_MS / 60000} min from the last saved employer`);
       retryTimer = setTimeout(() => { retryTimer = null; startWhenAwake('retry'); }, RETRY_AFTER_MS);
+      logIdle('Refresh stopped before the end');
+      return;
     }
+    logIdle('Refresh failed again after the retry');
   });
 
   return { started: true };
