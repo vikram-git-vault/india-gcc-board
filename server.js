@@ -57,6 +57,16 @@ const AUTO_SCORE = settings.scoring.auto_score;
 
 let scoringChild = null;
 
+// Keeps the Mac awake while the process `pid` runs (-i idle sleep; -s
+// system sleep on mains power). A closed lid on battery can still sleep.
+// Returns the caffeinate process, or null on other platforms.
+function keepAwake(pid) {
+  if (process.platform !== 'darwin') return null;
+  const awake = spawn('caffeinate', ['-i', '-s', '-w', String(pid)], { stdio: 'ignore' });
+  awake.on('error', (err) => logger.warn(`caffeinate not started: ${err.message}`));
+  return awake;
+}
+
 function runAutoScore() {
   if (!AUTO_SCORE || refreshState.scoring) return;
   refreshState.scoring = true;
@@ -67,6 +77,10 @@ function runAutoScore() {
   // The 'ipc' channel carries the counts (lib/progress.js).
   const child = spawn('node', ['autoscore.js'], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
   scoringChild = child;
+  // Scoring starts when the refresh (and its caffeinate) ends: without
+  // this, the Mac slept during the Claude call on 2026-10-19, and the
+  // 15-minute time limit stopped the batch with no scores.
+  const awake = keepAwake(child.pid);
   let lastLogged = null;
   child.on('message', (msg) => {
     if (!msg || msg.type !== 'progress') return;
@@ -84,6 +98,7 @@ function runAutoScore() {
   }, PROGRESS_LOG_EVERY_MS);
   const done = (code) => {
     clearInterval(progressTimer);
+    if (awake && awake.exitCode === null) awake.kill();
     fs.closeSync(out);
     refreshState.scoring = false;
     scoringChild = null;
@@ -125,14 +140,10 @@ function runRefresh(trigger) {
   refreshState.paused = null;
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
   const child = spawn('node', args, { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
-  // Keep the Mac awake until the refresh ends (-i idle sleep; -s system
-  // sleep on mains power). A closed lid on battery can still sleep, so
-  // refresh.js pauses then (--pause-on-sleep, lib/power.js).
-  let awake = null;
-  if (process.platform === 'darwin') {
-    awake = spawn('caffeinate', ['-i', '-s', '-w', String(child.pid)], { stdio: 'ignore' });
-    awake.on('error', (err) => logger.warn(`caffeinate not started: ${err.message}`));
-  }
+  // Keep the Mac awake until the refresh ends. A closed lid on battery
+  // can still sleep, so refresh.js pauses then (--pause-on-sleep,
+  // lib/power.js).
+  const awake = keepAwake(child.pid);
   // The summary at the end of the run (lib/progress.js reportSummary):
   // written to this log after "Refresh finished", so pm2 logs show it too.
   let summary = null;
