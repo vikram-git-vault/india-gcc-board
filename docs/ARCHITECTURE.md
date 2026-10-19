@@ -381,6 +381,21 @@ The refresh scrapes not more than 6 employers at the same time (`lib/pool.js`). 
 - The refresh writes each employer to the database when it finishes. It writes `data/roles.json` not more than one time in 30 seconds, and one time at the end of the scrape stage.
 - If the Mac can sleep (refer to section 6), the refresh starts no new employer. The employers in progress finish. Then the refresh pauses.
 - If an employer fails and the Mac slept after the employer started, the refresh tries that employer one more time.
+- If an employer fails because the computer has no network, the refresh waits for the network (refer to section 4.2).
+
+### 4.2 Network loss
+
+After a wake or a Wi-Fi change, the Mac can be without a network for some minutes. On 2026-10-18, the network stopped 2 minutes into a catch-up run. Each request failed immediately, and 86 employers failed in 1.4 seconds. The run completed with exit code 0, so the server did not try it again.
+
+`lib/network.js` prevents this:
+
+- **Network errors.** These error codes show that the computer has no network: `ENOTFOUND`, `EAI_AGAIN`, `EADDRNOTAVAIL`, `ENETUNREACH`, `ENETDOWN`, and the browser errors `net::ERR_NAME_NOT_RESOLVED`, `ERR_INTERNET_DISCONNECTED`, `ERR_NETWORK_CHANGED` and `ERR_ADDRESS_UNREACHABLE`. HTTP errors, `ECONNRESET` and `ETIMEDOUT` are problems of one site.
+- **Network check.** The check opens a TCP connection to `scraping.network_check_host` (`github.com`) on port 443. The check needs DNS and a route.
+- **Wait and try again.** When an employer fails with a network error, the refresh does the network check. If there is no network, the refresh starts no new employer. It does the check every 30 seconds (`refresh.network_check_seconds`). When the network is back, it tries each employer that failed again. All employers share one wait.
+- **Pause.** If the network is not back after 15 minutes (`refresh.network_wait_minutes`), the refresh saves the checkpoint and stops with exit code 69. The server sets `paused` in `GET /api/refresh/status`. At each catch-up check, the server continues the run with `--resume` when there is a network.
+- **Start.** A scheduled, catch-up, retry or resumed run does not start without a network. A **Refresh now** click always starts.
+- **Detail pages.** In the sitemap and Avature scrapers, a network error stops the employer immediately, so that the refresh can wait and try again. If every detail page of an employer fails for another reason, the employer fails. Before this change, the result was "0 roles" and the employer counted as a success.
+- **Too many failures.** If more than 50% of the employers fail (`refresh.max_failed_percent`), the run is not complete. The refresh does not write `completed_at` or `last_refresh`, and it stops with exit code 1. The summary starts with "Refresh NOT complete". The server tries the run again after 10 minutes with `--resume`, and the retry scrapes only the failed employers. The roles from the employers that succeeded stay in the database and on the board.
 
 The first full run with 6 employers at the same time (2026-10-16, on a copy of the database) took 14 minutes for 92 employers. The run before it took 96 minutes. The total work of the employers was 83 minutes in both runs. Nomura was the longest employer (9.5 minutes).
 
@@ -454,7 +469,7 @@ The refresh saves each employer to the database immediately after it scrapes tha
 
   The refresh skips the employers with the result `ok`. It scrapes the employers with the result `error` again. The employer that was in progress when the run stopped starts again from its first role. If the conditions are not true, a new run starts.
 - **Which runs resume.** The server adds `--resume` to the scheduled run, to the catch-up run and to the retry run. **Refresh now** and `node refresh.js` always start a new, full run. `node refresh.js --only=...` does not read or write the checkpoint.
-- **Retry.** If an error or a signal stops a refresh early, the server starts it again one time after 10 minutes. The retry run uses `--resume`. The server does not try a failed retry run again. A run that completes with some failed employers does not stop with an error. The next scheduled run scrapes these employers again.
+- **Retry.** If an error or a signal stops a refresh early, the server starts it again one time after 10 minutes. The retry run uses `--resume`. The server does not try a failed retry run again. A run that completes with some failed employers does not stop with an error. The next scheduled run scrapes these employers again. A run with more than 50% failed employers stops with an error (refer to section 4.2).
 - **Completion.** Before the last publication step, the refresh writes `completed_at` in the checkpoint. If the publication fails, the refresh removes `completed_at` again. Thus the retry continues the run and does not scrape all employers again.
 - **Run record.** The `scrape_runs` row of a resumed run includes the employers from before the stop. If a resumed run records the same `run_id` again, the new row replaces the old row. A complete run also sets `last_refresh` in `meta`. An `--only` run does not change `last_refresh`.
 - **The board.** The publisher adds `meta.refresh` to `data/roles.json`: `complete`, `total`, `refreshed`, `failed` and the times. The "Updated" text on the board always shows the end of the last complete run. Point to it, or tap it, to open the refresh status panel. The panel shows the status: complete or partial. It also shows the finished, pending and failed employers, and the number of scored roles. When the data is partial, the board also shows a **Partial** label. While a refresh runs, the label shows the progress, for example **Refreshing 14 of 56**. The footer shows the current step. Each 15 seconds, the board reads `GET /api/refresh/status`. When the scrape completes a new employer, the board loads the roles again, not more than one time each minute.
@@ -526,6 +541,8 @@ At the end of a complete refresh, `refresh.js` writes a summary (`formatRefreshS
 ```
 
 The time starts when the run started. For a resumed run, the time includes the pause, and the counts include the employers that were saved before the pause.
+
+The summary is in `logs/refresh.log` and `logs/combined.log`. `refresh.js` also sends the summary to the server through the IPC channel (`reportSummary`). The server writes it after the line "Refresh finished", so `pm2 logs` also shows it.
 
 ### 7.3 Health checks
 

@@ -594,7 +594,7 @@
         }
         if (wasScoring) { wasScoring = false; loadRoles(); }
         if (s.paused) {
-          refreshStatusEl.textContent = 'Refresh paused: ' + s.paused + '. It continues when the Mac is on mains power or the lid is open.';
+          refreshStatusEl.textContent = 'Refresh paused: ' + s.paused + '.';
           return;
         }
         refreshStatusEl.textContent = s.lastFinishedAt

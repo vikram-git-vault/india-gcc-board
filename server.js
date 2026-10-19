@@ -20,6 +20,7 @@ import { settings } from './lib/settings.js';
 import { formatProgress, formatMinutes, formatScoringProgress, formatScoringSummary } from './lib/progress.js';
 import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
 import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
+import { checkOnline, NETWORK_EXIT_CODE } from './lib/network.js';
 import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security.js';
 
 const logger = createLogger('server');
@@ -45,8 +46,9 @@ const refreshState = {
   scoringStartedAt: null,
   // Counts from autoscore.js: total, done (sent), scored, rejected.
   scoringProgress: null,
-  // An unfinished run waits for the Mac to stay awake (lib/power.js):
-  // the reason, e.g. "on battery with the lid closed", or null.
+  // An unfinished run waits for the Mac to stay awake (lib/power.js) or
+  // for the network (lib/network.js): the reason and when it continues,
+  // or null.
   paused: null,
 };
 // After a successful refresh, score the new roles with Claude Code
@@ -131,10 +133,15 @@ function runRefresh(trigger) {
     awake = spawn('caffeinate', ['-i', '-s', '-w', String(child.pid)], { stdio: 'ignore' });
     awake.on('error', (err) => logger.warn(`caffeinate not started: ${err.message}`));
   }
+  // The summary at the end of the run (lib/progress.js reportSummary):
+  // written to this log after "Refresh finished", so pm2 logs show it too.
+  let summary = null;
   child.on('message', (msg) => {
     if (msg && msg.type === 'progress') {
       const { type, ...progress } = msg;
       refreshState.progress = progress;
+    } else if (msg && msg.type === 'summary' && Array.isArray(msg.lines)) {
+      summary = msg.lines.map(String);
     }
   });
   const progressTimer = setInterval(() => {
@@ -150,11 +157,19 @@ function runRefresh(trigger) {
     refreshState.lastExitCode = code;
     const took = formatMinutes(new Date(refreshState.lastFinishedAt) - new Date(refreshState.lastStartedAt));
     logger.info(`Refresh finished (trigger: ${trigger}, exit code: ${code}${signal ? `, signal: ${signal}` : ''}, took ${took})`);
+    if (summary) summary.forEach((line) => (code === 0 ? logger.info(line) : logger.warn(line)));
+    else if (code === 0) logger.info('No refresh summary received; see logs/refresh.log');
     if (code === 0) runAutoScore();
     if (code === PAUSED_EXIT_CODE) {
       // catchUpIfMissed() continues the run when the Mac can stay awake.
-      refreshState.paused = 'the Mac can sleep (on battery with the lid closed)';
+      refreshState.paused = waitText('on battery with the lid closed');
       logger.info('Refresh paused; it continues when the Mac is on mains power or the lid is open');
+      return;
+    }
+    if (code === NETWORK_EXIT_CODE) {
+      // catchUpIfMissed() continues the run when the network is back.
+      refreshState.paused = waitText('no network');
+      logger.info('Refresh paused: no network; it continues when the network is back');
       return;
     }
     if (code !== 0 && trigger !== 'retry') {
@@ -166,18 +181,30 @@ function runRefresh(trigger) {
   return { started: true };
 }
 
+// The pause text on the board: "Refresh paused: <this>."
+function waitText(reason) {
+  return reason === 'no network'
+    ? 'no network. It continues when the network is back'
+    : `the Mac can sleep (${reason}). It continues when the Mac is on mains power or the lid is open`;
+}
+
 // Scheduled, catch-up, retry and resume runs start only when the Mac can
-// stay awake. A Refresh now click always starts. Resolves to true when the
-// refresh started. A held-back cron run is started later by catch-up; a
-// held-back retry or resume waits until catch-up sees the Mac can stay awake.
+// stay awake and has a network (after a wake, Wi-Fi can take some time).
+// A Refresh now click always starts. Resolves to true when the refresh
+// started. A held-back cron run is started later by catch-up; a held-back
+// retry or resume waits until catch-up sees the Mac can run it.
 let lastWaitReason = null;
 
 async function startWhenAwake(trigger) {
   if (refreshState.running) return false;
-  const risk = await checkSleepRisk();
+  const risk = (await checkSleepRisk()) || (await checkOnline() ? null : 'no network');
   if (risk) {
-    if (trigger === 'retry') refreshState.paused = refreshState.paused || `the Mac can sleep (${risk})`;
-    if (risk !== lastWaitReason) logger.info(`Refresh (${trigger}) not started: the Mac is ${risk} and can sleep; waiting`);
+    if (trigger === 'retry') refreshState.paused = refreshState.paused || waitText(risk);
+    if (risk !== lastWaitReason) {
+      logger.info(risk === 'no network'
+        ? `Refresh (${trigger}) not started: no network; waiting`
+        : `Refresh (${trigger}) not started: the Mac is ${risk} and can sleep; waiting`);
+    }
     lastWaitReason = risk;
     return false;
   }
@@ -232,7 +259,7 @@ async function catchUpIfMissed() {
   if (refreshState.running) return;
   // A paused run (or a held-back retry) continues first.
   if (refreshState.paused) {
-    if (await startWhenAwake('resume')) logger.info('The Mac can stay awake again; continuing the paused refresh');
+    if (await startWhenAwake('resume')) logger.info('The Mac can run the refresh again; continuing the paused refresh');
     return;
   }
   const now = new Date();

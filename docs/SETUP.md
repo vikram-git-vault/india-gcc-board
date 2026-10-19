@@ -59,9 +59,13 @@ The settings are in two files:
 | `refresh.employer_time_limit_minutes` | `20` | The time limit for one employer. After the limit, the employer counts as failed. |
 | `refresh.publish_interval_seconds` | `30` | The minimum time between two writes of `data/roles.json` during a refresh. |
 | `refresh.checkpoint_max_age_hours` | `12` | A resumed refresh continues an unfinished run only if the run is younger than this. |
+| `refresh.network_wait_minutes` | `15` | Without a network, the refresh waits this long. Then it pauses, and the server continues it when there is a network. |
+| `refresh.network_check_seconds` | `30` | The time between two network checks while the refresh waits. |
+| `refresh.max_failed_percent` | `50` | If more failed employers than this percentage, the run is not complete and the server tries it again. |
 | `scraping.user_agent` | `india-gcc-board-bot/1.0 (...)` | The name that the scrapers send to the employer sites. |
 | `scraping.request_timeout_seconds` | `30` | The time limit for one request. |
 | `scraping.default_crawl_delay_seconds` | `5` | The crawl delay for an employer that has no `crawl_delay_seconds` in `config/employers.json`. |
+| `scraping.network_check_host` | `github.com` | The network check opens a connection to this host on port 443. |
 | `descriptions.min_full_chars` | `1000` | A scraped description with this length or more is the full text. The refresh does not get the description again. |
 | `descriptions.max_chars` | `50000` | The maximum length of a stored description. |
 | `descriptions.refetch_ok_days` | `14` | The age after which the refresh gets a description again. |

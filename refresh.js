@@ -11,6 +11,9 @@
  *           employers already saved in that run are skipped.
  *           --pause-on-sleep stops the run (exit code 75) when the Mac
  *           is on battery with the lid closed (lib/power.js).
+ *           Without a network the run waits, then stops (exit code 69,
+ *           lib/network.js). More than refresh.max_failed_percent
+ *           failed employers: exit code 1, the run is not complete.
  *
  * data/roles.json is read live by server.js's GET /api/roles — there is
  * no separate publish/sync step. See docs/ARCHITECTURE.md §5.
@@ -25,6 +28,7 @@ import {
   newCheckpoint, loadCheckpoint, saveCheckpoint, resumableCheckpoint, recordEmployer, pendingEmployers,
 } from './lib/checkpoint.js';
 import { checkSleepRisk, createSleepWatch, PAUSED_EXIT_CODE } from './lib/power.js';
+import { isNetworkError, checkOnline, createNetworkGate, NETWORK_EXIT_CODE } from './lib/network.js';
 
 const logger = createLogger('refresh');
 
@@ -99,7 +103,7 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
       return { status: 'ok', count: roles.length, added, updated, closed };
     } catch (err) {
       logger.error(`Failed scraping ${employer.name}: ${err.message}`);
-      return { status: 'error', error: err.message };
+      return { status: 'error', error: err.message, network: isNetworkError(err) };
     }
   };
 
@@ -107,6 +111,24 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
   const board = createThrottle(publish, PUBLISH_INTERVAL_MS,
     (err) => logger.warn(`Could not update the board: ${err.message}`));
   const watch = createSleepWatch();
+  let loggedMinutes = 0;
+  const network = createNetworkGate({
+    onWait: (minutes) => {
+      if (minutes <= loggedMinutes) return;
+      loggedMinutes = minutes;
+      logger.warn(`No network for ${minutes} min; waiting (up to ${settings.refresh.network_wait_minutes} min)`);
+    },
+  });
+
+  // A network error with the network down: wait for it (one wait for all
+  // employers), then try the employer again. True when the network is back.
+  const waitIfOffline = async (employer) => {
+    if (!network.waiting && await checkOnline()) return false;
+    if (!network.waiting) logger.warn(`No network (${employer.name} failed); waiting for it before the next employer`);
+    const back = await network.wait();
+    if (back) logger.info(`Network back; trying ${employer.name} again`);
+    return back;
+  };
 
   const runEmployer = async (employer) => {
     running.add(employer.name);
@@ -119,6 +141,12 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
       logger.warn(`The computer slept while scraping ${employer.name}; trying it again`);
       result = await scrapeOne(employer);
     }
+    // A network error while the network is down is not the employer's
+    // fault: try it again when the network is back.
+    if (result.status === 'error' && result.network && await waitIfOffline(employer)) {
+      result = await scrapeOne(employer);
+    }
+    delete result.network;
     result.seconds = Math.round((Date.now() - startedAt) / 1000);
     running.delete(employer.name);
     finished += 1;
@@ -132,6 +160,7 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
   // start no new employer, and server.js continues the run (--resume) later.
   let warned = false;
   const shouldStop = async () => {
+    if (!await network.ready()) return true;
     const risk = pauseOnSleep ? await checkSleepRisk() : null;
     if (risk && !warned) {
       warned = true;
@@ -142,7 +171,8 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
 
   try {
     const { stopped } = await runPool(pending, concurrency, runEmployer, shouldStop);
-    return { paused: stopped };
+    if (network.lost) logger.warn(`Refresh paused: no network for ${settings.refresh.network_wait_minutes} min; it continues when the network is back`);
+    return { paused: stopped, offline: network.lost };
   } finally {
     watch.stop();
     await board.flush();
@@ -307,7 +337,11 @@ async function main() {
 
   // server.js passes --pause-on-sleep; a run by hand never pauses.
   const pauseOnSleep = !only && args.includes('--pause-on-sleep');
-  const { paused } = await scrapeEmployers(toScrape, filters, cp, save, { pauseOnSleep, previousSeconds });
+  const { paused, offline } = await scrapeEmployers(toScrape, filters, cp, save, { pauseOnSleep, previousSeconds });
+  if (offline) {
+    process.exitCode = NETWORK_EXIT_CODE;
+    return;
+  }
   if (paused) {
     process.exitCode = PAUSED_EXIT_CODE;
     return;
@@ -319,11 +353,19 @@ async function main() {
   const descriptions = await fetchDescriptions(employers);
   const counts = await reclassify();
   logger.info(`Classified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
-  await recordRun(cp, { updateLastRefresh: !only });
+  // Too many failed employers (for example a network fault that the
+  // network check did not see): not complete, so the retry (--resume)
+  // scrapes the failed employers again. The roles saved so far are kept.
+  const results = Object.values(cp.employers);
+  const failedPercent = results.length ? (100 * results.filter((r) => r.status === 'error').length) / results.length : 0;
+  const tooManyFailed = !only && failedPercent > settings.refresh.max_failed_percent;
+  if (!tooManyFailed) await recordRun(cp, { updateLastRefresh: !only });
   // Mark complete before the last publish so the board shows "complete";
   // if the publish fails, unmark it so the retry resumes, not rescrapes.
-  cp.completed_at = new Date().toISOString();
-  save(cp);
+  if (!tooManyFailed) {
+    cp.completed_at = new Date().toISOString();
+    save(cp);
+  }
   let rolesOnBoard;
   try {
     rolesOnBoard = await publishRoles();
@@ -333,11 +375,15 @@ async function main() {
     throw err;
   }
 
-  const { formatRefreshSummary } = await import('./lib/progress.js');
+  const { formatRefreshSummary, reportSummary } = await import('./lib/progress.js');
   const names = Object.fromEntries(employers.map((e) => [e.id, e.name]));
-  formatRefreshSummary({
+  const summary = formatRefreshSummary({
     cp, names, resumed: cp.run_id !== runId, expired, descriptions, classified: counts, rolesOnBoard,
-  }).forEach((line) => logger.info(line));
+    incomplete: tooManyFailed ? `more than ${settings.refresh.max_failed_percent}% of employers failed` : null,
+  });
+  summary.forEach((line) => (tooManyFailed ? logger.warn(line) : logger.info(line)));
+  reportSummary(summary);
+  if (tooManyFailed) process.exitCode = 1;
 }
 
 main().catch((err) => {

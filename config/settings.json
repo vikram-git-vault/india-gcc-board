@@ -14,12 +14,16 @@
     "scrape_concurrency": 6,
     "employer_time_limit_minutes": 20,
     "publish_interval_seconds": 30,
-    "checkpoint_max_age_hours": 12
+    "checkpoint_max_age_hours": 12,
+    "network_wait_minutes": 15,
+    "network_check_seconds": 30,
+    "max_failed_percent": 50
   },
   "scraping": {
     "user_agent": "india-gcc-board-bot/1.0 (+https://github.com/vikram-git-vault/india-gcc-board)",
     "request_timeout_seconds": 30,
-    "default_crawl_delay_seconds": 5
+    "default_crawl_delay_seconds": 5,
+    "network_check_host": "github.com"
   },
   "descriptions": {
     "min_full_chars": 1000,

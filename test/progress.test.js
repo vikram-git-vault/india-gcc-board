@@ -1,4 +1,4 @@
-import { formatMinutes, formatProgress, reportProgress, formatScoringProgress, formatScoringSummary, formatRefreshSummary } from '../lib/progress.js';
+import { formatMinutes, formatProgress, reportProgress, formatScoringProgress, formatScoringSummary, formatRefreshSummary, reportSummary } from '../lib/progress.js';
 
 const start = '2026-10-14T00:30:00Z';
 const now = new Date('2026-10-14T02:19:30Z');
@@ -101,5 +101,16 @@ describe('formatRefreshSummary', () => {
     });
     expect(lines[0]).toBe('=== Refresh complete in 1 h 17 min (resumed run): 1 of 1 employers succeeded, 0 failed ===');
     expect(lines.some((l) => l.includes('Failed:') || l.includes('Board:'))).toBe(false);
+  });
+
+  test('a run with too many failed employers says it is not complete', () => {
+    const lines = formatRefreshSummary({ cp, names, finishedAt: '2026-10-17T02:28:35Z', incomplete: 'more than 50% of employers failed' });
+    expect(lines[0]).toBe('=== Refresh NOT complete (more than 50% of employers failed) after 16 min: 2 of 3 employers succeeded, 1 failed ===');
+  });
+});
+
+describe('reportSummary', () => {
+  test('does nothing without an IPC channel', () => {
+    expect(() => reportSummary(['=== Refresh complete ==='])).not.toThrow();
   });
 });
