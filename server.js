@@ -57,20 +57,31 @@ const AUTO_SCORE = settings.scoring.auto_score;
 
 let scoringChild = null;
 
-// Keeps the Mac awake while the process `pid` runs (-i idle sleep; -s
-// system sleep on mains power). A closed lid on battery can still sleep.
-// Returns the caffeinate process, or null on other platforms.
-function keepAwake(pid) {
-  if (process.platform !== 'darwin') return null;
-  const awake = spawn('caffeinate', ['-i', '-s', '-w', String(pid)], { stdio: 'ignore' });
+// Keeps the Mac awake for the whole cycle: the refresh and then the
+// scoring (-i idle sleep; -s system sleep on mains power). One caffeinate
+// for the cycle: with one for each child, the refresh's caffeinate ended
+// before the scoring's one held the Mac, and on battery the Mac slept in
+// that gap during the Claude call (2026-10-25, 2026-10-28). -w on this
+// server's pid: caffeinate also ends if the server stops. logIdle() ends
+// it. A closed lid on battery can still sleep.
+let cycleAwake = null;
+function keepAwake() {
+  if (process.platform !== 'darwin' || (cycleAwake && cycleAwake.exitCode === null && !cycleAwake.killed)) return;
+  const awake = spawn('caffeinate', ['-i', '-s', '-w', String(process.pid)], { stdio: 'ignore' });
   awake.on('error', (err) => logger.warn(`caffeinate not started: ${err.message}`));
-  return awake;
+  awake.on('exit', () => { if (cycleAwake === awake) cycleAwake = null; });
+  cycleAwake = awake;
+}
+function allowSleep() {
+  if (cycleAwake && cycleAwake.exitCode === null) cycleAwake.kill();
+  cycleAwake = null;
 }
 
 // The last line of a refresh cycle (refresh, then scoring): what ended,
 // and that nothing runs until the next refresh.
 function logIdle(what) {
   if (refreshState.running || refreshState.scoring) return;
+  allowSleep();
   let next;
   if (retryTimer) next = `retry in ${RETRY_AFTER_MS / 60000} min`;
   else if (refreshState.paused) next = `paused: ${refreshState.paused}`;
@@ -90,10 +101,9 @@ function runAutoScore() {
   // The 'ipc' channel carries the counts (lib/progress.js).
   const child = spawn('node', ['autoscore.js'], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
   scoringChild = child;
-  // Scoring starts when the refresh (and its caffeinate) ends: without
-  // this, the Mac slept during the Claude call on 2026-10-19, and the
-  // 15-minute time limit stopped the batch with no scores.
-  const awake = keepAwake(child.pid);
+  // The refresh started the cycle caffeinate; this starts a new one only
+  // if that one stopped (for example, it was killed).
+  keepAwake();
   let lastLogged = null;
   child.on('message', (msg) => {
     if (!msg || msg.type !== 'progress') return;
@@ -111,7 +121,6 @@ function runAutoScore() {
   }, PROGRESS_LOG_EVERY_MS);
   const done = (code) => {
     clearInterval(progressTimer);
-    if (awake && awake.exitCode === null) awake.kill();
     fs.closeSync(out);
     refreshState.scoring = false;
     scoringChild = null;
@@ -156,10 +165,10 @@ function runRefresh(trigger) {
   refreshState.paused = null;
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
   const child = spawn('node', args, { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
-  // Keep the Mac awake until the refresh ends. A closed lid on battery
-  // can still sleep, so refresh.js pauses then (--pause-on-sleep,
-  // lib/power.js).
-  const awake = keepAwake(child.pid);
+  // Keep the Mac awake until the cycle ends (refresh, then scoring). A
+  // closed lid on battery can still sleep, so refresh.js pauses then
+  // (--pause-on-sleep, lib/power.js).
+  keepAwake();
   // The summary at the end of the run (lib/progress.js reportSummary):
   // written to this log after "Refresh finished", so pm2 logs show it too.
   let summary = null;
@@ -177,7 +186,6 @@ function runRefresh(trigger) {
 
   child.on('exit', (code, signal) => {
     clearInterval(progressTimer);
-    if (awake && awake.exitCode === null) awake.kill();
     fs.closeSync(out);
     refreshState.running = false;
     refreshState.lastFinishedAt = new Date().toISOString();

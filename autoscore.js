@@ -23,6 +23,7 @@ import { fileURLToPath } from 'url';
 import { createLogger } from './lib/logger.js';
 import { settings } from './lib/settings.js';
 import { reportProgress } from './lib/progress.js';
+import { createSleepWatch } from './lib/power.js';
 
 const logger = createLogger('autoscore');
 const WORK_DIR = path.join('.cache', 'autoscore');
@@ -32,6 +33,9 @@ const CLAUDE_TIMEOUT_MS = settings.scoring.claude_timeout_minutes * 60 * 1000;
 // this many tries with the same description (so it cannot block the rest).
 const MAX_ATTEMPTS = settings.scoring.max_attempts;
 const ATTEMPTS_FILE = path.join(WORK_DIR, 'attempts.json');
+// Claude calls for one batch: a call stopped by the time limit is tried
+// one more time (other errors, such as a usage limit, are not).
+const CLAUDE_ATTEMPTS = 2;
 const KEEP_SCORE_FILES = settings.scoring.keep_score_files;
 const RESUME_FILES = {
   profile: path.join('Resume', 'candidate_profile.txt'),
@@ -49,12 +53,13 @@ function run(cmd, args, { input, timeoutMs, cwd } = {}) {
     let stderr = '';
     child.stdout.on('data', (d) => { stdout += d; });
     child.stderr.on('data', (d) => { stderr += d; });
-    const timer = timeoutMs ? setTimeout(() => child.kill('SIGTERM'), timeoutMs) : null;
+    let timedOut = false;
+    const timer = timeoutMs ? setTimeout(() => { timedOut = true; child.kill('SIGTERM'); }, timeoutMs) : null;
     child.on('error', (err) => { if (timer) clearTimeout(timer); resolve({ code: -1, stdout, stderr: err.message }); });
     child.on('close', (code, signal) => {
       if (timer) clearTimeout(timer);
       current = null;
-      resolve({ code: code === null ? -1 : code, signal, stdout, stderr });
+      resolve({ code: code === null ? -1 : code, signal, stdout, stderr, timedOut });
     });
     // claude can exit before it reads all of the prompt (not logged in,
     // usage limit): ignore EPIPE here, the 'close' result tells why.
@@ -114,6 +119,14 @@ function loadAttempts() {
   try { return JSON.parse(fs.readFileSync(ATTEMPTS_FILE, 'utf-8')); } catch { return {}; }
 }
 
+// Why a claude call failed, in words for the log.
+export function claudeFailure(reply, slept, limitMinutes) {
+  const tail = (String(reply.stderr || '') + String(reply.stdout || '')).slice(-300).trim();
+  if (reply.timedOut && slept) return `the Mac slept during the Claude call, and the ${limitMinutes}-minute time limit passed (claude stopped)`;
+  if (reply.timedOut) return `the Claude call took more than ${limitMinutes} minutes (claude stopped)`;
+  return `claude exited with ${reply.code}${reply.signal ? ` (${reply.signal})` : ''}${tail ? `: ${tail}` : ''}`;
+}
+
 // Roles to leave out of this batch: already sent in this run, or rejected
 // MAX_ATTEMPTS times for the same description.
 export function excludedIds(tried, attempts) {
@@ -138,10 +151,22 @@ async function scoreBatch(batchNo, texts, tried, attempts) {
   roles.forEach((r) => tried.add(r.role_id));
 
   logger.info(`Batch ${batchNo}: asking Claude Code to score ${roles.length} roles`);
-  const reply = await run('claude', [
-    '-p', '--tools', '', '--strict-mcp-config', '--no-session-persistence', '--output-format', 'json',
-  ], { input: buildPrompt({ ...texts, roles }), timeoutMs: CLAUDE_TIMEOUT_MS, cwd: WORK_DIR });
-  if (reply.code !== 0) throw new Error(`claude exited with ${reply.code}${reply.signal ? ` (${reply.signal})` : ''}: ${(reply.stderr + reply.stdout).slice(-300)}`);
+  const prompt = buildPrompt({ ...texts, roles });
+  let reply;
+  for (let attempt = 1; ; attempt += 1) {
+    // A sleep of the Mac during the call stops the reply; on wake the time
+    // limit has passed (2026-10-25 and 2026-10-28). Detect it to say so.
+    const watch = createSleepWatch();
+    reply = await run('claude', [
+      '-p', '--tools', '', '--strict-mcp-config', '--no-session-persistence', '--output-format', 'json',
+    ], { input: prompt, timeoutMs: CLAUDE_TIMEOUT_MS, cwd: WORK_DIR });
+    const slept = watch.slept();
+    watch.stop();
+    if (reply.code === 0) break;
+    const reason = claudeFailure(reply, slept, CLAUDE_TIMEOUT_MS / 60000);
+    if (!reply.timedOut || attempt >= CLAUDE_ATTEMPTS) throw new Error(reason);
+    logger.warn(`Batch ${batchNo}: ${reason}; trying the batch again`);
+  }
   const envelope = JSON.parse(reply.stdout);
   if (envelope.is_error) throw new Error(`claude reported an error: ${String(envelope.result).slice(0, 300)}`);
 
