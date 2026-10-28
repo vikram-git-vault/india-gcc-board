@@ -1,4 +1,4 @@
-import { buildPrompt, extractJsonArray, escapeTags, excludedIds } from '../autoscore.js';
+import { buildPrompt, extractJsonArray, escapeTags, excludedIds, claudeFailure } from '../autoscore.js';
 
 const role = {
   role_id: 7, description_hash: 'abc123', employer: 'Acme', title: 'Director, Product', grade: 'Director',
@@ -50,5 +50,22 @@ describe('extractJsonArray', () => {
   test('rejects a reply without an array', () => {
     expect(() => extractJsonArray('I cannot do that.')).toThrow('no JSON array');
     expect(() => extractJsonArray('')).toThrow('no JSON array');
+  });
+});
+
+describe('claudeFailure', () => {
+  test('a sleep during the call is named', () => {
+    expect(claudeFailure({ code: 143, signal: null, stdout: '', stderr: '', timedOut: true }, true, 15))
+      .toBe('the Mac slept during the Claude call, and the 15-minute time limit passed (claude stopped)');
+  });
+  test('a slow call without a sleep', () => {
+    expect(claudeFailure({ code: 143, stdout: '', stderr: '', timedOut: true }, false, 15))
+      .toBe('the Claude call took more than 15 minutes (claude stopped)');
+  });
+  test('other errors keep the exit code and the output', () => {
+    expect(claudeFailure({ code: 1, signal: null, stdout: '', stderr: 'usage limit reached\n', timedOut: false }, false, 15))
+      .toBe('claude exited with 1: usage limit reached');
+    expect(claudeFailure({ code: -1, signal: 'SIGKILL', stdout: '', stderr: '' }, true, 15))
+      .toBe('claude exited with -1 (SIGKILL)');
   });
 });

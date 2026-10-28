@@ -74,7 +74,7 @@ The settings are in two files:
 | `scoring.auto_score` | `true` | Score new roles with Claude Code after each refresh. Refer to section 6. |
 | `scoring.max_roles_per_run` | `50` | The maximum number of roles that one automatic scoring run scores. |
 | `scoring.batch_size` | `10` | The number of roles in one request to Claude Code. |
-| `scoring.claude_timeout_minutes` | `15` | The time limit for one request to Claude Code. |
+| `scoring.claude_timeout_minutes` | `15` | The time limit for one request to Claude Code. After the limit, `autoscore.js` sends the same batch one more time. Thus one batch can take two times this limit. |
 | `scoring.max_attempts` | `2` | After this number of rejected scores, the role is not sent again until its description changes. |
 | `scoring.keep_score_files` | `10` | The number of score files that `.cache/autoscore/` keeps. |
 | `discovery.delay_seconds` | `5` | The delay between requests of `discover.js`. |
@@ -173,7 +173,7 @@ The server checks every 5 minutes, and 30 seconds after it starts. If a daily re
 For example, when you open the computer at 08:30, the refresh starts within approximately 5 minutes.
 The server makes only one catch-up attempt for each due time. The check does nothing in the **On demand only** mode.
 If a refresh stops with an error, the server tries it again one time after 10 minutes. The new attempt continues from the employer that stopped.
-During a refresh, the server keeps the Mac awake with `caffeinate`. When the refresh stops, the Mac can sleep again.
+During a refresh and the scoring after it, the server keeps the Mac awake with `caffeinate`. When the cycle ends, the Mac can sleep again. The cycle ends after the scoring, or when the refresh pauses or fails.
 On battery power with a closed lid, `caffeinate` cannot keep the Mac awake. Thus the refresh does not start then. If you close the lid on battery power during a refresh, the refresh pauses before the next employer. The board shows **Refresh paused**. When you connect mains power or open the lid, the refresh continues within approximately 5 minutes.
 
 > **NOTE:** To refresh before you start work, you can also wake the computer before the daily time. On macOS, run `sudo pmset repeat wakeorpoweron MTWRFSU 05:55:00`. A MacBook with a closed lid on battery power can stay asleep.
