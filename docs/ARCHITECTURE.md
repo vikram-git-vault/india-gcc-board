@@ -957,7 +957,7 @@ The Word files go to `<tailoring.output_dir>/<Company>/<YYYY-MM-DD>_<Role>/`:
 | `job_description.md` | The job description that career-ops used |
 | `evaluation.md` | The career-ops report |
 
-`<Full_Name>` is `candidate.full_name` from the career-ops profile. Folder and file names have no spaces. The board shows links to the CV, the cover letter and the report. `GET /api/roles/:id/tailored/cv|cover|report` sends a file only if `tailored_docs` names it and the file is in `tailoring.output_dir`.
+`<Full_Name>` is `candidate.full_name` from the career-ops profile. Folder and file names have no spaces. The board shows the links **Resume (Word)**, **Cover letter (Word)**, **career-ops report** and **Folder**. A click sends `POST /api/roles/:id/tailored/cv|cover|report|folder/open`. The server opens the file where it is, with the macOS `open` command: a Word file opens in Word, so changes stay in the OneDrive folder. **Folder** opens the folder in Finder. The server accepts this request only from the computer that runs the board (a loopback address). On another device the server refuses it, and the board downloads the file with `GET /api/roles/:id/tailored/cv|cover|report`. Both routes use a file only if `tailored_docs` names it and the file is in `tailoring.output_dir`.
 
 ### 16.3 The CV rules
 

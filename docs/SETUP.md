@@ -258,7 +258,7 @@ The board shows a stale score with the label "score out of date".
 After the scoring, the server sends each role with an RM score of 75 or more to career-ops (`tailor.js`). career-ops gives the role a score from 1 to 5. At 4 or more, the board makes a tailored Word CV and cover letter. The role card shows:
 
 - The career-ops score next to the ATS score and the RM score. A dashed box means that the role waits for career-ops.
-- The links **Resume (Word)**, **Cover letter (Word)** and **career-ops report**.
+- The links **Resume (Word)**, **Cover letter (Word)**, **career-ops report** and **Folder**. On the computer that runs the board, a click opens the file in its OneDrive folder (Word files open in Word) or opens the folder in Finder. On another device, a click downloads the file.
 - In "Why this score": the career-ops decision and the job requirements that are not in your master CV.
 
 Tailoring needs these conditions:

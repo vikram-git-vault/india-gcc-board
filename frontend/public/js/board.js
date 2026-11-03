@@ -266,10 +266,16 @@
     var t = role.tailor;
     if (!t) return '';
     var base = '/api/roles/' + encodeURIComponent(role.id) + '/tailored/';
+    // A click opens the file in its OneDrive folder (see openTailored);
+    // the href is the download for a board opened on another device.
+    function link(kind, label, tip) {
+      return '<a class="doc-link" data-open="' + base + kind + '/open" href="' + (kind === 'folder' ? '#' : base + kind) + '" title="' + tip + '">' + label + '</a>';
+    }
     var links = '';
-    if (t.cv) links += '<a class="doc-link" href="' + base + 'cv" download>Resume (Word)</a>';
-    if (t.cover) links += '<a class="doc-link" href="' + base + 'cover" download>Cover letter (Word)</a>';
-    if (t.cv) links += '<a class="doc-link" href="' + base + 'report" download>career-ops report</a>';
+    if (t.cv) links += link('cv', 'Resume (Word)', 'Open the tailored resume in Word, in its OneDrive folder');
+    if (t.cover) links += link('cover', 'Cover letter (Word)', 'Open the tailored cover letter in Word, in its OneDrive folder');
+    if (t.cv) links += link('report', 'career-ops report', 'Open the career-ops evaluation');
+    if (t.cv) links += link('folder', 'Folder', 'Open the OneDrive folder of this role in Finder');
     return links;
   }
 
@@ -313,6 +319,22 @@
       (g ? '<h3>Not in your master CV (left off the resume)</h3><p>If you have done one of these, add it to your master CV in your own words. The next run can then use it.</p><ul class="gap-list">' + g + '</ul>' : '') +
       '</div>';
   }
+
+  // Opens a tailored file on the Mac that runs the board. On another
+  // device the server says no (403): then download it, or for the folder
+  // say why nothing opened.
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a.doc-link[data-open]');
+    if (!a) return;
+    e.preventDefault();
+    fetch(a.getAttribute('data-open'), { method: 'POST' }).then(function (r) {
+      if (r.ok) return;
+      if (r.status === 403 && a.getAttribute('href') !== '#') { window.location.href = a.getAttribute('href'); return; }
+      return r.json().catch(function () { return {}; }).then(function (body) {
+        window.alert(body.error || 'The file did not open (error ' + r.status + ').');
+      });
+    }).catch(function () { window.alert('The file did not open: the board server did not answer.'); });
+  });
 
   function safeUrl(url) {
     return /^https?:\/\//i.test(url || '') ? url : '#';

@@ -12,7 +12,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cron from 'node-cron';
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
@@ -380,21 +380,52 @@ app.get('/api/roles', (_req, res) => {
 });
 
 // The tailored Word files of a role (tailor.js). Only a file that
-// tailored_docs names, inside tailoring.output_dir, is sent.
-const TAILOR_FILES = { cv: 'cv_file', cover: 'cover_file', report: null };
+// tailored_docs names, inside tailoring.output_dir, is used.
+const TAILOR_FILES = { cv: 'cv_file', cover: 'cover_file', report: null, folder: null };
+async function tailoredPath(idParam, kind) {
+  const id = Number(idParam);
+  if (!Number.isInteger(id) || !Object.prototype.hasOwnProperty.call(TAILOR_FILES, kind)) return null;
+  const row = await getTailored(id);
+  if (!row || !row.folder) return null;
+  const root = path.resolve(expandHome(settings.tailoring.output_dir));
+  const name = kind === 'folder' ? '.' : TAILOR_FILES[kind] ? row[TAILOR_FILES[kind]] : 'evaluation.md';
+  if (!name) return null;
+  const file = path.resolve(row.folder, name);
+  if (!file.startsWith(root + path.sep) || !fs.existsSync(file)) return null;
+  return file;
+}
+
+// A download, for a board opened on another device.
 app.get('/api/roles/:id/tailored/:kind', async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || !(req.params.kind in TAILOR_FILES)) { res.status(404).end(); return; }
   try {
-    const row = await getTailored(id);
-    const name = row && (TAILOR_FILES[req.params.kind] ? row[TAILOR_FILES[req.params.kind]] : 'evaluation.md');
-    if (!row || !row.folder || !name) { res.status(404).json({ error: 'No tailored file for this role' }); return; }
-    const root = path.resolve(expandHome(settings.tailoring.output_dir));
-    const file = path.resolve(row.folder, name);
-    if (!file.startsWith(root + path.sep) || !fs.existsSync(file)) { res.status(404).json({ error: 'File not found' }); return; }
+    const file = req.params.kind === 'folder' ? null : await tailoredPath(req.params.id, req.params.kind);
+    if (!file) { res.status(404).json({ error: 'No tailored file for this role' }); return; }
     res.download(file, path.basename(file));
   } catch (err) {
-    logger.warn(`Tailored file for role ${id}: ${err.message}`);
+    logger.warn(`Tailored file for role ${req.params.id}: ${err.message}`);
+    res.status(500).end();
+  }
+});
+
+// Opens the file where it is (in OneDrive), on this Mac: a Word file opens
+// in Word, so changes stay in that folder; "folder" opens it in Finder.
+// Only a request from this computer: on another device the board downloads
+// the file instead.
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+app.post('/api/roles/:id/tailored/:kind/open', async (req, res) => {
+  if (process.platform !== 'darwin' || !LOOPBACK.has(req.socket.remoteAddress)) {
+    res.status(403).json({ error: 'Files open only on the computer that runs the board' });
+    return;
+  }
+  try {
+    const file = await tailoredPath(req.params.id, req.params.kind);
+    if (!file) { res.status(404).json({ error: 'No tailored file for this role' }); return; }
+    execFile('open', [file], (err) => {
+      if (err) { logger.warn(`open ${file}: ${err.message}`); res.status(500).json({ error: 'The file did not open' }); return; }
+      res.status(204).end();
+    });
+  } catch (err) {
+    logger.warn(`Tailored file for role ${req.params.id}: ${err.message}`);
     res.status(500).end();
   }
 });
