@@ -124,6 +124,7 @@ Do not remove the employer from the configuration. Do not write logic that evade
 | Phenom | 8 | `POST /widgets` with `ddoKey` `refineSearch` and the country filter `India`, 50 jobs on each page. This is the call that the search page of the site makes. The descriptions stage uses `ddoKey` `jobDetail`. robots.txt on Phenom sites blocks `*/px-widgets`, `*/apply` and `*/jobcart`, but not `/widgets`. Each employer has its own `lang`, `country` and URL `path` in its `phenom` block. Read these values from the home page of the site. |
 | Eightfold | 4 | Two APIs. HSBC uses `/api/apply/v2/jobs`. PayPal, NAB and HP use `/api/pcsx/search` (`eightfold.api: "pcsx"`), because there the older API answers 403. Both take `domain` and `location=India`, with 10 positions on each page. The descriptions stage uses `/api/apply/v2/jobs/<id>` or `/api/pcsx/position_details`. |
 | Jibe | 7 | `GET /api/jobs?location=India`, 100 jobs on each page, with the full description. Jibe is a front end for iCIMS (AMD, Gallagher, Aon, ICE, Schneider Electric, DocuSign, Publicis). The location filter removes the jobs outside India. |
+| BrassRing | 1 | The search page gives a session value and a request token in hidden inputs. Then `POST /TgNewUI/Search/Ajax/MatchedJobs` with the location `India`, 50 jobs on each page, with a short description. The location search uses the country field, thus a city name finds no job (UBS). |
 | Amazon | 1 | `GET /en/search.json` with `normalized_country_code[]=IND`, 100 jobs on each page, with the description and the qualifications. |
 | Custom | 14 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD, also inside `@graph`, or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). The scraper reads first the job URLs that contain an Indian city name. It does not read a known page again unless the sitemap `lastmod` is newer (refer to section 3). Radancy sites (Moody's, Intuit), SuccessFactors career sites (ANZ, Nomura) and sites with a vacancy sitemap (Experian, Wise) use this method. |
 
@@ -229,7 +230,7 @@ A role that a run did not read stays active. When a role is on the site again, i
 | Scraper | Full list | Result |
 |---|---|---|
 | Workday, Oracle, Greenhouse | All pages of the API search | A job ID that is not in the list becomes inactive. |
-| Eightfold, Phenom, Jibe, Amazon | All pages, if the total is not more than `max_pages` | Not more than `max_pages`: as for Workday. More than `max_pages`: no role becomes inactive because it is not in the list. |
+| Eightfold, Phenom, Jibe, Amazon, BrassRing | All pages, if the total is not more than `max_pages` | Not more than `max_pages`: as for Workday. More than `max_pages`: no role becomes inactive because it is not in the list. |
 | Custom (sitemap) | The job URLs in the sitemap | A stored role whose URL is not in the sitemap becomes inactive. A stored role whose URL is in the sitemap stays active, or becomes active again. |
 | Avature | The search pages, only when the scraper reads all of them | The scraper stops when it has `max_detail_fetches` new URLs. Then no role becomes inactive because it is not in the list. The scraper uses the remaining fetches to read the known roles again, the oldest first. A page with no title is a closed role. |
 
