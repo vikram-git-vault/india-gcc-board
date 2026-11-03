@@ -22,6 +22,8 @@ import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastSch
 import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
 import { checkOnline, NETWORK_EXIT_CODE } from './lib/network.js';
 import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security.js';
+import { getTailored } from './lib/database.js';
+import { expandHome } from './lib/tailoring.js';
 
 const logger = createLogger('server');
 
@@ -46,6 +48,11 @@ const refreshState = {
   scoringStartedAt: null,
   // Counts from autoscore.js: total, done (sent), scored, rejected.
   scoringProgress: null,
+  // career-ops after the scoring (tailor.js): running, and its counts
+  // (total, done, ready, failed).
+  tailoring: false,
+  tailoringStartedAt: null,
+  tailoringProgress: null,
   // An unfinished run waits for the Mac to stay awake (lib/power.js) or
   // for the network (lib/network.js): the reason and when it continues,
   // or null.
@@ -56,6 +63,10 @@ const refreshState = {
 const AUTO_SCORE = settings.scoring.auto_score;
 
 let scoringChild = null;
+// After the scoring, send the best-matched roles to career-ops for a Word
+// CV and cover letter (tailor.js). tailoring.auto_tailor: false turns this off.
+const AUTO_TAILOR = settings.tailoring.auto_tailor;
+let tailorChild = null;
 
 // Keeps the Mac awake for the whole cycle: the refresh and then the
 // scoring (-i idle sleep; -s system sleep on mains power). One caffeinate
@@ -80,7 +91,7 @@ function allowSleep() {
 // The last line of a refresh cycle (refresh, then scoring): what ended,
 // and that nothing runs until the next refresh.
 function logIdle(what) {
-  if (refreshState.running || refreshState.scoring) return;
+  if (refreshState.running || refreshState.scoring || refreshState.tailoring) return;
   allowSleep();
   let next;
   if (retryTimer) next = `retry in ${RETRY_AFTER_MS / 60000} min`;
@@ -127,10 +138,40 @@ function runAutoScore() {
     const took = formatMinutes(Date.now() - new Date(refreshState.scoringStartedAt));
     logger.info(`Automatic scoring finished (exit code: ${code}, took ${took}): ${formatScoringSummary(refreshState.scoringProgress)}; details in logs/combined.log`);
     // A refresh that starts stops the scoring: then the cycle is not over.
-    logIdle(code === 0 ? 'Refresh and scoring complete' : `Refresh complete, scoring failed (exit code: ${code})`);
+    // Roles scored before a failure can still go to career-ops.
+    if (refreshState.running) return;
+    if (!runTailor()) logIdle(code === 0 ? 'Refresh and scoring complete' : `Refresh complete, scoring failed (exit code: ${code})`);
   };
   child.on('error', (err) => { logger.warn(`Automatic scoring not started: ${err.message}`); });
   child.on('close', done);
+  return true;
+}
+// Returns true when tailoring started.
+function runTailor() {
+  if (!AUTO_TAILOR || refreshState.tailoring || refreshState.running) return false;
+  refreshState.tailoring = true;
+  refreshState.tailoringStartedAt = new Date().toISOString();
+  refreshState.tailoringProgress = null;
+  logger.info('Tailoring started (tailor.js: career-ops, Word CV and cover letter)');
+  const out = fs.openSync(REFRESH_LOG_PATH, 'a');
+  const child = spawn('node', ['tailor.js'], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
+  tailorChild = child;
+  keepAwake();
+  child.on('message', (msg) => {
+    if (!msg || msg.type !== 'progress') return;
+    const { type, ...progress } = msg;
+    refreshState.tailoringProgress = progress;
+  });
+  child.on('error', (err) => { logger.warn(`Tailoring not started: ${err.message}`); });
+  child.on('close', (code) => {
+    fs.closeSync(out);
+    refreshState.tailoring = false;
+    tailorChild = null;
+    const p = refreshState.tailoringProgress || {};
+    const took = formatMinutes(Date.now() - new Date(refreshState.tailoringStartedAt));
+    logger.info(`Tailoring finished (exit code: ${code}, took ${took}): ${p.done || 0} roles evaluated, ${p.ready || 0} Word CVs made, ${p.failed || 0} failed; details in logs/combined.log`);
+    logIdle(code === 0 ? 'Refresh, scoring and tailoring complete' : `Tailoring failed (exit code: ${code})`);
+  });
   return true;
 }
 const PROGRESS_LOG_EVERY_MS = settings.server.progress_log_minutes * 60 * 1000;
@@ -148,6 +189,10 @@ function runRefresh(trigger) {
   if (scoringChild) {
     logger.info('Stopping automatic scoring: a refresh starts');
     scoringChild.kill('SIGTERM');
+  }
+  if (tailorChild) {
+    logger.info('Stopping tailoring: a refresh starts');
+    tailorChild.kill('SIGTERM');
   }
   refreshState.running = true;
   refreshState.lastStartedAt = new Date().toISOString();
@@ -195,7 +240,7 @@ function runRefresh(trigger) {
     if (summary) summary.forEach((line) => (code === 0 ? logger.info(line) : logger.warn(line)));
     else if (code === 0) logger.info('No refresh summary received; see logs/refresh.log');
     if (code === 0) {
-      if (!runAutoScore()) logIdle(AUTO_SCORE ? 'Refresh complete' : 'Refresh complete (automatic scoring off)');
+      if (!runAutoScore() && !runTailor()) logIdle(AUTO_SCORE ? 'Refresh complete' : 'Refresh complete (automatic scoring off)');
       return;
     }
     if (code === PAUSED_EXIT_CODE) {
@@ -332,6 +377,26 @@ app.get('/api/roles', (_req, res) => {
     return;
   }
   res.type('application/json').send(fs.readFileSync(ROLES_PATH, 'utf-8'));
+});
+
+// The tailored Word files of a role (tailor.js). Only a file that
+// tailored_docs names, inside tailoring.output_dir, is sent.
+const TAILOR_FILES = { cv: 'cv_file', cover: 'cover_file', report: null };
+app.get('/api/roles/:id/tailored/:kind', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !(req.params.kind in TAILOR_FILES)) { res.status(404).end(); return; }
+  try {
+    const row = await getTailored(id);
+    const name = row && (TAILOR_FILES[req.params.kind] ? row[TAILOR_FILES[req.params.kind]] : 'evaluation.md');
+    if (!row || !row.folder || !name) { res.status(404).json({ error: 'No tailored file for this role' }); return; }
+    const root = path.resolve(expandHome(settings.tailoring.output_dir));
+    const file = path.resolve(row.folder, name);
+    if (!file.startsWith(root + path.sep) || !fs.existsSync(file)) { res.status(404).json({ error: 'File not found' }); return; }
+    res.download(file, path.basename(file));
+  } catch (err) {
+    logger.warn(`Tailored file for role ${id}: ${err.message}`);
+    res.status(500).end();
+  }
 });
 
 app.get('/api/refresh/status', (_req, res) => {

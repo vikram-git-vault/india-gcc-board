@@ -282,6 +282,28 @@ CREATE TABLE role_scores (
 );
 ```
 
+### `tailored_docs`
+
+```sql
+CREATE TABLE tailored_docs (
+  role_id INTEGER PRIMARY KEY REFERENCES roles(id),
+  description_hash TEXT NOT NULL,   -- the title and description that career-ops used
+  status TEXT NOT NULL,             -- 'ready' | 'evaluated' | 'failed'
+  score REAL,                       -- the career-ops score, 1 to 5
+  decision TEXT,                    -- for example 'Apply' or 'Consider'
+  report_num TEXT,                  -- the career-ops report number
+  folder TEXT,                      -- the folder of the Word files
+  cv_file TEXT,                     -- the Word CV file name, or NULL
+  cover_file TEXT,                  -- the Word cover letter file name, or NULL
+  gaps TEXT NOT NULL DEFAULT '[]',  -- JSON array: job requirements that are not in the master CV
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,  -- failed runs with the same description
+  run_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+`tailor.js` writes this table. Refer to section 16.
+
 ### `role_marks`
 
 ```sql
@@ -903,3 +925,65 @@ To add an employer, do these steps:
 `detectAts()` in `lib/discovery.js` knows these signatures: Workday, Oracle, Greenhouse, Avature, Lever, SmartRecruiters, Eightfold, SuccessFactors, iCIMS, Phenom, Taleo.
 
 The discovery on 2026-10-13 added 113 employers: 35 active and 78 inactive. Some employers are excluded on purpose.
+
+---
+
+## 16. Tailored resumes (career-ops)
+
+The board sends the roles with the best match to career-ops (https://github.com/career-ops-hq/career-ops, MIT license). career-ops evaluates each role and writes a tailored CV and cover letter. The board makes Word files from them. The owner opens the posting and applies by hand. Nothing applies automatically.
+
+### 16.1 The sequence
+
+After a successful refresh, the server starts `autoscore.js`. When the scoring stops, the server starts `tailor.js`. `tailor.js` does these steps for each role, one role at a time:
+
+1. It selects the active roles whose better RM score (PO or EM resume) is `tailoring.min_fit_score` (75) or more. It skips a role that career-ops evaluated with the same description. It sends a failed role again, but not more than `tailoring.max_attempts` (2) times for the same description.
+2. It writes the job description from the database to `jds/board-<role id>.md` in the career-ops folder. career-ops does not open the employer site.
+3. It starts one career-ops worker (`claude -p`) with the batch prompt of career-ops, the owner profile and `config/tailoring-rules.md`.
+4. The worker gives a score from 1 to 5 and writes a report. When the score is at or above `auto_pdf_score_threshold` in the career-ops profile (4.0), the worker also writes a CV payload and a cover letter payload (JSON).
+5. `tools/build-cv-docx.py` and `tools/build-cover-docx.py` make the Word files from the payloads. The templates are the owner's own Word files in `Resume/templates/` (git ignores them).
+6. `tailor.js` runs the career-ops fact check (`verify-cv-facts.mjs`) on the text of each Word file. If the check fails, `tailor.js` deletes the file and records the failure.
+7. It writes the result to `tailored_docs` and writes `data/roles.json` again.
+
+One role takes approximately 3 minutes. One run sends not more than `tailoring.max_roles_per_run` (40) roles. When a refresh starts, the server stops `tailor.js` and its worker.
+
+### 16.2 The files
+
+The Word files go to `<tailoring.output_dir>/<Company>/<YYYY-MM-DD>_<Role>/`:
+
+| File | Contents |
+|---|---|
+| `<Full_Name>_Resume.docx` | The tailored CV |
+| `<Full_Name>_Cover_Letter.docx` | The tailored cover letter |
+| `job_description.md` | The job description that career-ops used |
+| `evaluation.md` | The career-ops report |
+
+`<Full_Name>` is `candidate.full_name` from the career-ops profile. Folder and file names have no spaces. The board shows links to the CV, the cover letter and the report. `GET /api/roles/:id/tailored/cv|cover|report` sends a file only if `tailored_docs` names it and the file is in `tailoring.output_dir`.
+
+### 16.3 The CV rules
+
+- **Facts.** The master CV (`cv.md` in the career-ops folder) is the only source of facts. The owner's own resumes supplied all of its facts. The worker can use the words of the job description for a real fact. It must not add a skill, a number or a title.
+- **Gaps.** A job requirement with no support in the master CV is a gap. The CV does not show it. The report lists it, and the board shows it in "Why this score". The owner can add a real skill to the master CV in their own words. The next run can then use it.
+- **Headline.** The line below the name has the job title of the posting, then 4 to 6 search keywords from the job description, for example `SOFTWARE ENGINEERING DIRECTOR | CLOUD MODERNIZATION | ...`. The job title must agree with the owner's real level. The owner CV rules give the level. The master CV must support each keyword.
+- **Length.** Not more than 3 pages. `build-cv-docx.py` calculates the number of lines. Its calibration comes from the page counts that Word saved in the owner's resumes: 160 lines are approximately 3 pages. Above 160 lines, it removes the least relevant items: first an accomplishment, then the last bullets of the latest role and of the older roles, then skill groups. It does not remove a role.
+- **Format.** Word (`.docx`). The owner makes a PDF when necessary.
+
+### 16.4 Limited permissions
+
+career-ops starts its workers with all permission checks off. The board does not do this. A job description is external text, and it can contain instructions. `tailor.js` starts each worker with these limits (`limitedSettings()` in `lib/tailoring.js`):
+
+- `--permission-mode dontAsk`: the worker cannot use a tool that no allow rule permits.
+- The file tools can read and write only in the career-ops folder.
+- Commands run in the macOS sandbox. They can write only in the career-ops folder and in temporary folders. They have no network access. No command can run outside the sandbox.
+- No web tools (WebFetch, WebSearch) and no subagents.
+- No MCP servers (`--strict-mcp-config`).
+
+The rules tell the worker that the job description is data and not instructions.
+
+> **CAUTION:** Do not start career-ops workers with `--dangerously-skip-permissions` for board roles.
+
+### 16.5 Personal data
+
+The master CV, the career-ops profile, the reports and the Word files contain personal data. They stay in the career-ops folder, in `Resume/` and in `tailoring.output_dir`. Git does not track them. `config/tailoring-rules.md` contains no personal data.
+
+The owner's original resume folder is read-only for Claude Code. A deny rule and a hook in the Claude Code user settings prevent writes to it. People can change it as usual.
+

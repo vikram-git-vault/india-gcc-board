@@ -211,6 +211,7 @@
         '<div class="score-box ' + band(sc.fit) + '" title="' + RM_TIP + '"><span class="num">' + sc.fit + '</span><span class="lbl">RM score</span></div>'
       : '<div class="score-box pending" title="' + ATS_TIP + '"><span class="num">–</span><span class="lbl">ATS score</span></div>' +
         '<div class="score-box pending" title="' + RM_TIP + '"><span class="num">–</span><span class="lbl">RM score</span></div>') +
+      tailorBox(role) +
       '</div>';
 
     function markBtn(value, label) {
@@ -230,6 +231,7 @@
         scoreHtml(role) +
         '<div class="card-actions">' +
           '<a class="apply-link" href="' + escapeHtml(safeUrl(role.job_url)) + '" target="_blank" rel="noopener noreferrer">Open the posting</a>' +
+          tailorLinks(role) +
           '<div class="mark-group" role="group" aria-label="Mark this role">' +
             markBtn('interested', 'Interested') +
             markBtn('applied', 'Applied') +
@@ -239,6 +241,36 @@
         '</div>' +
         '</div>' +
       '</article>';
+  }
+
+  // career-ops (tailor.js): its score from 1 to 5. A role with a better
+  // RM score at or above the minimum and no result yet is waiting.
+  var CO_TIP = 'career-ops score: how well this job fits you, from 1 to 5, from the career-ops evaluation. At 4 or more, the board makes a tailored Word resume and cover letter.';
+  function bestFit(role) {
+    var v = (role.score && role.score.variants) || {};
+    return Math.max((v.PO || {}).fit || 0, (v.EM || {}).fit || 0);
+  }
+  function tailorBox(role) {
+    var t = role.tailor;
+    if (t && t.score != null) {
+      var b = t.score >= 4 ? 'high' : t.score >= 3 ? 'mid' : 'low';
+      return '<div class="score-box ' + b + '" title="' + CO_TIP + (t.stale ? ' The job description changed after this evaluation.' : '') + '"><span class="num">' + Number(t.score).toFixed(1) + '</span><span class="lbl">career-ops</span></div>';
+    }
+    var min = (state.targeting || {}).tailor_min_fit;
+    if (min != null && role.score && bestFit(role) >= min) {
+      return '<div class="score-box pending" title="' + CO_TIP + ' This role is waiting for career-ops."><span class="num">–</span><span class="lbl">career-ops</span></div>';
+    }
+    return '';
+  }
+  function tailorLinks(role) {
+    var t = role.tailor;
+    if (!t) return '';
+    var base = '/api/roles/' + encodeURIComponent(role.id) + '/tailored/';
+    var links = '';
+    if (t.cv) links += '<a class="doc-link" href="' + base + 'cv" download>Resume (Word)</a>';
+    if (t.cover) links += '<a class="doc-link" href="' + base + 'cover" download>Cover letter (Word)</a>';
+    if (t.cv) links += '<a class="doc-link" href="' + base + 'report" download>career-ops report</a>';
+    return links;
   }
 
   function scoreHtml(role) {
@@ -267,8 +299,19 @@
         '<p>' + escapeHtml(sc.reason) + '</p>' +
         (kw ? '<div><h3>Found in your resume</h3><div class="kw-list">' + kw + '</div></div>' : '') +
         (gaps ? '<div><h3>Gaps to address</h3><ul class="gap-list">' + gaps + '</ul></div>' : '') +
+        tailorWhy(role) +
         '<div><h3>Both resumes</h3><table class="variant-table"><tr><th>Resume</th><th>ATS score</th><th>RM score</th></tr>' + variantRow('PO') + variantRow('EM') + '</table></div>' +
       '</div></details>';
+  }
+
+  function tailorWhy(role) {
+    var t = role.tailor;
+    if (!t) return '';
+    var g = (t.gaps || []).map(function (x) { return '<li>' + escapeHtml(x) + '</li>'; }).join('');
+    return '<div><h3>career-ops: ' + Number(t.score).toFixed(1) + ' of 5' + (t.decision ? ' (' + escapeHtml(t.decision) + ')' : '') + '</h3>' +
+      '<p>' + (t.cv ? 'A tailored Word resume' + (t.cover ? ' and cover letter are' : ' is') + ' ready.' : 'Below the score for a tailored resume (4 of 5).') + '</p>' +
+      (g ? '<h3>Not in your master CV (left off the resume)</h3><p>If you have done one of these, add it to your master CV in your own words. The next run can then use it.</p><ul class="gap-list">' + g + '</ul>' : '') +
+      '</div>';
   }
 
   function safeUrl(url) {
@@ -552,6 +595,7 @@
   var pollTimer = null;
   var wasRunning = false;
   var wasScoring = false;
+  var wasTailoringDone = null;
   var lastLiveReload = Date.now();  // loadRoles() runs at page load
   var reloadedAt = null;            // progress key of the last live reload
 
@@ -596,6 +640,19 @@
           return;
         }
         if (wasScoring) { wasScoring = false; loadRoles(); }
+        // tailor.js runs after the scoring: one role takes about 3 minutes,
+        // so reload the roles after each finished role.
+        if (s.tailoring) {
+          var tp = s.tailoringProgress;
+          refreshStatusEl.textContent = tp && tp.total
+            ? 'Making tailored resumes with career-ops: ' + tp.done + ' of ' + tp.total + ' roles done, ' + tp.ready + ' Word resumes made'
+              + (tp.failed ? ', ' + tp.failed + ' failed' : '') + '.'
+            : 'Making tailored resumes with career-ops…';
+          if (tp && tp.done !== wasTailoringDone) { wasTailoringDone = tp.done; loadRoles(); }
+          if (!pollTimer) pollTimer = setInterval(pollRefreshStatus, 15000);
+          return;
+        }
+        if (wasTailoringDone !== null) { wasTailoringDone = null; loadRoles(); }
         if (s.paused) {
           refreshStatusEl.textContent = 'Refresh paused: ' + s.paused + '.';
           return;

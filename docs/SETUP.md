@@ -77,6 +77,14 @@ The settings are in two files:
 | `scoring.claude_timeout_minutes` | `15` | The time limit for one request to Claude Code. After the limit, `autoscore.js` sends the same batch one more time. Thus one batch can take two times this limit. |
 | `scoring.max_attempts` | `2` | After this number of rejected scores, the role is not sent again until its description changes. |
 | `scoring.keep_score_files` | `10` | The number of score files that `.cache/autoscore/` keeps. |
+| `tailoring.auto_tailor` | `true` | After the scoring, send the best-matched roles to career-ops for a tailored Word CV and cover letter. Refer to section 6.1. |
+| `tailoring.career_ops_dir` | `~/Projects/career-ops` | The career-ops folder. `~` is your home folder. |
+| `tailoring.output_dir` | `~/Library/CloudStorage/OneDrive-Personal/Desktop/Resume_Tailored` | The folder for the Word files. |
+| `tailoring.min_fit_score` | `75` | career-ops gets only the roles whose better RM score is this or more. |
+| `tailoring.max_roles_per_run` | `40` | The maximum number of roles in one tailoring run. |
+| `tailoring.worker_timeout_minutes` | `20` | The time limit for one role. |
+| `tailoring.model` | `claude-sonnet-5-5` | The Claude model of the career-ops worker. |
+| `tailoring.max_attempts` | `2` | After this number of failed runs, the role is not sent again until its description changes. |
 | `discovery.delay_seconds` | `5` | The delay between requests of `discover.js`. |
 | `logging.level` | `info` | The minimum level of log messages: `error`, `warn`, `info` or `debug`. |
 | `database.path` | `./data/jobs.db` | The location of the database. |
@@ -244,6 +252,34 @@ A score becomes stale when the job description or the rubric version changes. Th
 The board shows a stale score with the label "score out of date".
 
 > **NOTE:** `score.js --import` rejects a score that does not agree with the rubric schema. For example, it rejects a score above 100, or a recommended resume that does not have the higher fit score. The command shows the reason for each rejection.
+
+### 6.1 Tailored resumes (career-ops)
+
+After the scoring, the server sends each role with an RM score of 75 or more to career-ops (`tailor.js`). career-ops gives the role a score from 1 to 5. At 4 or more, the board makes a tailored Word CV and cover letter. The role card shows:
+
+- The career-ops score next to the ATS score and the RM score. A dashed box means that the role waits for career-ops.
+- The links **Resume (Word)**, **Cover letter (Word)** and **career-ops report**.
+- In "Why this score": the career-ops decision and the job requirements that are not in your master CV.
+
+Tailoring needs these conditions:
+
+1. career-ops is in `tailoring.career_ops_dir`, and `node doctor.mjs` in that folder shows no failures.
+2. These career-ops files have your data: `cv.md` (the master CV), `config/profile.yml` and `modes/_profile.md`.
+3. `Resume/templates/resume.docx` and `Resume/templates/cover-letter.docx` are your own Word files. The board copies their format.
+
+To run tailoring by hand, run one of these commands:
+
+```bash
+node tailor.js              # all roles that need it
+node tailor.js --max 5      # not more than 5 roles
+node tailor.js --role 463   # only role 463
+```
+
+To stop tailoring, set `tailoring.auto_tailor` to `false` and restart the server.
+
+> **CAUTION:** The master CV is the only source of facts for the tailored files. If you have a skill that the board shows as a gap, add it to `cv.md` in your own words. Do not add a skill that you do not have.
+
+> **NOTE:** Read each Word file before you send it. The page count is an estimate. Make sure that the CV has 3 pages or less in Word.
 
 ## 7. Open the board from other devices
 
