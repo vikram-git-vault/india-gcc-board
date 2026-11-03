@@ -3,7 +3,7 @@
 **Status:** Phases 0 to 3b and 5 to 8 are complete. | **Owner:** the repository owner | **Last update:** 2026-10-13
 
 India GCC Board is a personal job board. It runs on your own computer.
-It checks the career sites of 149 employers: BFSI (banking, financial services and insurance) employers and employers in other industries.
+It checks the career sites of 161 employers: BFSI (banking, financial services and insurance) employers and employers in other industries.
 It keeps the leadership roles in India GCC hub cities: Bengaluru, Mumbai, Delhi NCR, Pune, Hyderabad, Chennai, Gurugram and Noida.
 It shows only the roles that match a target profile, and it scores each role against two resume variants.
 
@@ -106,9 +106,9 @@ Do not scrape pages behind a login. Do not collect personal data. Do not scrape 
 
 ### 2.1 Site classification
 
-- **Automated (92 employers):** robots.txt permits the careers paths, and the site does not need a login.
-- **Excluded by policy (3 employers):** Citigroup (robots.txt: `Disallow: /search-jobs/`), JPMorgan Chase (403 login wall), Charles Schwab (robots.txt: `Disallow: /` for all user agents). These are in `config/employers.json`, list `excluded`.
-- **Inactive (54 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
+- **Automated (106 employers):** robots.txt permits the careers paths, and the site does not need a login.
+- **Excluded by policy (0 employers):** the list is empty since 2026-11-03. Citigroup, JPMorgan Chase and Charles Schwab were in this list. Their real job systems permit crawlers (refer to section 8.2.1).
+- **Inactive (55 employers):** bot protection, no scraper yet for their ATS, or no India roles on their site. Refer to section 8.2 and `docs/EMPLOYERS.md`.
 
 If a site later prohibits scraping, add the employer to the `excluded` list and set `active: false`.
 Do not remove the employer from the configuration. Do not write logic that evades a block.
@@ -117,22 +117,24 @@ Do not remove the employer from the configuration. Do not write logic that evade
 
 | ATS type | Active employers | Method |
 |---|---|---|
-| Workday | 51 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. |
-| Oracle Fusion Recruiting Cloud | 3 | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
-| Greenhouse | 2 | The public API `boards-api.greenhouse.io`. |
+| Workday | 56 | The public CXS JSON search API (`/wday/cxs/<tenant>/<site>/jobs`), with the search text "India" when the site is not specific to India. Workday gives `total` only on the first page. The next pages show `total: 0`. Thus the scraper keeps the total of the first page. Before 2026-11-03, it used the 0 and stopped each employer at 40 roles. |
+| Oracle Fusion Recruiting Cloud | 5 | The public REST API `recruitingCEJobRequisitions`, with the location filter `India` on the server. |
+| Greenhouse | 3 | The public API `boards-api.greenhouse.io`. |
 | Avature | 2 | The server-rendered search result pages, and the location block on each detail page. `custom.search_params` adds a server filter (MetLife: `semanticSearch=India`). When the list has no total, the scraper reads pages until a page is empty. When a detail page has no title, location or description block, the scraper uses the banner title, the location on the list card and the "Description" block. |
 | Phenom | 8 | `POST /widgets` with `ddoKey` `refineSearch` and the country filter `India`, 50 jobs on each page. This is the call that the search page of the site makes. The descriptions stage uses `ddoKey` `jobDetail`. robots.txt on Phenom sites blocks `*/px-widgets`, `*/apply` and `*/jobcart`, but not `/widgets`. Each employer has its own `lang`, `country` and URL `path` in its `phenom` block. Read these values from the home page of the site. |
 | Eightfold | 4 | Two APIs. HSBC uses `/api/apply/v2/jobs`. PayPal, NAB and HP use `/api/pcsx/search` (`eightfold.api: "pcsx"`), because there the older API answers 403. Both take `domain` and `location=India`, with 10 positions on each page. The descriptions stage uses `/api/apply/v2/jobs/<id>` or `/api/pcsx/position_details`. |
-| Jibe | 7 | `GET /api/jobs?location=India`, 100 jobs on each page, with the full description. Jibe is a front end for iCIMS (AMD, Gallagher, Aon, ICE, Schneider Electric, DocuSign, Publicis). The location filter removes the jobs outside India. |
+| Jibe | 8 | `GET /api/jobs?location=India`, 100 jobs on each page, with the full description. Jibe is a front end for iCIMS (AMD, Gallagher, Aon, ICE, Schneider Electric, DocuSign, Publicis). The location filter removes the jobs outside India. |
 | BrassRing | 1 | The search page gives a session value and a request token in hidden inputs. Then `POST /TgNewUI/Search/Ajax/MatchedJobs` with the location `India`, 50 jobs on each page, with a short description. The location search uses the country field, thus a city name finds no job (UBS). |
 | Amazon | 1 | `GET /en/search.json` with `normalized_country_code[]=IND`, 100 jobs on each page, with the description and the qualifications. |
-| Custom | 14 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD, also inside `@graph`, or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). The scraper reads first the job URLs that contain an Indian city name. It does not read a known page again unless the sitemap `lastmod` is newer (refer to section 3). Radancy sites (Moody's, Intuit), SuccessFactors career sites (ANZ, Nomura) and sites with a vacancy sitemap (Experian, Wise) use this method. |
+| Custom | 18 | `sitemap.xml` and schema.org `JobPosting` data (JSON-LD, also inside `@graph`, or Microdata). Puppeteer for tenants that need JavaScript (`custom.render: true`). The scraper reads first the job URLs that contain an Indian city name. It does not read a known page again unless the sitemap `lastmod` is newer (refer to section 3). Radancy sites (Moody's, Intuit), SuccessFactors career sites (ANZ, Nomura) and sites with a vacancy sitemap (Experian, Wise) use this method. |
 
 For the list of employers for each ATS type, refer to `docs/EMPLOYERS.md`.
 
 The reason for each inactive employer is in its `note` in `config/employers.json`. The main reasons are:
 
-- The site refuses automated requests (HTTP 403, timeouts). Examples: UBS, BNP Paribas, Citadel, Nokia, American Express.
+- The site refuses automated requests (HTTP 403, timeouts, a Cloudflare challenge). Examples: The Standard, Alvarez & Marsal, Citadel, Envestnet, BNP Paribas, American Express.
+
+> **NOTE:** A 403 on the corporate careers page does not always block the job system. On 2026-11-03, a check found an open job system behind 8 "blocked" employers (refer to section 8.2.1). Before you set an employer to inactive, open the careers page with a normal browser and find the link to the real ATS.
 - robots.txt blocks the job API or the whole host. Examples: American Airlines (`/services/`), Swiss Re (`Disallow: /`), the SmartRecruiters API host.
 - The site has no India roles, or posts its India roles on a different site. Examples: Under Armour, Principal, T. Rowe Price, Lloyds.
 - The configured address no longer exists (HTTP 404). Examples: Morgan Stanley, Deutsche Bank.
@@ -358,11 +360,16 @@ BaseScraper (lib/scrapers/BaseScraper.js)
  ├─ fetchListings(): abstract; gets the raw data
  └─ extractRoles(raw): abstract; returns [{ title, location, url, postedDate, externalJobId, ... }]
 
-WorkdayScraper    (12 employers)
-OracleScraper     (2 employers)
-GreenhouseScraper (1 employer)
-AvatureScraper    (1 employer)
-CustomScraper     (6 employers; sitemap and JobPosting data; optional Puppeteer)
+WorkdayScraper    (56 employers)
+OracleScraper     (5 employers)
+GreenhouseScraper (3 employers)
+AvatureScraper    (2 employers)
+EightfoldScraper  (4 employers)
+PhenomScraper     (8 employers)
+JibeScraper       (8 employers)
+AmazonJobsScraper (1 employer)
+BrassRingScraper  (1 employer; UBS)
+CustomScraper     (18 employers; sitemap and JobPosting data; optional Puppeteer)
 ```
 
 `lib/parser.js` changes the scraper output into the `roles` schema. It does these steps:
@@ -604,7 +611,7 @@ These design decisions came from the findings:
   1. A location filter removed all roles on sites whose URLs have no city name. The fix ranks the URLs and does not filter them.
   2. A JSON-LD-only parser found no data on Microdata sites. The fix reads both formats.
   3. Keyword matches with `.includes()` found "Intern" in "international", and the parser applied "India" before "Pune". The fix uses whole-word matches and the longest city name.
-- **A known ATS does not always mean that the employer permits scraping.** Charles Schwab uses iCIMS, but its robots.txt disallows all paths. Because of this, Charles Schwab is in the excluded list. Blackstone shows a Cloudflare challenge page, also in a headless browser. Blackstone is bot-protected. Refer to section 14.
+- **A known ATS does not always mean that the employer permits scraping.** Charles Schwab uses iCIMS, but its robots.txt disallows all paths. Because of this, Charles Schwab is in the excluded list. (On 2026-11-03, Charles Schwab moved to the board through its schwabjobs.com sitemap. Refer to section 8.2.1.) Blackstone shows a Cloudflare challenge page, also in a headless browser. Blackstone is bot-protected. Refer to section 14.
 
 Inactive employers (11): UBS, BNP Paribas and Blackstone are bot-protected. Vanguard, Goldman Sachs, Morgan Stanley, Deutsche Bank and Citadel probably use their own systems. The platforms of KPMG, Zurich and ICE are not known.
 
@@ -621,28 +628,44 @@ The team checked the robots.txt of each active employer again after the fix.
 
 ### 8.2 Employers that you must check manually
 
-**Policy stop (6). Do not automate these employers.** The site does not permit crawlers, or it has a bot wall.
+**Policy stop (6). Do not automate these employers.** A Cloudflare challenge or another bot wall blocks the crawler.
 Do not try to go around a block (refer to section 14). A person can visit the public pages.
+On 2026-11-03, the owner chose a manual check for the first four employers. The link opens the India search of the site.
 
 | Employer | Reason | Career site |
 |---|---|---|
-| Citigroup | robots.txt: `Disallow: /search-jobs/` | https://jobs.citi.com/search-jobs |
-| JPMorgan Chase | 403 login wall | https://www.jpmorganchase.com/careers |
-| Charles Schwab | robots.txt: `Disallow: /` for all user agents | https://schwabjobs.com |
-| UBS | 403, bot protection | https://jobs.ubs.com |
+| The Standard | Cloudflare blocks the Darwinbox job API. The portal shows a stub page to the crawler. | https://stancorpglobal.darwinbox.in/ms/candidatev2/main/careers/allJobs |
+| Alvarez & Marsal | Cloudflare challenge, also in a headless browser | https://careers.alvarezandmarsal.com/search/jobs/in/country/india |
+| Citadel | Cloudflare challenge, also in a headless browser (Citadel Securities, Gurugram) | https://www.citadelsecurities.com/careers/open-opportunities?location-filter=gurugram |
+| Envestnet | Cloudflare challenge, also in a headless browser | https://careers.envestnet.com/search/jobs/in/country/india |
 | BNP Paribas | 403, bot protection | https://group.bnpparibas/en/careers |
 | Blackstone | Cloudflare challenge page, also in a headless browser | https://www.blackstone.com/careers |
 
-**Backlog (8). No policy block.** These sites do not match the `CustomScraper` method, or their platform is not known.
+#### 8.2.1 Blocked employers with an open job system (2026-11-03)
+
+The owner asked for access to all blocked sites. A check with a normal browser found an open job system for 8 of them. The crawler keeps its own user agent and obeys robots.txt.
+
+| Employer | Earlier block | Open job system |
+|---|---|---|
+| Citigroup | robots.txt blocks `/search-jobs/` | The sitemap and the `/job/` pages (custom) |
+| Charles Schwab | The iCIMS host blocks all paths | schwabjobs.com sitemap (custom) |
+| JPMorgan Chase | 403 login wall on the old careers site | Oracle site `CX_1001` |
+| Nestlé | 403 on nestle.in | jobdetails.nestle.com sitemap (custom) |
+| Microchip | 403 on careers.microchip.com | Workday `microchiphr/wd5/External` |
+| Nokia | 403 on nokia.com | Oracle site `CX_1` |
+| UBS | 403 on the jobs.ubs.com root page | BrassRing at `jobs.ubs.com/TGnewUI` |
+| Global Payments | Cloudflare challenge on jobs.globalpayments.com | Workday `tsys/wd1/TSYS` |
+
+Inspire Brands permits crawlers on careers.inspirebrands.com, but that site has no India roles.
+
+**Backlog (6). No policy block.** These sites do not match the `CustomScraper` method, or their platform is not known.
 A future phase can add a scraper with CSS selectors for each site (refer to section 4).
 
 | Employer | Status | Career site |
 |---|---|---|
-| Vanguard | Content is available. No known ATS. Probably a proprietary system. | https://www.vanguard.in/ |
 | Goldman Sachs | Content is available. No known ATS. Probably a proprietary system. | https://higher.gs.com/roles |
 | Morgan Stanley | Content is available. No known ATS. Probably a proprietary system. | https://www.morganstanley.com/careers/students-graduates/experienced-professionals |
 | Deutsche Bank | Content is available. No known ATS. Probably a proprietary system. | https://careers.db.com/search-results |
-| Citadel | Content is available. No known ATS. Probably a proprietary system. | https://www.citadel.com/careers/open-opportunities/ |
 | KPMG | Marketing site only. The ATS URL is not known. | https://www.kpmguscareers.com/ |
 | Zurich Insurance | The URL is not known. The India operations can be in a joint venture (Zurich Kotak). | https://www.zurich.com/careers |
 | ICE | The platform is not known. Two vendor matches were false. | https://careers.ice.com |
@@ -853,7 +876,7 @@ The first run on 2026-10-13 got 36 descriptions, found 21 closed roles, and had 
 - No email or SMS notifications. You check the board.
 - No accounts for many users. `role_marks.user_id` is for one person's devices only.
 - No scraping of application forms, salary data or pages behind a login.
-- No evasion of bot protection (no CAPTCHA solving, no IP rotation, no browser fingerprint changes). Set such a site to `active: false`.
+- No evasion of bot protection (no CAPTCHA solving, no IP rotation, no browser fingerprint changes, no headless browser that acts as a person to pass a bot check). Set such a site to `active: false`. On 2026-11-03, the owner asked to work around crawler blocks. The open job systems in section 8.2.1 made a bypass unnecessary for 8 employers. For the 4 employers behind Cloudflare, the owner chose a manual check (section 8.2).
 - No cloud database. One SQLite file is sufficient for one user.
 
 ---
