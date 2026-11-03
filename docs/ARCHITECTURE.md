@@ -431,7 +431,7 @@ The board has these functions:
 - **Sort:** best RM score (the default), best ATS score, newest, employer, title.
 - **Filters:** RM score band, grade, role family, city, posting date, employer. The filters use AND between groups and OR in one group. The posting date filter is different: you select one band at a time (within 1 day, 3 days, 5 days, 1 week, 2 weeks or 1 month, more than a month, or date unknown). The "within" bands include the newer roles. Each band shows its number of roles.
 - **Search:** by title or employer.
-- **Tabs:** All, Interested, Applied, Rejected, Closed.
+- **Tabs:** Open, Interested, Applied, Rejected, Closed. The Open tab shows all roles, but not the roles with the mark Applied or Rejected. These roles show only in their own tab. When you remove the mark, the role goes back to the Open tab.
 - **Marks:** Interested, Applied, Rejected, Closed. The browser keeps the marks in `localStorage`. The marks do not move to other browsers or devices.
 - **Status bar:** the status bar shows these items:
   - The time of the last refresh.

@@ -27,7 +27,7 @@
     sort: 'fit',
     scoreBands: new Set(),
     posted: null,         // one POSTED_BANDS id, or null for any date
-    tab: 'all',
+    tab: 'open',
   };
 
   // Grade order mirrors config/targets.json: target grades first, then exceptions.
@@ -171,8 +171,11 @@
 
   function markOf(role) { return state.marks[String(role.id)] || null; }
 
+  // Applied and rejected roles leave the Open tab; they show only in their own tab.
+  var DONE_MARKS = { applied: true, rejected: true };
+
   function matchesTab(role) {
-    if (state.tab === 'all') return true;
+    if (state.tab === 'open') return !DONE_MARKS[markOf(role)];
     return markOf(role) === state.tab;
   }
 
@@ -308,14 +311,14 @@
     // Set through the DOM, not a style attribute, so the CSP needs no 'unsafe-inline'.
     document.querySelectorAll('#cards .card').forEach(function (el) { el.style.viewTransitionName = 'role-' + el.getAttribute('data-card-id'); });
     document.getElementById('emptyState').hidden = sorted.length !== 0;
-    document.getElementById('resultsMeta').textContent = 'Showing ' + sorted.length + ' of ' + state.roles.length;
+    document.getElementById('resultsMeta').textContent = 'Showing ' + sorted.length + ' of ' + state.roles.filter(matchesTab).length;
 
     var counts = { interested: 0, applied: 0, rejected: 0, closed: 0 };
     state.roles.forEach(function (r) {
       var m = markOf(r);
       if (m && counts.hasOwnProperty(m)) counts[m]++;
     });
-    flashStat(document.getElementById('tabAllN'), state.roles.length);
+    flashStat(document.getElementById('tabOpenN'), state.roles.length - counts.applied - counts.rejected);
     flashStat(document.getElementById('tabInterestedN'), counts.interested);
     flashStat(document.getElementById('tabAppliedN'), counts.applied);
     flashStat(document.getElementById('tabRejectedN'), counts.rejected);
