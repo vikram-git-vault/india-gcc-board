@@ -2,7 +2,7 @@ import os from 'os';
 import path from 'path';
 import {
   expandHome, safeName, docFolder, limitedSettings, workerPrompt, jobMessage, jdMarkdown, parseWorkerResult, extractGaps,
-  extractDecision, localDate,
+  extractDecision, localDate, trackerStatus, validateGapAnswer, appendConfirmedSkill, CONFIRMED_HEADING,
 } from '../lib/tailoring.js';
 
 describe('names and folders', () => {
@@ -95,5 +95,45 @@ describe('extractDecision and localDate', () => {
   });
   test('the date in the board time zone, not UTC', () => {
     expect(localDate('Asia/Kolkata', new Date('2026-11-03T19:00:00Z'))).toBe('2026-11-04');
+  });
+});
+
+describe('trackerStatus', () => {
+  test('board marks to career-ops tracker states', () => {
+    expect(trackerStatus('applied')).toBe('Applied');
+    expect(trackerStatus('rejected')).toBe('Rejected');
+    expect(trackerStatus('closed')).toBe('Discarded');
+    expect(trackerStatus('interested')).toBe('Evaluated');
+    expect(trackerStatus(null)).toBe('Evaluated');
+    expect(trackerStatus('other')).toBeNull();
+  });
+});
+
+describe('validateGapAnswer', () => {
+  test('one paragraph, trimmed', () => {
+    expect(validateGapAnswer(' Kubernetes ', 'Ran EKS clusters\nfor two years.')).toEqual({ ok: true, gap: 'Kubernetes', answer: 'Ran EKS clusters for two years.' });
+  });
+  test('too short, too long, missing gap', () => {
+    expect(validateGapAnswer('K8s', 'yes').ok).toBe(false);
+    expect(validateGapAnswer('K8s', 'x'.repeat(801)).ok).toBe(false);
+    expect(validateGapAnswer('', 'Ran EKS clusters.').ok).toBe(false);
+  });
+  test('no heading and no comment markers (it goes into cv.md)', () => {
+    expect(validateGapAnswer('K8s', '## Ran EKS clusters').ok).toBe(false);
+    expect(validateGapAnswer('K8s', 'Ran EKS --> clusters').ok).toBe(false);
+  });
+});
+
+describe('appendConfirmedSkill', () => {
+  const add = { gap: 'Kubernetes', answer: 'Ran EKS clusters.', employer: 'BNY', date: '2026-11-04' };
+  test('the first answer makes the section at the end', () => {
+    const out = appendConfirmedSkill('# CV\n\n## Skills\n- AWS\n\n', add);
+    expect(out).toBe(`# CV\n\n## Skills\n- AWS\n\n${CONFIRMED_HEADING}\n\n<!-- 2026-11-04: confirmed on the job board for the gap "Kubernetes" (BNY) -->\n- Ran EKS clusters.\n`);
+  });
+  test('a later answer goes below the earlier ones', () => {
+    const once = appendConfirmedSkill('# CV\n', add);
+    const twice = appendConfirmedSkill(once, { ...add, answer: 'Second.' });
+    expect(twice.split(CONFIRMED_HEADING)).toHaveLength(2);
+    expect(twice.endsWith('- Second.\n')).toBe(true);
   });
 });

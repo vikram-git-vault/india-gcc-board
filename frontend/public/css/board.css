@@ -224,6 +224,26 @@
     padding: 7px 12px; border-radius: 8px; box-shadow: inset 0 0 0 1.5px var(--cobalt);
   }
   a.doc-link:hover { background: var(--cobalt-soft); }
+
+  /* confirming a career-ops gap in the owner's words */
+  .gap-list li > span { margin-right: 6px; }
+  button.gap-confirm, .gap-actions button {
+    font: inherit; font-size: 14px; font-weight: 600; color: var(--cobalt); background: transparent;
+    border: 0; box-shadow: inset 0 0 0 1.5px var(--cobalt); border-radius: 6px; padding: 2px 8px; cursor: pointer;
+  }
+  button.gap-confirm:hover, .gap-actions button:hover { background: var(--cobalt-soft); }
+  .gap-actions button.gap-save { color: #fff; background: var(--cobalt); box-shadow: none; }
+  :root[data-theme="dark"] .gap-actions button.gap-save { color: #0B1A31; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .gap-actions button.gap-save { color: #0B1A31; } }
+  .gap-actions button:disabled { opacity: 0.6; cursor: default; }
+  .gap-form { margin: 8px 0 4px; display: flex; flex-direction: column; gap: 6px; }
+  .gap-form label { font-size: 14px; color: var(--text-muted); }
+  .gap-form textarea {
+    font: inherit; font-size: 15px; color: var(--text); background: var(--surface); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px; resize: vertical;
+  }
+  .gap-actions { display: flex; gap: 8px; }
+  .gap-error { color: var(--critical); margin: 0; font-size: 14px; }
   .mark-group { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
   .mark-btn {
     font-size: 15px; padding: 6px 11px; border-radius: 8px; cursor: pointer;

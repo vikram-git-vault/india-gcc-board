@@ -22,8 +22,14 @@ import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastSch
 import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
 import { checkOnline, NETWORK_EXIT_CODE } from './lib/network.js';
 import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security.js';
-import { getTailored } from './lib/database.js';
-import { expandHome } from './lib/tailoring.js';
+import {
+  getTailored, getMarks, getMark, setMark, roleExists, addGapAnswer, requestRetailor,
+} from './lib/database.js';
+import {
+  expandHome, MARKS, validateGapAnswer, appendConfirmedSkill, localDate,
+} from './lib/tailoring.js';
+import { syncTracker } from './lib/tracker-sync.js';
+import { publish } from './lib/publisher.js';
 
 const logger = createLogger('server');
 
@@ -66,6 +72,7 @@ let scoringChild = null;
 // After the scoring, send the best-matched roles to career-ops for a Word
 // CV and cover letter (tailor.js). tailoring.auto_tailor: false turns this off.
 const AUTO_TAILOR = settings.tailoring.auto_tailor;
+const CAREER_OPS_DIR = expandHome(settings.tailoring.career_ops_dir);
 let tailorChild = null;
 
 // Keeps the Mac awake for the whole cycle: the refresh and then the
@@ -146,15 +153,15 @@ function runAutoScore() {
   child.on('close', done);
   return true;
 }
-// Returns true when tailoring started.
-function runTailor() {
+// Returns true when tailoring started. args: for example ['--role', '463'].
+function runTailor(args = []) {
   if (!AUTO_TAILOR || refreshState.tailoring || refreshState.running) return false;
   refreshState.tailoring = true;
   refreshState.tailoringStartedAt = new Date().toISOString();
   refreshState.tailoringProgress = null;
   logger.info('Tailoring started (tailor.js: career-ops, Word CV and cover letter)');
   const out = fs.openSync(REFRESH_LOG_PATH, 'a');
-  const child = spawn('node', ['tailor.js'], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
+  const child = spawn('node', ['tailor.js', ...args], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
   tailorChild = child;
   keepAwake();
   child.on('message', (msg) => {
@@ -427,6 +434,68 @@ app.post('/api/roles/:id/tailored/:kind/open', async (req, res) => {
   } catch (err) {
     logger.warn(`Tailored file for role ${req.params.id}: ${err.message}`);
     res.status(500).end();
+  }
+});
+
+// The owner's marks, stored on the server: every browser and device shows
+// the same marks. A change also updates the career-ops tracker.
+app.get('/api/marks', async (_req, res) => {
+  try {
+    const marks = {};
+    (await getMarks()).forEach((m) => { marks[m.role_id] = m.status; });
+    res.json({ marks });
+  } catch (err) {
+    logger.warn(`Marks: ${err.message}`);
+    res.status(500).json({ error: 'Marks not read' });
+  }
+});
+
+app.put('/api/roles/:id/mark', express.json(), async (req, res) => {
+  const id = Number(req.params.id);
+  const status = req.body ? req.body.status : undefined;
+  if (!Number.isInteger(id) || !(status === null || MARKS.includes(status))) {
+    res.status(400).json({ error: `status must be one of ${MARKS.join(', ')}, or null` });
+    return;
+  }
+  try {
+    if (!(await roleExists(id))) { res.status(404).json({ error: 'No such role' }); return; }
+    const before = await getMark(id);
+    await setMark(id, status);
+    res.json({ role_id: id, status });
+    syncTracker(CAREER_OPS_DIR, id, { previous: before && before.tracker_status })
+      .then((done) => { if (done.startsWith('tracker')) logger.info(`Mark of role ${id}: ${done}`); })
+      .catch((err) => logger.warn(`Mark of role ${id}: career-ops tracker not updated: ${err.message}`));
+  } catch (err) {
+    logger.warn(`Mark of role ${id}: ${err.message}`);
+    res.status(500).json({ error: 'Mark not saved' });
+  }
+});
+
+// The owner confirms a gap in their own words: the answer goes into the
+// career-ops master CV (cv.md), and career-ops makes the role's resume
+// again (now if nothing runs, otherwise in the next run).
+app.post('/api/roles/:id/gaps', express.json(), async (req, res) => {
+  const id = Number(req.params.id);
+  const checked = validateGapAnswer(req.body && req.body.gap, req.body && req.body.answer);
+  if (!Number.isInteger(id) || !checked.ok) { res.status(400).json({ error: checked.error || 'Bad role' }); return; }
+  try {
+    const tailored = await getTailored(id);
+    if (!tailored) { res.status(404).json({ error: 'career-ops has not evaluated this role' }); return; }
+    const cvFile = path.join(CAREER_OPS_DIR, 'cv.md');
+    const employer = path.basename(path.dirname(tailored.folder || '')) || `role ${id}`;
+    const cv = fs.readFileSync(cvFile, 'utf-8');
+    const tmp = `${cvFile}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, appendConfirmedSkill(cv, { ...checked, employer, date: localDate(REFRESH_TIMEZONE) }));
+    fs.renameSync(tmp, cvFile);
+    await addGapAnswer(id, checked.gap, checked.answer);
+    await requestRetailor(id);
+    await publish();
+    logger.info(`Role ${id}: the owner confirmed the gap "${checked.gap}"; added to the master CV`);
+    const now = !refreshState.running && !refreshState.scoring && runTailor(['--role', String(id)]);
+    res.json({ added: true, retailoring: now ? 'now' : 'next run' });
+  } catch (err) {
+    logger.warn(`Gap answer for role ${id}: ${err.message}`);
+    res.status(500).json({ error: 'The answer was not saved' });
   }
 });
 

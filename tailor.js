@@ -32,6 +32,7 @@ import { reportProgress } from './lib/progress.js';
 import { descriptionHash } from './lib/scoring.js';
 import { initDb, closeDb, getRolesForTailoring, upsertTailored } from './lib/database.js';
 import { publish } from './lib/publisher.js';
+import { ensureTracker, syncTracker } from './lib/tracker-sync.js';
 import {
   expandHome, safeName, docFolder, limitedSettings, workerPrompt, jobMessage, jdMarkdown, parseWorkerResult, extractGaps,
   extractDecision, localDate,
@@ -196,9 +197,10 @@ async function main() {
   fs.mkdirSync(WORK_DIR, { recursive: true });
   await initDb();
   const rows = await getRolesForTailoring(T.min_fit_score);
-  // Not yet sent, or sent with another description; failed fewer than max_attempts times.
+  // Not yet sent, sent with another description, or asked again (the owner
+  // added a skill); failed fewer than max_attempts times.
   const todo = rows.filter((r) => (onlyRole ? r.id === onlyRole
-    : (r.tailored_hash !== descriptionHash(r.title, r.description)
+    : (r.tailored_hash !== descriptionHash(r.title, r.description) || r.rerun
       || (r.tailored_status === 'failed' && (r.attempts || 0) < T.max_attempts))));
   const batch = todo.slice(0, max);
   logger.info(`${todo.length} roles need career-ops${todo.length > batch.length ? `; this run sends ${batch.length}` : ''}`);
@@ -223,8 +225,18 @@ async function main() {
     await publish();
     reportProgress('tailor', { total: batch.length, ...counts });
   }
-  // Keep career-ops' own tracker (data/applications.md) up to date.
+  // Keep career-ops' own tracker (data/applications.md) up to date: the
+  // new rows, then the status of each role that the owner marked already.
+  if (ensureTracker(CO)) logger.info('Made the career-ops tracker data/applications.md');
   await run('node', ['merge-tracker.mjs'], { cwd: CO });
+  for (const role of batch) {
+    try {
+      const done = await syncTracker(CO, role.id);
+      if (done.startsWith('tracker')) logger.info(`Role ${role.id}: ${done}`);
+    } catch (err) {
+      logger.warn(`Role ${role.id}: career-ops tracker not updated: ${err.message}`);
+    }
+  }
   logger.info(`career-ops: ${counts.done} roles evaluated, ${counts.ready} Word CVs made, ${counts.failed} failed`);
 }
 

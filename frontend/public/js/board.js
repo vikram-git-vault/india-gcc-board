@@ -18,7 +18,7 @@
     targeting: null,
     refreshRunning: false,  // from /api/refresh/status
     refreshProgress: null,  // the last step of the running refresh
-    marks: loadMarks(),   // roleId -> status, persisted in this browser only
+    marks: loadMarks(),   // roleId -> status; the server keeps them (GET /api/marks), this browser keeps a copy
     query: '',
     grades: new Set(),
     families: new Set(),
@@ -310,15 +310,75 @@
       '</div></details>';
   }
 
+  // A gap that the owner is confirming: the form stays open over re-renders.
+  var gapForm = null;  // { roleId, idx, text, busy, error }
+
   function tailorWhy(role) {
     var t = role.tailor;
     if (!t) return '';
-    var g = (t.gaps || []).map(function (x) { return '<li>' + escapeHtml(x) + '</li>'; }).join('');
+    var done = {};
+    (t.confirmed || []).forEach(function (c) { done[c.gap] = true; });
+    var g = (t.gaps || []).map(function (x, i) {
+      if (done[x]) return '';
+      var open = gapForm && gapForm.roleId === role.id && gapForm.idx === i;
+      var form = open
+        ? '<div class="gap-form"><label for="gapText' + role.id + '_' + i + '">Where you did it, what you did and a result, in your own words. It goes into your master CV as you write it.</label>' +
+          '<textarea id="gapText' + role.id + '_' + i + '" class="gap-text" data-role-id="' + role.id + '" data-idx="' + i + '" rows="3" maxlength="800">' + escapeHtml(gapForm.text || '') + '</textarea>' +
+          (gapForm.error ? '<p class="gap-error">' + escapeHtml(gapForm.error) + '</p>' : '') +
+          '<div class="gap-actions"><button class="gap-save" data-role-id="' + role.id + '" data-idx="' + i + '"' + (gapForm.busy ? ' disabled' : '') + '>' + (gapForm.busy ? 'Saving…' : 'Add to my master CV') + '</button>' +
+          '<button class="gap-cancel">Cancel</button></div></div>'
+        : '<button class="gap-confirm" data-role-id="' + role.id + '" data-idx="' + i + '">I have done this</button>';
+      return '<li><span>' + escapeHtml(x) + '</span> ' + form + '</li>';
+    }).join('');
+    var c = (t.confirmed || []).map(function (x) {
+      return '<li><strong>' + escapeHtml(x.gap) + ':</strong> ' + escapeHtml(x.answer) + '</li>';
+    }).join('');
     return '<div><h3>career-ops: ' + Number(t.score).toFixed(1) + ' of 5' + (t.decision ? ' (' + escapeHtml(t.decision) + ')' : '') + '</h3>' +
       '<p>' + (t.cv ? 'A tailored Word resume' + (t.cover ? ' and cover letter are' : ' is') + ' ready.' : 'Below the score for a tailored resume (4 of 5).') + '</p>' +
-      (g ? '<h3>Not in your master CV (left off the resume)</h3><p>If you have done one of these, add it to your master CV in your own words. The next run can then use it.</p><ul class="gap-list">' + g + '</ul>' : '') +
+      (g ? '<h3>Not in your master CV (left off the resume)</h3><p>If you have done one of these, click <em>I have done this</em> and write it in your own words. The board adds it to your master CV, and career-ops makes this resume again.</p><ul class="gap-list">' + g + '</ul>' : '') +
+      (c ? '<h3>Added to your master CV</h3><ul class="gap-list confirmed">' + c + '</ul>' : '') +
       '</div>';
   }
+
+  function roleById(id) {
+    return state.roles.filter(function (r) { return String(r.id) === String(id); })[0];
+  }
+
+  document.addEventListener('input', function (e) {
+    if (e.target.classList && e.target.classList.contains('gap-text') && gapForm) gapForm.text = e.target.value;
+  });
+  document.addEventListener('click', function (e) {
+    var el = e.target;
+    if (!el.classList) return;
+    if (el.classList.contains('gap-confirm')) {
+      gapForm = { roleId: Number(el.getAttribute('data-role-id')), idx: Number(el.getAttribute('data-idx')), text: '' };
+      render();
+      var ta = document.querySelector('.gap-text');
+      if (ta) ta.focus();
+    } else if (el.classList.contains('gap-cancel')) {
+      gapForm = null;
+      render();
+    } else if (el.classList.contains('gap-save') && gapForm && !gapForm.busy) {
+      var role = roleById(gapForm.roleId);
+      var gap = role && role.tailor && role.tailor.gaps[gapForm.idx];
+      gapForm.busy = true; gapForm.error = null;
+      render();
+      fetch('/api/roles/' + encodeURIComponent(gapForm.roleId) + '/gaps', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gap: gap, answer: gapForm.text }),
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (body) {
+          if (!r.ok) throw new Error(body.error || 'error ' + r.status);
+          gapForm = null;
+          refreshStatusEl.textContent = 'Added to your master CV. career-ops makes this resume again ' + (body.retailoring === 'now' ? 'now (about 3 minutes).' : 'in the next run.');
+          loadRoles();
+          pollRefreshStatus();
+        });
+      }).catch(function (err) {
+        if (gapForm) { gapForm.busy = false; gapForm.error = err.message; }
+        render();
+      });
+    }
+  });
 
   // Opens a tailored file on the Mac that runs the board. On another
   // device the server says no (403): then download it, or for the folder
@@ -408,12 +468,49 @@
     });
   }
 
+  function putMark(roleId, status) {
+    return fetch('/api/roles/' + encodeURIComponent(roleId) + '/mark', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: status }),
+    }).then(function (r) { if (!r.ok) throw new Error('error ' + r.status); });
+  }
+
   function toggleMark(roleId, value) {
     var current = state.marks[roleId];
     var next = current === value ? null : value;
     if (next) state.marks[roleId] = next; else delete state.marks[roleId];
     saveMarks();
     render();
+    putMark(roleId, next).catch(function (err) {
+      window.alert('The mark was not saved on the server (' + err.message + '). It stays in this browser only.');
+    });
+  }
+
+  // The server keeps the marks. One time in each browser, the marks that
+  // only this browser has (from before the server kept them) go to the
+  // server; after that, the server's marks win.
+  var COPIED_KEY = 'india-gcc-board:marks-copied-to-server';
+  function loadServerMarks() {
+    fetch('/api/marks').then(function (r) { return r.ok ? r.json() : null; }).then(function (body) {
+      if (!body) return;
+      var server = body.marks || {};
+      var copied = false;
+      try { copied = localStorage.getItem(COPIED_KEY) === 'yes'; } catch (e) {}
+      if (!copied) {
+        var local = state.marks;
+        var uploads = Object.keys(local).filter(function (id) { return !server[id]; });
+        Promise.all(uploads.map(function (id) { return putMark(id, local[id]).then(function () { server[id] = local[id]; }); }))
+          .then(function () {
+            try { localStorage.setItem(COPIED_KEY, 'yes'); } catch (e) {}
+            state.marks = server; saveMarks(); render();
+          })
+          // Not all copied: keep this browser's marks; the next load tries again.
+          .catch(function () {});
+        return;
+      }
+      state.marks = server;
+      saveMarks();
+      render();
+    }).catch(function () {});
   }
 
   // "Refreshing: 14 of 56 employers done (now: Nomura, Intuit)" from
@@ -745,4 +842,5 @@
 
   pollRefreshStatus();
   loadRoles();
+  loadServerMarks();
 })();

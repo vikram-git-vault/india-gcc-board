@@ -298,6 +298,7 @@ CREATE TABLE tailored_docs (
   gaps TEXT NOT NULL DEFAULT '[]',  -- JSON array: job requirements that are not in the master CV
   error TEXT,
   attempts INTEGER NOT NULL DEFAULT 0,  -- failed runs with the same description
+  rerun INTEGER NOT NULL DEFAULT 0,     -- 1: send again in the next run (the owner added a skill)
   run_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -317,7 +318,34 @@ CREATE TABLE role_marks (
 );
 ```
 
-> **NOTE:** The board does not use this table now. The board keeps the marks in the browser (`localStorage`). Refer to section 5.
+> **NOTE:** The board does not use this table. The board keeps the marks in the `marks` table. Refer to section 5.
+
+### `marks`
+
+```sql
+CREATE TABLE marks (
+  role_id INTEGER PRIMARY KEY REFERENCES roles(id),
+  status TEXT NOT NULL,          -- 'interested' | 'applied' | 'rejected' | 'closed'
+  marked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  tracker_status TEXT            -- the career-ops tracker status that the last sync wrote
+);
+```
+
+One row for each marked role. Refer to section 5 and section 16.6.
+
+### `gap_answers`
+
+```sql
+CREATE TABLE gap_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role_id INTEGER NOT NULL REFERENCES roles(id),
+  gap TEXT NOT NULL,             -- the gap from the career-ops report
+  answer TEXT NOT NULL,          -- the owner's words, also added to cv.md
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+Refer to section 16.3.
 
 ### `scrape_runs`
 
@@ -454,7 +482,7 @@ The board has these functions:
 - **Filters:** RM score band, grade, role family, city, posting date, employer. The filters use AND between groups and OR in one group. The posting date filter is different: you select one band at a time (within 1 day, 3 days, 5 days, 1 week, 2 weeks or 1 month, more than a month, or date unknown). The "within" bands include the newer roles. Each band shows its number of roles.
 - **Search:** by title or employer.
 - **Tabs:** Open, Interested, Applied, Rejected, Closed. The Open tab shows all roles, but not the roles with the mark Applied or Rejected. These roles show only in their own tab. When you remove the mark, the role goes back to the Open tab.
-- **Marks:** Interested, Applied, Rejected, Closed. The browser keeps the marks in `localStorage`. The marks do not move to other browsers or devices.
+- **Marks:** Interested, Applied, Rejected, Closed. The server keeps the marks in the `marks` table (`GET /api/marks`, `PUT /api/roles/:id/mark`). All browsers and devices show the same marks. The browser keeps a copy in `localStorage`. The first time that a browser opens the board, it sends its old marks (from before the server kept them) to the server.
 - **Status bar:** the status bar shows these items:
   - The time of the last refresh.
   - The number of shortlisted roles.
@@ -962,7 +990,12 @@ The Word files go to `<tailoring.output_dir>/<Company>/<YYYY-MM-DD>_<Role>/`:
 ### 16.3 The CV rules
 
 - **Facts.** The master CV (`cv.md` in the career-ops folder) is the only source of facts. The owner's own resumes supplied all of its facts. The worker can use the words of the job description for a real fact. It must not add a skill, a number or a title.
-- **Gaps.** A job requirement with no support in the master CV is a gap. The CV does not show it. The report lists it, and the board shows it in "Why this score". The owner can add a real skill to the master CV in their own words. The next run can then use it.
+- **Gaps.** A job requirement with no support in the master CV is a gap. The CV does not show it. The report lists it, and the board shows it in "Why this score", with the button **I have done this**. The owner writes the experience in their own words (10 to 800 characters, one paragraph). `POST /api/roles/:id/gaps` then does these steps:
+  1. It adds the text to the end of `cv.md`, in the section "Additional Experience (confirmed by the owner)". A comment line before the text gives the date, the gap and the employer.
+  2. It records the answer in `gap_answers`. The board shows it under "Added to your master CV".
+  3. It sets `tailored_docs.rerun`. If no refresh, scoring or tailoring runs, the server starts `tailor.js --role <id>` immediately. If not, the next run sends the role again.
+
+  All later CVs can use the new fact. The career-ops fact check also accepts it, because it reads all of `cv.md`.
 - **Headline.** The line below the name has the job title of the posting, then 4 to 6 search keywords from the job description, for example `SOFTWARE ENGINEERING DIRECTOR | CLOUD MODERNIZATION | ...`. The job title must agree with the owner's real level. The owner CV rules give the level. The master CV must support each keyword.
 - **Length.** Not more than 3 pages. `build-cv-docx.py` calculates the number of lines. Its calibration comes from the page counts that Word saved in the owner's resumes: 160 lines are approximately 3 pages. Above 160 lines, it removes the least relevant items: first an accomplishment, then the last bullets of the latest role and of the older roles, then skill groups. It does not remove a role.
 - **Format.** Word (`.docx`). The owner makes a PDF when necessary.
@@ -986,4 +1019,27 @@ The rules tell the worker that the job description is data and not instructions.
 The master CV, the career-ops profile, the reports and the Word files contain personal data. They stay in the career-ops folder, in `Resume/` and in `tailoring.output_dir`. Git does not track them. `config/tailoring-rules.md` contains no personal data.
 
 The owner's original resume folder is read-only for Claude Code. A deny rule and a hook in the Claude Code user settings prevent writes to it. People can change it as usual.
+
+### 16.6 The career-ops tracker
+
+career-ops keeps its own tracker in `data/applications.md` in the career-ops folder. After each run, `tailor.js` makes this file if it does not exist (`ensureTracker()` in `lib/tracker-sync.js`) and runs `merge-tracker.mjs`. Then each evaluated role has a row with the status "Evaluated".
+
+A board mark changes the status of the row (`syncTracker()`), with the career-ops command `set-status.mjs --report <number>`:
+
+| Board mark | career-ops status |
+|---|---|
+| Interested | Evaluated |
+| Applied | Applied |
+| Rejected (the employer said no) | Rejected |
+| Closed | Discarded |
+| No mark | Evaluated |
+
+The server does the sync after each mark change. `tailor.js` does it after each run for the roles that had a mark before career-ops evaluated them. `marks.tracker_status` records the last status that the sync wrote, so the sync writes only a change. With the status "Applied", career-ops also plans a follow-up date.
+
+### 16.7 The fact-check configuration
+
+`config/cv-facts.json` in the career-ops folder gives the fact check two lists:
+
+- `forbidden_phrases`: claims that the owner does not make, for example "Fortune 500", "patent", "PhD" and "P&L ownership". A file with one of these fails the check.
+- `warn_phrases`: clichés, for example "passionate", "results-driven" and "proven track record". The check shows a warning.
 

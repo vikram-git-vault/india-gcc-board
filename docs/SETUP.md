@@ -277,7 +277,18 @@ node tailor.js --role 463   # only role 463
 
 To stop tailoring, set `tailoring.auto_tailor` to `false` and restart the server.
 
-> **CAUTION:** The master CV is the only source of facts for the tailored files. If you have a skill that the board shows as a gap, add it to `cv.md` in your own words. Do not add a skill that you do not have.
+To add a skill that career-ops shows as a gap, do these steps:
+
+1. Open "Why this score" on the role card.
+2. Below "Not in your master CV", click **I have done this** next to the gap.
+3. Write where you did it, what you did and a result, in your own words.
+4. Click **Add to my master CV**.
+
+The board adds your text to `cv.md` and career-ops makes the resume of this role again (approximately 3 minutes). Later resumes for other roles can also use it.
+
+> **CAUTION:** The master CV is the only source of facts for the tailored files. Add only experience that you have. The board adds your words as you write them.
+
+The marks **Applied**, **Rejected** and **Closed** also change the status of the role in the career-ops tracker (`data/applications.md` in the career-ops folder). The server keeps the marks, so all your browsers and devices show the same marks.
 
 > **NOTE:** Read each Word file before you send it. The page count is an estimate. Make sure that the CV has 3 pages or less in Word.
 
