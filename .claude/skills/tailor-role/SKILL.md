@@ -15,12 +15,14 @@ The owner pastes roles from employer sites. This skill finds them on the board, 
    node tools/find-role.js <url | job id | role id> ...
    ```
 
-   For each input it prints the board role, its RM score, any earlier career-ops result and the `tailor.js` command to use.
+   For each input it prints the board role, the state of each part (`lib/states.js`; `docs/ARCHITECTURE.md`, section 18): active or closed with the cause, the job text, the RM score, the career-ops state with what the next automatic run does, the mark, and the `tailor.js` command to use.
 
 2. **Handle what the script cannot run:**
    - `NOT FOUND`: the board has not scraped the role. Add it as a manual job (step 2a) when the owner asked to add it, or asked to score or tailor it. If the employer is not in `config/employers.json` (search by its career site host), also offer to add the employer for the future. Do not add an employer without the owner's yes.
-   - `NOT SCORED`: run `node autoscore.js` (it scores all pending roles), then run step 1 again.
+   - `NOT SCORED (waiting ...)`: run `node autoscore.js` (it scores all pending roles), then run step 1 again. `NOT SCORED (given_up ...)`: the scorer gave a score that the import rejected twice; `autoscore.js` does not send it again. Tell the owner. `NOT SCORED (outside_window ...)`: the role is older than the board window; `autoscore.js` does not send it.
    - `CLOSED`: the posting is gone. Tell the owner; do not run career-ops.
+   - `career-ops state: given_up` or `retry`: the last run failed. The line gives the state; the error is in `node tools/board-status.js`. A run by hand (`node tailor.js --role ID`) tries again.
+   - `career-ops state: no_cv`: the role passed the gate but was too old for a CV. `node tailor.js --role ID` makes the CV.
 
 2a. **Add a manual job** (a link the board has not scraped, or a job description that the owner pasted):
 

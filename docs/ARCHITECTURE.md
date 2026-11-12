@@ -1,6 +1,6 @@
 # India GCC Board: architecture
 
-**Status:** Phases 0 to 3b and 5 to 8 are complete. | **Owner:** the repository owner | **Last update:** 2026-10-13
+**Status:** Phases 0 to 3b and 5 to 8 are complete. | **Owner:** the repository owner | **Last update:** 2026-11-12
 
 India GCC Board is a personal job board. It runs on your own computer.
 It checks the career sites of 161 employers: BFSI (banking, financial services and insurance) employers and employers in other industries.
@@ -1139,3 +1139,107 @@ The list-price value is the value that Claude Code reports. With a Claude subscr
 - The rubric, the RM and career-ops scores, their thresholds and the gate.
 - The career-ops evaluation and the CV rules. The second message has all of the context of the first message.
 - The job cache: a role gets a new score only when its description or the rubric version changes (`role_scores`), and a new evaluation only when its description changes or the owner asks for it (`tailored_docs`).
+
+## 18. State machines
+
+Many values on the board move through states. Before 2026-11-12, no one file named the states or the transitions. `lib/states.js` now names them. Each machine has a list of states, a pure function that reads a row and gives the state, and a text for each state. The writers did not move: `lib/database.js`, `tailor.js` and `server.js` still write the columns and the flags. The readers use `lib/states.js`: the publisher writes `score_state` and `tailor_state` into `data/roles.json`, the board shows their text, and `tools/find-role.js` and `tools/board-status.js` print them. `test/states.test.js` tests each function.
+
+The functions in `lib/states.js` change nothing. They do not decide what a run does. The selection rules stay in their modules (`selectForTailoring()`, `scoreState()`, `getRolesNeedingDescription()`); the state functions call them or copy them, and a test keeps the two equal.
+
+### 18.1 Role lifecycle (`roles.is_active`)
+
+| State | Meaning |
+|---|---|
+| open | The role is on the board. |
+| closed | The role is not on the board. |
+
+Transitions:
+
+| From | To | Cause | Writer |
+|---|---|---|---|
+| (new) | open | The scraper found the role. | `syncRoles` |
+| open | closed | The job id or the URL is not in the full list of the site. | `syncRoles` (section 3.0.1) |
+| open | closed | The closing date passed (UTC). | `deactivateExpiredRoles`, at the end of `syncRoles` and after the scrape stage |
+| open | closed | The detail page says that the role is closed. | `syncRoles` (`goneUrls`), `saveDescriptionResult` (`gone`) |
+| closed | open | The site lists the id or the URL again. Not after the closing date. | `syncRoles` |
+
+A manual role (`source` 'manual') stays open. The refresh never closes it. The owner marks it **Closed**. The database does not store the cause of a close. `roleState()` reads the cause from `description_status` and `deadline` when they show it.
+
+### 18.2 Job text (`roles.description_status`)
+
+| State | Column value | Due again |
+|---|---|---|
+| owner | 'ok', `source` 'manual' | Never. The text is the text that the owner gave. |
+| listing | NULL, text of `min_full_chars` or more | Never. The scrape gave the full text. |
+| missing | NULL, shorter text | In the next refresh. |
+| fetched | 'ok' | After `descriptions.refetch_ok_days` (14). |
+| closed | 'gone' | When a scrape opens the role again (the role is active with status 'gone'). |
+| error | 'error' | After `descriptions.retry_error_hours` (20). |
+| skipped | 'skipped' | After `descriptions.retry_skipped_days` (7). |
+
+Only an active, shortlisted, scraped role is due. `saveDescriptionResult()` writes the column. `getRolesNeedingDescription()` applies the rule in SQL. `descriptionState()` applies the same rule in code, and `test/states.test.js` compares the two on a test database.
+
+### 18.3 Tier and source
+
+`roles.tier` is 'target', 'exception' or 'excluded' (NULL before the first classification). It is a classification, not a lifecycle: `refresh.js --reclassify` can move a role to any tier. A manual role keeps 'target'. `SHORTLISTED_SQL` in `lib/states.js` gives the shortlist rule (`tier IN ('target', 'exception')`) to the queries. `roles.source` is 'manual' or NULL and never changes.
+
+### 18.4 RM score (`role_scores`)
+
+| State | Meaning | Next scoring run |
+|---|---|---|
+| scored | The stored score is current. | Nothing. |
+| stale | The title, the text or the rubric changed (`scoreState()` in `lib/scoring.js`, section 12.3). | Scores it again. |
+| waiting | No current score. | Scores it. |
+| given_up | `score.js --import` rejected the score `scoring.max_attempts` (2) times for the same description (`.cache/autoscore/attempts.json`). | Does not send it until the description changes. |
+| outside_window | The role is older than `board.max_age_days` (30). | Does not send it. |
+
+`rmState()` gives the state. The board shows the reason for a missing score on the role card. `tools/find-role.js` shows it with the text.
+
+### 18.5 career-ops and the Word CV (`tailored_docs`)
+
+The table stores 'evaluated', 'ready' or 'failed', with `attempts`, `rerun` and `description_hash`. The state adds the gate, the board window and the CV window:
+
+| State | Meaning | Next automatic run |
+|---|---|---|
+| unscored | No RM score yet. | Waits for the score. |
+| not_eligible | The better RM score is below `tailoring.min_fit_score` (75). | Does not send it. `tailor.js --role ID --any-fit` evaluates it; `--force-cv` also makes a CV. |
+| outside_window | RM passes, but the role is older than `board.max_age_days`. | Does not send it. `tailor.js --role ID` does. |
+| incomplete | The employer site left the job text empty. | Does not send it. |
+| waiting | RM passes; no evaluation yet. | Sends it. |
+| stale | The title or the text changed after the evaluation. An earlier CV stays. | Sends it again. |
+| rerun | The owner confirmed a gap (section 16.3). | Sends it again. |
+| retry | The last run failed, fewer than `tailoring.max_attempts` (2) times. | Tries again. |
+| given_up | Failed `max_attempts` times with the same description. | Does not send it until the description changes. |
+| below_gate | Evaluated; the RM score or the career-ops score is below the gate. No CV. | Nothing. |
+| no_cv | Evaluated and passed the gate, but older than `tailoring.max_age_days` (3) when evaluated. No CV. | Nothing. `tailor.js --role ID` makes a CV. |
+| ready | A Word CV is made. | Nothing. |
+| evaluated | Evaluated, no CV, and the career-ops threshold is not on this computer. | Nothing. |
+
+`tailorState()` gives the state, its text and `next` (true when the next automatic `tailor.js` run sends the role). `next` comes from `selectForTailoring()` on that one row, so it cannot differ from the real selection. The career-ops threshold (`auto_pdf_score_threshold` in the career-ops profile, 4.0) comes from `readCvMinScore()`; the publisher writes it to `targeting.cv_min_score`.
+
+The outcomes of one `tailor.js` run ('below', 'too_old', 'ready', 'failed' in the server log) name what that run did. The state names what the table shows now.
+
+The board shows the state text in the career-ops box (a role that waits, a retry or a failed role), in "Why this score", and as counts in the refresh status panel. Before this change, a role that passed the gate but was too old for a CV showed "Below the score for a tailored resume".
+
+### 18.6 Marks and the tracker (`marks`)
+
+The states are the marks: none, interested, applied, rejected, closed (`MARKS` in `lib/tailoring.js`). Any mark can follow any mark; a second click on the same mark removes it. `trackerStatus()` maps the mark to the career-ops tracker status (section 16.6), and `marks.tracker_status` records the last status that the sync wrote. This machine was explicit before; it stays in `lib/tailoring.js` and `lib/tracker-sync.js`.
+
+### 18.7 The server cycle (`server.js`)
+
+`GET /api/refresh/status` gives the flags `running`, `scoring`, `tailoring` and `paused`, and now also `phase` and `queued`:
+
+| Phase | Meaning | Next |
+|---|---|---|
+| refreshing | `refresh.js` runs. | The scoring (exit code 0), a pause (75 or 69), a retry wait (other codes) or idle. |
+| scoring | `autoscore.js` runs. | The tailoring, or idle. A refresh that starts stops it. |
+| tailoring | `tailor.js` runs. | Queued work (a manual job's scoring, "Make CV anyway"), or idle. A refresh that starts stops it. |
+| paused | The refresh stopped because the Mac can sleep or has no network. | The catch-up check continues it (`--resume`). |
+| retry_wait | The refresh stopped with an error. | One retry after `schedule.retry_after_minutes` (10), with `--resume`. |
+| idle | Nothing runs. | The next scheduled refresh, or **Refresh now**. |
+
+`cyclePhase()` gives the phase from the flags, in this order of precedence. `queued` gives `scoring` (true when a manual job waits for the scoring) and `cvs` (the number of "Make CV anyway" requests that wait). The board still reads the flags; the phase is for the API readers.
+
+### 18.8 The refresh checkpoint
+
+`lib/checkpoint.js` was explicit before. An employer in a run is pending, 'ok' or 'error'. A run is in progress, complete (`completed_at`), or resumable (not complete and started less than `refresh.checkpoint_max_age_hours` (12) before). Refer to section 6.1.

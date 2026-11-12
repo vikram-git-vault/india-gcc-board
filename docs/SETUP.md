@@ -270,7 +270,7 @@ node score.js --status
 ```
 
 A score becomes stale when the job description or the rubric version changes. The `--pending` output includes stale roles.
-The board shows a stale score with the label "score out of date".
+The board shows a stale score with the label "score out of date". A role with no score shows why: it waits for a score, the scorer gave up on it (two rejected scores), or it is older than the board window. `docs/ARCHITECTURE.md`, section 18.4, lists the states.
 
 > **NOTE:** `score.js --import` rejects a score that does not agree with the rubric schema. For example, it rejects a score above 100, or a recommended resume that does not have the higher fit score. The command shows the reason for each rejection.
 
@@ -278,7 +278,7 @@ The board shows a stale score with the label "score out of date".
 
 After the scoring, the server sends each role with an RM score of 75 or more to career-ops (`tailor.js`). career-ops gives the role a score from 1 to 5. At 4 or more, the board makes a tailored Word CV and cover letter. The role card shows:
 
-- The career-ops score next to the ATS score and the RM score. A dashed box means that the role waits for career-ops.
+- The career-ops score next to the ATS score and the RM score. A dashed box means that the role waits for career-ops; its tooltip says what the next run does (waiting, a retry, or given up after two failed runs). "Why this score" names the state: a Word CV is ready, the role is below the gate, or it passed the gate but was too old for a CV. The refresh status panel (point to "Updated") counts the roles in each state. `docs/ARCHITECTURE.md`, section 18.5, lists the states.
 - The links **Resume (Word)**, **Cover letter (Word)**, **career-ops report** and **Folder**. On the computer that runs the board, a click opens the file in its OneDrive folder (Word files open in Word) or opens the folder in Finder. On another device, a click downloads the file.
 - In "Why this score": the career-ops decision and the job requirements that are not in your master CV.
 
@@ -339,6 +339,8 @@ node tools/add-job.js --url <link> [--file jd.md] [--company NAME] [--title TITL
 node autoscore.js
 node tailor.js --role <role id>
 ```
+
+To see the state of a role (open or closed, the job text, the RM score, career-ops, the mark) and the `tailor.js` command for it, run `node tools/find-role.js <role id | job id | job URL>`. `node tools/board-status.js` reports the last run and counts the roles on the board in each state. Both are read-only.
 
 > **NOTE:** Workday can give the legal name of the company (for example a name with "Private Limited"). Type the usual name in the **Company** field.
 

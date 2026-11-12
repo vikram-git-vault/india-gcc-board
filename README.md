@@ -103,11 +103,12 @@ Current status: Phase 9 is complete. The refresh scrapes 106 of 161 employers.
 ```
 config/             employers, filters, targeting rules, scoring rubric
 lib/                database, parser, targeting, descriptions, scoring, discovery, schedule, publisher
+lib/states.js       the named states of a role, its score, career-ops and the server cycle
 lib/scrapers/       scraper classes, one for each ATS type
 refresh.js          refresh: scrape, classify, get descriptions, publish
 score.js            scoring: export roles to score, import scores
 tailor.js           career-ops: tailored Word CV and cover letter for the best roles
-tools/              Word builders for the tailored CV and cover letter
+tools/              Word builders for the tailored CV and cover letter; read-only reports (find-role, board-status, check-cv); add-job
 discover.js         discovery: find companies and detect their ATS (manual run)
 server.js           server: shows the board, gives the API, runs the daily refresh
 frontend/public/    the board web page (index.html, js/, css/, fonts/)
