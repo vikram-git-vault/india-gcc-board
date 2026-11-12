@@ -35,6 +35,7 @@ import { createSleepWatch } from './lib/power.js';
 import { usageLimitMessage, expandHome } from './lib/tailoring.js';
 import { claudeCall, modelFor, parseEnvelope, usageFromEnvelope, routeLine } from './lib/models.js';
 import { initDb, closeDb, recordModelCall } from './lib/database.js';
+import { SCORE_ATTEMPTS_FILE } from './lib/states.js';
 
 const logger = createLogger('autoscore');
 const WORK_DIR = path.join('.cache', 'autoscore');
@@ -42,8 +43,10 @@ const BATCH_SIZE = settings.scoring.batch_size;
 const CLAUDE_TIMEOUT_MS = settings.scoring.claude_timeout_minutes * 60 * 1000;
 // A role that Claude scored but import rejected is not sent again after
 // this many tries with the same description (so it cannot block the rest).
+// The file is named in lib/states.js: the publisher and tools/find-role.js
+// read it to show the state 'given_up'.
 const MAX_ATTEMPTS = settings.scoring.max_attempts;
-const ATTEMPTS_FILE = path.join(WORK_DIR, 'attempts.json');
+const ATTEMPTS_FILE = SCORE_ATTEMPTS_FILE;
 // Claude calls for one batch: a call stopped by the time limit is tried
 // one more time (other errors, such as a usage limit, are not).
 const CLAUDE_ATTEMPTS = 2;
