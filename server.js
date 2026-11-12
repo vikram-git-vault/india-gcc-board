@@ -27,7 +27,9 @@ import { checkOnline, NETWORK_EXIT_CODE } from './lib/network.js';
 import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security.js';
 import {
   getTailored, getEmployerName, getMarks, getMark, setMark, roleExists, addGapAnswer, requestRetailor, getModelUsage,
+  getManualRole, initDb,
 } from './lib/database.js';
+import { addManualJob } from './lib/manual-job.js';
 import { summarizeUsage, STAGES } from './lib/models.js';
 import {
   expandHome, MARKS, validateGapAnswer, appendConfirmedSkill, localDate,
@@ -78,6 +80,12 @@ let scoringChild = null;
 const AUTO_TAILOR = settings.tailoring.auto_tailor;
 const CAREER_OPS_DIR = expandHome(settings.tailoring.career_ops_dir);
 let tailorChild = null;
+// Work the owner asked for while the board was busy (lib/manual-job.js):
+// scoring for a job added by hand, and "Make CV anyway" runs (tailor.js
+// arguments). They start when tailoring ends; a refresh's own scoring and
+// tailoring take a queued job with them.
+let scoreQueued = false;
+const cvQueue = [];
 
 // Keeps the Mac awake for the whole cycle: the refresh and then the
 // scoring (-i idle sleep; -s system sleep on mains power). One caffeinate
@@ -194,6 +202,9 @@ function runTailor(args = []) {
     tailorChild = null;
     const took = formatMinutes(Date.now() - new Date(refreshState.tailoringStartedAt));
     logger.info(`Tailoring finished (exit code: ${code}, took ${took}): ${formatTailoringSummary(refreshState.tailoringProgress)}; details in logs/combined.log`);
+    if (refreshState.running) return;
+    if (scoreQueued) { scoreQueued = false; if (runAutoScore()) return; }
+    while (cvQueue.length) { if (runTailor(cvQueue.shift())) return; }
     logIdle(code === 0 ? 'Refresh, scoring and tailoring complete' : `Tailoring failed (exit code: ${code})`);
   });
   return true;
@@ -516,6 +527,69 @@ app.post('/api/roles/:id/gaps', express.json(), async (req, res) => {
   }
 });
 
+// A job the owner adds by hand: a link, the job text, or both (the
+// board's "Add a job" form). The RM scoring starts now when nothing runs;
+// a role that passes the gate then goes to career-ops (runAutoScore starts
+// tailor.js). 422 with needText: the board could not read the link.
+app.post('/api/manual-jobs', express.json({ limit: '256kb' }), async (req, res) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const pick = (k) => (typeof body[k] === 'string' ? body[k] : '');
+  try {
+    const added = await addManualJob({
+      url: pick('url'), text: pick('text'), company: pick('company'), title: pick('title'), location: pick('location'),
+    });
+    if (added.error) {
+      res.status(422).json({ error: added.error, needText: !!added.needText, needFields: added.needFields || [], found: added.job || null });
+      return;
+    }
+    if (!added.created) {
+      res.json({ roleId: added.roleId, created: false, next: 'The board already has this job' });
+      return;
+    }
+    await publish();
+    logger.info(`Role ${added.roleId}: added by the owner (${added.job.company}, ${added.job.title}; ${added.via})`);
+    let next;
+    let started = false;
+    if (!AUTO_SCORE) next = 'Automatic scoring is off (scoring.auto_score): run node autoscore.js';
+    else if (refreshState.running) next = 'The refresh that runs now scores it';
+    else if (refreshState.scoring) next = 'The scoring that runs now scores it, or the next one';
+    else if (refreshState.tailoring) { scoreQueued = true; next = 'Scoring starts when the career-ops run ends'; }
+    else {
+      started = runAutoScore();
+      next = started ? 'Scoring started' : 'Scoring did not start; see the server log';
+    }
+    res.json({ roleId: added.roleId, created: true, via: added.via, started, next });
+  } catch (err) {
+    logger.warn(`Add a job: ${err.message}`);
+    res.status(500).json({ error: 'The job was not added' });
+  }
+});
+
+// "Make CV anyway": a Word CV for a job the owner added by hand, also when
+// it fails the gate (tailor.js --force-cv). The role needs its RM score.
+app.post('/api/roles/:id/make-cv', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: 'Bad role' }); return; }
+  try {
+    const role = await getManualRole(id);
+    if (!role) { res.status(404).json({ error: 'Only a job added by hand can get a CV anyway' }); return; }
+    if (!role.is_active) { res.status(409).json({ error: 'The job is closed' }); return; }
+    if (role.best_fit == null) { res.status(409).json({ error: 'The job has no RM score yet' }); return; }
+    const args = ['--role', String(id), '--force-cv'];
+    if (refreshState.running || refreshState.scoring || refreshState.tailoring) {
+      if (!cvQueue.some((a) => a[1] === String(id))) cvQueue.push(args);
+      res.json({ started: false, next: 'The CV starts when the board finishes the work that runs now' });
+      return;
+    }
+    const started = runTailor(args);
+    logger.info(`Role ${id}: the owner asked for a CV anyway${started ? '' : ' (not started)'}`);
+    res.json({ started, next: started ? 'career-ops started: the CV takes about 5 to 10 minutes' : 'Tailoring is off (tailoring.auto_tailor)' });
+  } catch (err) {
+    logger.warn(`Make CV for role ${id}: ${err.message}`);
+    res.status(500).json({ error: 'The CV did not start' });
+  }
+});
+
 app.get('/api/refresh/status', (_req, res) => {
   res.json(refreshState);
 });
@@ -572,6 +646,10 @@ app.put('/api/schedule', express.json(), (req, res) => {
 });
 
 app.use(express.static(path.join('frontend', 'public')));
+
+// The schema and its new columns (lib/database.js migrations) before the
+// first request: a column added since the last refresh is there at once.
+await initDb();
 
 app.listen(PORT, HOST, () => {
   logger.info(`India GCC Board serving on http://${HOST}:${PORT} (open http://localhost:${PORT} locally)`);

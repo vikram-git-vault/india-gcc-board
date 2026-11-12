@@ -3,14 +3,16 @@
  * tailor.js — send the best-matched roles to career-ops for a tailored Word
  * CV and cover letter.
  *
- *   node tailor.js [--max N] [--role ID [--any-fit]] [--since YYYY-MM-DD]
+ *   node tailor.js [--max N] [--role ID [--any-fit] [--force-cv]] [--since YYYY-MM-DD]
  *
  * career-ops evaluates roles of all ages, as the RM scoring does. A Word CV
  * is made only for a role posted, or changed by the employer, in the last
  * tailoring.max_age_days days (3); --role always makes one. A new CV goes
  * to a new folder; the earlier CVs stay. --since: only roles posted on or after
  * that date. --any-fit (with --role): evaluate the roles also when the RM
- * score is below min_fit_score; the CV gate does not change. Roles posted last go first. A Claude usage limit stops the run; the roles not sent wait for
+ * score is below min_fit_score; the CV gate does not change. --force-cv (with
+ * --role): a Word CV also when the role fails the gate (the board's "Make CV
+ * anyway" button for a job the owner added by hand). Roles posted last go first. A Claude usage limit stops the run; the roles not sent wait for
  * the next run and do not count as failed.
  *
  * server.js runs this after the automatic scoring (tailoring.auto_tailor:
@@ -65,6 +67,8 @@ let TRIAL = false;
 // Word CVs only for roles posted on or after this date; --role: always.
 let CV_CUTOFF = null;
 let FORCED = false;
+// --force-cv: no RM or career-ops gate for the CV (the owner's choice).
+let FORCE_CV = false;
 // career-ops' CV threshold (config/profile.yml auto_pdf_score_threshold).
 let MIN_CAREER_OPS = 3.0;
 const WORK_DIR = path.join('.cache', 'tailor');
@@ -251,7 +255,8 @@ async function tailorRole(role, files, onStep = () => {}) {
     const gaps = extractGaps(reportText);
     const rec = { ...base, status: 'evaluated', outcome: 'below', score: result.score, decision: extractDecision(reportText), gaps };
     const passed = qualifies({ bestFit: role.best_fit, careerOpsScore: result.score }, { minFit: T.min_fit_score, minScore: MIN_CAREER_OPS });
-    if (!passed) {
+    if (!passed && FORCE_CV) logger.info(`Role ${role.id}: below the gate (RM ${role.best_fit}, career-ops ${result.score}/5); the owner asked for a CV anyway`);
+    if (!passed && !FORCE_CV) {
       logger.info(`Role ${role.id} (${role.employer}, ${role.title}): career-ops ${result.score}/5, below the CV threshold ${MIN_CAREER_OPS}, ${gaps.length} gaps, ${Math.round((Date.now() - started) / 1000)}s`);
       return rec;
     }
@@ -314,7 +319,9 @@ async function main() {
     TRIAL = true;
     OUTPUT_DIR = path.resolve(expandHome(opt('--trial')));
   }
-  const anyFit = args.includes('--any-fit');
+  FORCE_CV = args.includes('--force-cv');
+  if (FORCE_CV && !onlyRoles) throw new Error('--force-cv needs --role ID[,ID]');
+  const anyFit = args.includes('--any-fit') || FORCE_CV;
   if (anyFit && !onlyRoles) throw new Error('--any-fit needs --role ID[,ID]');
   const since = opt('--since');
   if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error('--since needs a date: YYYY-MM-DD');

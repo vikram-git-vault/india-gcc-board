@@ -65,6 +65,8 @@
   }
   .refresh-btn:hover:not(:disabled) { background: #E6EDFD; }
   .refresh-btn:disabled { opacity: 0.7; cursor: default; }
+  .refresh-btn.secondary { background: transparent; color: var(--on-ink); box-shadow: inset 0 0 0 1.5px var(--on-ink-muted); }
+  .refresh-btn.secondary:hover:not(:disabled) { background: var(--ink-soft); }
   .header-link { color: var(--on-ink-muted); font-size: 16px; }
   .schedule { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--on-ink-muted); font-size: 16px; min-width: 0; }
   .schedule select, .schedule input {
@@ -245,6 +247,42 @@
   }
   .gap-actions { display: flex; gap: 8px; }
   .gap-error { color: var(--critical); margin: 0; font-size: 14px; }
+
+  /* a job the owner adds by hand */
+  .badge.manual { background: var(--mid-soft); color: var(--mid); }
+  button.make-cv {
+    font: inherit; font-size: 15px; font-weight: 600; color: var(--cobalt); background: transparent; cursor: pointer;
+    border: 0; box-shadow: inset 0 0 0 1.5px var(--cobalt); border-radius: 8px; padding: 6px 11px;
+  }
+  button.make-cv:hover:not(:disabled) { background: var(--cobalt-soft); }
+  button.make-cv:disabled { opacity: 0.6; cursor: default; }
+  dialog.add-job {
+    width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); box-sizing: border-box; overflow: auto;
+    border: 1px solid var(--line); border-radius: 12px; padding: 22px; background: var(--surface); color: var(--text);
+  }
+  dialog.add-job::backdrop { background: rgba(11, 26, 49, 0.55); }
+  .add-job h2 { margin: 0 0 6px; font-size: 22px; }
+  .add-job form { display: flex; flex-direction: column; gap: 6px; }
+  .add-job label { font-size: 15px; font-weight: 600; margin-top: 8px; }
+  .add-job .optional { font-weight: 400; color: var(--text-muted); }
+  .add-job input, .add-job textarea {
+    font: inherit; font-size: 15px; color: var(--text); background: var(--surface); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px; width: 100%; box-sizing: border-box;
+  }
+  .add-job textarea { resize: vertical; }
+  .add-job-help, .add-job-optional { margin: 0; color: var(--text-muted); font-size: 14px; }
+  .add-job-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; }
+  @media (max-width: 640px) { .add-job-row { grid-template-columns: 1fr; } }
+  .add-job-error { color: var(--critical); margin: 6px 0 0; font-size: 14px; }
+  .add-job-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .add-job-actions button {
+    font: inherit; font-size: 16px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    color: var(--cobalt); background: transparent; border: 0; box-shadow: inset 0 0 0 1.5px var(--cobalt);
+  }
+  .add-job-actions button.primary { color: #fff; background: var(--cobalt); box-shadow: none; }
+  :root[data-theme="dark"] .add-job-actions button.primary { color: #0B1A31; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .add-job-actions button.primary { color: #0B1A31; } }
+  .add-job-actions button:disabled { opacity: 0.6; cursor: default; }
   .mark-group { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
   .mark-btn {
     font-size: 15px; padding: 6px 11px; border-radius: 8px; cursor: pointer;

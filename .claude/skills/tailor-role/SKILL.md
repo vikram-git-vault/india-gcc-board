@@ -1,6 +1,6 @@
 ---
 name: tailor-role
-description: Run career-ops (score, gaps and, when the role qualifies, a tailored Word CV and cover letter) for roles the owner names on the India GCC board - by job URL, employer job id (such as R-2680072) or board role id. Use this whenever the owner pastes a job link or job id and asks to score it, evaluate it, run career-ops, tailor a CV, make a resume or cover letter for it, or check whether it is indexed or scored. Also use it to re-run career-ops on a role after a gap answer.
+description: Run career-ops (score, gaps and, when the role qualifies, a tailored Word CV and cover letter) for roles the owner names on the India GCC board - by job URL, employer job id (such as R-2680072) or board role id. Use this whenever the owner pastes a job link or job id and asks to score it, evaluate it, run career-ops, tailor a CV, make a resume or cover letter for it, or check whether it is indexed or scored. Also use it when the owner pastes a job description or a job link that the board has not scraped (LinkedIn, Naukri, any career site) and asks to add it, and to re-run career-ops on a role after a gap answer.
 ---
 
 # Tailor a role with career-ops
@@ -18,9 +18,21 @@ The owner pastes roles from employer sites. This skill finds them on the board, 
    For each input it prints the board role, its RM score, any earlier career-ops result and the `tailor.js` command to use.
 
 2. **Handle what the script cannot run:**
-   - `NOT FOUND`: the board has not scraped the role. Check that the employer is in `config/employers.json` (search by its career site host). If the employer is not there, tell the owner and offer to add it. Do not add an employer without the owner's yes. If the employer is there, the role is probably new since the last refresh: say so.
+   - `NOT FOUND`: the board has not scraped the role. Add it as a manual job (step 2a) when the owner asked to add it, or asked to score or tailor it. If the employer is not in `config/employers.json` (search by its career site host), also offer to add the employer for the future. Do not add an employer without the owner's yes.
    - `NOT SCORED`: run `node autoscore.js` (it scores all pending roles), then run step 1 again.
    - `CLOSED`: the posting is gone. Tell the owner; do not run career-ops.
+
+2a. **Add a manual job** (a link the board has not scraped, or a job description that the owner pasted):
+
+   ```
+   node tools/add-job.js --url <link> [--file <jd file>] [--company NAME] [--title TITLE] [--location CITY]
+   ```
+
+   - For pasted text, write it to a file in the scratchpad directory (not in the repo) and give it with `--file`.
+   - The board reads Workday links and pages with schema.org job data. `NOT ADDED: ... paste it` means it could not: ask the owner to paste the job description. LinkedIn, Naukri and pages with a login always need the pasted text.
+   - Workday can give the legal entity as the company (for example "RE1055 GE ... Private Limited"). Give `--company` with the usual name.
+   - `ADDED: role ID`: run `node autoscore.js`, then go on with step 3 for that role id. `ALREADY ON THE BOARD`: use that role id.
+   - A manual job has no 3-day CV limit and the refresh never closes it. When it fails the gate, the owner can ask for a CV anyway: `node tailor.js --role ID --force-cv` (or the **Make CV anyway** button on the board).
 
 3. **Tell the owner before a costly run.** One career-ops role takes about 3 minutes and costs about $0.50 for the evaluation, plus about $2 when it makes a CV. For each role, say which case applies:
    - RM 75 or more: `node tailor.js --role ID`. It makes a Word CV when career-ops gives 4.0 or more.

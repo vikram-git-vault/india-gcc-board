@@ -110,7 +110,8 @@
   // Whole days from the posting date to today (the viewer's calendar), or
   // null when the site gave no date.
   // The board window (targeting.max_age_days, 30): older roles are hidden,
-  // except the owner's marked roles and roles with a tailored CV. The age
+  // except the owner's marked roles, roles with a tailored CV and jobs the
+  // owner added by hand (role.manual). The age
   // is the posted date, or the day the board first found the role.
   function ageDays(role) {
     var d = role.age_date || role.posted_date;
@@ -125,7 +126,7 @@
     return max != null && d !== null && d > max;
   }
   function inWindow(role) {
-    return !isOlder(role) || !!markOf(role) || !!(role.tailor && role.tailor.cv);
+    return !isOlder(role) || !!markOf(role) || !!role.manual || !!(role.tailor && role.tailor.cv);
   }
   function buildOlderChip() {
     var container = document.getElementById('facetOlder');
@@ -278,6 +279,9 @@
     var hiddenBadge = role.hidden
       ? '<span class="badge hidden-role" title="The board hides this role (' + escapeHtml(role.hidden) + '). It shows because you searched its job ID.">Hidden: ' + escapeHtml(role.hidden) + '</span>'
       : '';
+    var manualBadge = role.manual
+      ? '<span class="badge manual" title="You added this job by hand. The refresh never closes it: mark it Closed when you are done with it.">Manual</span>'
+      : '';
     var exceptionBadge = role.tier === 'exception'
       ? '<span class="badge exception" title="AVP or Senior Manager grade. The board keeps it only when the RM score is 75 or more.">Exception</span>'
       : '';
@@ -303,13 +307,13 @@
         '<div class="card-body">' +
         '<div class="card-head">' +
           '<h3 class="card-title">' + escapeHtml(role.title) + '</h3>' +
-          '<span class="badges">' + hiddenBadge + exceptionBadge + '<span class="badge">' + escapeHtml(role.grade || '') + '</span></span>' +
+          '<span class="badges">' + hiddenBadge + manualBadge + exceptionBadge + '<span class="badge">' + escapeHtml(role.grade || '') + '</span></span>' +
         '</div>' +
         '<div class="card-meta">' + metaParts.join('') + '</div>' +
         scoreHtml(role) +
         '<div class="card-actions">' +
-          '<a class="apply-link" href="' + escapeHtml(safeUrl(role.job_url)) + '" target="_blank" rel="noopener noreferrer">Open the posting</a>' +
-          tailorLinks(role) +
+          (role.job_url ? '<a class="apply-link" href="' + escapeHtml(safeUrl(role.job_url)) + '" target="_blank" rel="noopener noreferrer">Open the posting</a>' : '') +
+          tailorLinks(role) + makeCvButton(role) +
           '<div class="mark-group" role="group" aria-label="Mark this role">' +
             markBtn('interested', 'Interested') +
             markBtn('applied', 'Applied') +
@@ -355,6 +359,21 @@
     if (t.cv) links += link('report', 'career-ops report', 'Open the career-ops evaluation');
     if (t.cv) links += link('folder', 'Folder', 'Open the OneDrive folder of this role in Finder');
     return links;
+  }
+
+  // "Make CV anyway": a job added by hand that failed the gate (RM below
+  // the minimum, or career-ops below 4) and has no tailored resume.
+  var cvRequested = {};
+  function makeCvButton(role) {
+    if (!role.manual || !role.score || (role.tailor && role.tailor.cv)) return '';
+    var min = (state.targeting || {}).tailor_min_fit;
+    var t = role.tailor;
+    var failed = (t && t.score != null && t.score < 4) || (min != null && bestFit(role) < min);
+    if (!failed) return '';
+    var busy = cvRequested[role.id];
+    return '<button class="make-cv" data-role-id="' + role.id + '"' + (busy ? ' disabled' : '') +
+      ' title="This job is below the score for a tailored resume. career-ops makes the resume and cover letter anyway (about 5 to 10 minutes).">' +
+      (busy ? 'CV requested' : 'Make CV anyway') + '</button>';
   }
 
   function scoreHtml(role) {
@@ -456,6 +475,25 @@
         render();
       });
     }
+  });
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('button.make-cv');
+    if (!btn || btn.disabled) return;
+    var id = btn.getAttribute('data-role-id');
+    cvRequested[id] = true;
+    render();
+    fetch('/api/roles/' + encodeURIComponent(id) + '/make-cv', { method: 'POST' }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (body) {
+        if (!r.ok) throw new Error(body.error || 'error ' + r.status);
+        refreshStatusEl.textContent = body.next + '.';
+        if (body.started) pollRefreshStatus();
+      });
+    }).catch(function (err) {
+      delete cvRequested[id];
+      refreshStatusEl.textContent = 'The CV did not start: ' + err.message.replace(/\.$/, '') + '.';
+      render();
+    });
   });
 
   // Opens a tailored file on the Mac that runs the board. On another
@@ -921,6 +959,58 @@
   });
   scheduleMode.addEventListener('change', saveSchedule);
   scheduleTime.addEventListener('change', saveSchedule);
+
+  // --- "Add a job": a link, the job text, or both (POST /api/manual-jobs) ---
+  var addJobDialog = document.getElementById('addJobDialog');
+  var addJobForm = document.getElementById('addJobForm');
+  var addJobError = document.getElementById('addJobError');
+  var addJobSubmit = document.getElementById('addJobSubmit');
+  function addJobField(name) { return addJobForm.elements[name]; }
+  function showAddJobError(text) {
+    addJobError.textContent = text || '';
+    addJobError.hidden = !text;
+  }
+  document.getElementById('addJobBtn').addEventListener('click', function () {
+    showAddJobError('');
+    addJobDialog.showModal();
+    addJobField('url').focus();
+  });
+  document.getElementById('addJobCancel').addEventListener('click', function () { addJobDialog.close(); });
+  addJobForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var body = {};
+    ['url', 'text', 'company', 'title', 'location'].forEach(function (k) { body[k] = addJobField(k).value.trim(); });
+    if (!body.url && !body.text) { showAddJobError('Paste a link to the job or the job description.'); return; }
+    showAddJobError('');
+    addJobSubmit.disabled = true;
+    addJobSubmit.textContent = body.url && !body.text ? 'Reading the link…' : 'Adding…';
+    fetch('/api/manual-jobs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (res) {
+        if (r.status === 422) {
+          // Keep what the link gave, so the owner adds only what is missing.
+          var found = res.found || {};
+          ['company', 'title', 'location'].forEach(function (k) { if (!addJobField(k).value && found[k]) addJobField(k).value = found[k]; });
+          showAddJobError(res.error + '.');
+          (res.needText ? addJobField('text') : addJobField(res.needFields && res.needFields[0] === 'job title' ? 'title' : 'company')).focus();
+          return;
+        }
+        if (!r.ok) throw new Error(res.error || 'error ' + r.status);
+        addJobForm.reset();
+        addJobDialog.close();
+        refreshStatusEl.textContent = (res.created ? 'Job added (role ' + res.roleId + '). ' : 'The board already has this job (role ' + res.roleId + '). ') + (res.next ? res.next + '.' : '');
+        loadRoles();
+        // The status line then shows the scoring; else keep the message.
+        if (res.started) pollRefreshStatus();
+      });
+    }).catch(function (err) {
+      showAddJobError('The job was not added: ' + err.message.replace(/\.$/, '') + '.');
+    }).then(function () {
+      addJobSubmit.disabled = false;
+      addJobSubmit.textContent = 'Add the job';
+    });
+  });
 
   pollRefreshStatus();
   loadRoles();

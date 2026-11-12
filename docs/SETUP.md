@@ -319,6 +319,29 @@ The marks **Applied**, **Rejected** and **Closed** also change the status of the
 
 > **NOTE:** Read each Word file before you send it. The page count is an estimate. Make sure that the CV has 3 pages or less in Word.
 
+### 6.2 Add a job that the board did not find
+
+To add a job from LinkedIn, Naukri or a career site that the board does not scrape, do these steps:
+
+1. On the board, click **Add a job**.
+2. Paste the link to the job, the job description, or both.
+3. If you paste only a link, you can leave the company, title and city empty. The board takes them from the link.
+4. Click **Add the job**.
+
+The board reads Workday links and most career sites. If it cannot read the link, the form tells you to paste the job description. The job shows with the **Manual** tag, and the scoring starts immediately. If the job passes the gate, career-ops makes the Word CV and cover letter (approximately 5 to 10 minutes).
+
+If the job fails the gate, click **Make CV anyway** on its card to get a CV. The 3-day age limit does not apply to a manual job. The refresh never closes a manual job: when you do not need it, mark it **Closed**.
+
+You can also add a job from the command line:
+
+```bash
+node tools/add-job.js --url <link> [--file jd.md] [--company NAME] [--title TITLE] [--location CITY]
+node autoscore.js
+node tailor.js --role <role id>
+```
+
+> **NOTE:** Workday can give the legal name of the company (for example a name with "Private Limited"). Type the usual name in the **Company** field.
+
 ## 7. Open the board from other devices
 
 By default, the server listens on `127.0.0.1`. Thus only this computer can open the board.

@@ -28,6 +28,7 @@
           <span class="schedule-note" id="scheduleNote" role="status"></span>
         </div>
         <button class="refresh-btn" id="refreshBtn">Refresh now</button>
+        <button class="refresh-btn secondary" id="addJobBtn" aria-haspopup="dialog">Add a job</button>
         <a class="header-link" href="/employers.html">Employer list</a>
         <a class="header-link" href="/usage.html">Model usage</a>
       </div>
@@ -94,6 +95,28 @@
   <span id="syncStatus">Loading roles…</span>
   <span id="refreshStatus"></span>
 </footer>
+
+<dialog class="add-job" id="addJobDialog" aria-labelledby="addJobTitle">
+  <form id="addJobForm" method="dialog" novalidate>
+    <h2 id="addJobTitle">Add a job</h2>
+    <p class="add-job-help">Paste a link to the job, the job description, or both. The board reads the description from Workday links and from most career sites. For LinkedIn, Naukri and sites with a login, paste the description. The job then gets the RM score, the career-ops score and, when it passes the gate, a tailored resume and cover letter.</p>
+    <label for="addJobUrl">Link to the job</label>
+    <input type="url" id="addJobUrl" name="url" placeholder="https://..." autocomplete="off">
+    <label for="addJobText">Job description <span class="optional">(when the board cannot read the link)</span></label>
+    <textarea id="addJobText" name="text" rows="8" placeholder="Paste the whole job description"></textarea>
+    <div class="add-job-row">
+      <div><label for="addJobCompany">Company</label><input type="text" id="addJobCompany" name="company" maxlength="100" autocomplete="organization"></div>
+      <div><label for="addJobRole">Job title</label><input type="text" id="addJobRole" name="title" maxlength="200" autocomplete="off"></div>
+      <div><label for="addJobCity">City</label><input type="text" id="addJobCity" name="location" maxlength="100" autocomplete="off"></div>
+    </div>
+    <p class="add-job-optional">With a link, you can leave the company, title and city empty: the board takes them from the link.</p>
+    <p class="add-job-error" id="addJobError" role="alert" hidden></p>
+    <div class="add-job-actions">
+      <button type="submit" class="primary" id="addJobSubmit">Add the job</button>
+      <button type="button" id="addJobCancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="/js/board.js"></script>
 </body>

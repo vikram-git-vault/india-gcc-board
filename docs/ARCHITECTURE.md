@@ -171,7 +171,7 @@ CREATE TABLE employers (
   name TEXT UNIQUE NOT NULL,
   domain TEXT NOT NULL,
   careers_url TEXT NOT NULL,
-  ats_type TEXT,                    -- 'workday' | 'oracle' | 'greenhouse' | 'avature' | 'custom'
+  ats_type TEXT,                    -- 'workday' | 'oracle' | 'greenhouse' | 'avature' | 'custom' | 'manual'
   robots_txt_compliant BOOLEAN DEFAULT 1,
   crawl_delay_seconds INTEGER DEFAULT 5,
   active BOOLEAN DEFAULT 1,
@@ -183,6 +183,8 @@ CREATE TABLE employers (
 The specification uses only an integer key. This schema adds `slug` as a unique key.
 The code can then refer to an employer with the same text ID as `config/employers.json`.
 The foreign keys in `roles` and `scrape_runs` use the integer `id`.
+
+A manual job (section 3.0.2) from a company that is not in `config/employers.json` gets an employer row with the slug `manual-<name>` and `ats_type` 'manual'. The refresh reads its employers from `config/employers.json` only, so it never scrapes this row.
 
 ### `roles`
 
@@ -215,6 +217,8 @@ CREATE TABLE roles (
   description_status TEXT,          -- 'ok' | 'gone' | 'error' | 'skipped'
   description_error TEXT,
   description_fetched_at TIMESTAMP,
+  changed_date DATE,                -- the last day that the title or the text changed (the CV gate)
+  source TEXT,                      -- 'manual': the owner added the role; NULL: scraped
   UNIQUE(employer_id, external_job_id)
 );
 ```
@@ -237,6 +241,26 @@ A role that a run did not read stays active. When a role is on the site again, i
 | Avature | The search pages, only when the scraper reads all of them | The scraper stops when it has `max_detail_fetches` new URLs. Then no role becomes inactive because it is not in the list. The scraper uses the remaining fetches to read the known roles again, the oldest first. A page with no title is a closed role. |
 
 > **NOTE:** An empty sitemap list does not make roles inactive. An empty list usually shows a broken sitemap or URL pattern, not closed roles.
+
+#### 3.0.2 Manual jobs
+
+The owner can add a job that the board did not scrape: with the **Add a job** form on the board (`POST /api/manual-jobs`), or with `node tools/add-job.js` (the `/tailor-role` skill). `lib/manual-job.js` does these steps:
+
+1. If a role has the same link (a query or a last "/" is not part of the compare), it uses that role. It does not add a second role.
+2. If the owner gave no job text, it reads the link. For a Workday link, it uses the Workday job API. For other links, it reads the schema.org `JobPosting` data in the page. If it gets less than 500 characters, the owner must paste the text. LinkedIn, Naukri and pages with a login always need the pasted text.
+3. It adds the role with `source` 'manual', `tier` 'target', the posted date of today, and the text in `full_description`.
+
+The server reads only public internet addresses. It refuses loopback, private and link-local addresses, also after a redirect.
+
+Rules for a manual role:
+
+- The refresh never closes it, never classifies it again and never fetches its description again. A scrape of the same job ID changes nothing. The owner closes it with the **Closed** mark.
+- The board always shows it. The exception and employer minimum scores do not hide it.
+- It gets the same RM scoring, career-ops evaluation, CV gate and fact checks as a scraped role. The scoring starts when the owner adds it. If the board is busy, it starts when the work in progress ends.
+- The 3-day CV limit (`tailoring.max_age_days`) does not apply.
+- When it fails the gate, the board shows **Make CV anyway** (`POST /api/roles/:id/make-cv`, `tailor.js --role ID --force-cv`).
+
+The owner made these decisions on 2026-11-12.
 
 ### `source_urls`
 
