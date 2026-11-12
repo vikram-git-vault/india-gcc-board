@@ -57,6 +57,25 @@ line('\n## Run summaries');
 recent.filter((l) => /\[autoscore\] Scored|\[tailor\] career-ops: \d+ roles|\[refresh\].*(Refreshed|complete)/i.test(l))
   .forEach((l) => line(`- ${l.slice(0, 260)}`));
 
+// The named states of the roles on the board (lib/states.js), from the
+// publisher's file: the RM score state and the career-ops state.
+line('\n## Roles on the board by state');
+try {
+  const board = JSON.parse(fs.readFileSync('data/roles.json', 'utf-8'));
+  const count = (key) => {
+    const n = {};
+    board.roles.forEach((r) => { const s = key(r); if (s) n[s] = (n[s] || 0) + 1; });
+    return Object.entries(n).sort((a, b) => b[1] - a[1]).map(([s, c]) => `${c} ${s}`).join(', ') || 'none';
+  };
+  line(`RM score: ${count((r) => r.score_state)}`);
+  line(`career-ops: ${count((r) => r.tailor_state && r.tailor_state.state)}`);
+  const attention = board.roles.filter((r) => r.tailor_state && ['retry', 'given_up', 'no_cv'].includes(r.tailor_state.state));
+  attention.forEach((r) => line(`- ${r.id} ${r.employer}, ${r.title}: ${r.tailor_state.text}`));
+  if (!board.roles.some((r) => r.tailor_state)) line('(The board file has no states yet: it is from before lib/states.js. The next refresh or scoring run writes them.)');
+} catch (err) {
+  line(`No board file (data/roles.json): ${err.message}`);
+}
+
 line('\n## career-ops results');
 const tailored = await all(`
   SELECT t.role_id, e.name AS employer, r.title, t.status, t.score, t.cv_file, t.error, t.run_at
