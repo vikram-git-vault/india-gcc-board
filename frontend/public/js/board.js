@@ -332,15 +332,35 @@
     var v = (role.score && role.score.variants) || {};
     return Math.max((v.PO || {}).fit || 0, (v.EM || {}).fit || 0);
   }
+  // The career-ops state of a role (lib/states.js TAILOR_STATES), from
+  // data/roles.json: { state, next, text }. Older files have none.
+  function tailorStateOf(role) { return role.tailor_state || null; }
+  // The career-ops threshold for a CV (the career-ops profile); 4 when
+  // the board file does not give it.
+  function cvMinScore() {
+    var v = (state.targeting || {}).cv_min_score;
+    return v == null ? 4 : v;
+  }
+  // Short labels for the waiting box and the status panel.
+  var TAILOR_LABEL = {
+    unscored: 'not scored', not_eligible: 'RM below the minimum', outside_window: 'outside the board window', incomplete: 'empty job text',
+    waiting: 'waiting', stale: 'to evaluate again', rerun: 'to evaluate again', retry: 'failed, to try again', given_up: 'failed, given up',
+    below_gate: 'below the gate', no_cv: 'passed, no CV (too old)', evaluated: 'evaluated', ready: 'CV ready',
+  };
+  var TAILOR_LABEL_ORDER = ['ready', 'no_cv', 'below_gate', 'evaluated', 'waiting', 'stale', 'rerun', 'retry', 'given_up', 'incomplete', 'outside_window'];
   function tailorBox(role) {
     var t = role.tailor;
+    var ts = tailorStateOf(role);
     if (t && t.score != null) {
       var b = t.score >= 4 ? 'high' : t.score >= 3 ? 'mid' : 'low';
       return '<div class="score-box ' + b + '" title="' + CO_TIP + (t.stale ? ' The job description changed after this evaluation.' : '') + '"><span class="num">' + Number(t.score).toFixed(1) + '</span><span class="lbl">career-ops</span></div>';
     }
     var min = (state.targeting || {}).tailor_min_fit;
     if (min != null && role.score && bestFit(role) >= min) {
-      return '<div class="score-box pending" title="' + CO_TIP + ' This role is waiting for career-ops."><span class="num">–</span><span class="lbl">career-ops</span></div>';
+      // The box says what career-ops does next: waiting, a retry, or given up.
+      var why = ts && ts.text ? ' ' + escapeHtml(ts.text) + '.' : ' This role is waiting for career-ops.';
+      var lbl = ts && (ts.state === 'retry' || ts.state === 'given_up') ? 'career-ops ' + (ts.state === 'retry' ? 'retry' : 'failed') : 'career-ops';
+      return '<div class="score-box pending" title="' + CO_TIP + why + '"><span class="num">–</span><span class="lbl">' + lbl + '</span></div>';
     }
     return '';
   }
@@ -368,7 +388,7 @@
     if (!role.manual || !role.score || (role.tailor && role.tailor.cv)) return '';
     var min = (state.targeting || {}).tailor_min_fit;
     var t = role.tailor;
-    var failed = (t && t.score != null && t.score < 4) || (min != null && bestFit(role) < min);
+    var failed = (t && t.score != null && t.score < cvMinScore()) || (min != null && bestFit(role) < min);
     if (!failed) return '';
     var busy = cvRequested[role.id];
     return '<button class="make-cv" data-role-id="' + role.id + '"' + (busy ? ' disabled' : '') +
@@ -379,7 +399,11 @@
   function scoreHtml(role) {
     var sc = role.score;
     if (!sc) {
-      var why = role.description_status === 'gone' ? 'The posting is closed.' : 'This role is waiting for a score.';
+      // The RM score state (lib/states.js RM_STATES) says why there is no score.
+      var why = role.description_status === 'gone' ? 'The posting is closed.'
+        : role.score_state === 'given_up' ? 'The scorer gave a score that the import rejected two times. The role is scored again when the job text changes.'
+        : role.score_state === 'outside_window' ? 'Older than the board window: the board does not score it.'
+        : 'This role is waiting for a score.';
       return '<div class="score-line"><span class="send">' + why + '</span></div>';
     }
     var flags = '';
@@ -430,8 +454,16 @@
     var c = (t.confirmed || []).map(function (x) {
       return '<li><strong>' + escapeHtml(x.gap) + ':</strong> ' + escapeHtml(x.answer) + '</li>';
     }).join('');
+    // The sentence names the state (lib/states.js TAILOR_STATES): a role
+    // can pass the gate and still get no CV (too old), or wait for a new
+    // evaluation after the text changed.
+    var ts = tailorStateOf(role);
+    var line = t.cv ? 'A tailored Word resume' + (t.cover ? ' and cover letter are' : ' is') + ' ready.'
+      : ts && ts.text ? ts.text.charAt(0).toUpperCase() + ts.text.slice(1) + '.'
+      : 'Below the score for a tailored resume (' + cvMinScore() + ' of 5).';
+    if (t.cv && ts && (ts.state === 'stale' || ts.state === 'rerun')) line += ' ' + ts.text.charAt(0).toUpperCase() + ts.text.slice(1) + '.';
     return '<div><h3>career-ops: ' + Number(t.score).toFixed(1) + ' of 5' + (t.decision ? ' (' + escapeHtml(t.decision) + ')' : '') + '</h3>' +
-      '<p>' + (t.cv ? 'A tailored Word resume' + (t.cover ? ' and cover letter are' : ' is') + ' ready.' : 'Below the score for a tailored resume (4 of 5).') + '</p>' +
+      '<p>' + escapeHtml(line) + '</p>' +
       (g ? '<h3>Not in your master CV (left off the resume)</h3><p>If you have done one of these, click <em>I have done this</em> and write it in your own words. The board adds it to your master CV, and career-ops makes this resume again.</p><ul class="gap-list">' + g + '</ul>' : '') +
       (c ? '<h3>Added to your master CV</h3><ul class="gap-list confirmed">' + c + '</ul>' : '') +
       '</div>';
@@ -681,6 +713,12 @@
     if (t.scored != null) {
       rows.push(['Scores', t.scored + ' scored' + (t.unscored ? ', ' + t.unscored + ' waiting' : '') + (state.refreshScoring ? ' (scoring now)' : '')]);
     }
+    // The roles in each career-ops state (lib/states.js TAILOR_STATES).
+    if (t.tailor_states) {
+      var parts = TAILOR_LABEL_ORDER.filter(function (s) { return t.tailor_states[s]; })
+        .map(function (s) { return t.tailor_states[s] + ' ' + TAILOR_LABEL[s]; });
+      if (parts.length) rows.push(['career-ops', parts.join(', ') + (state.refreshTailoring ? ' (running now)' : '')]);
+    }
     return { heading: heading, rows: rows, note: note };
   }
 
@@ -842,6 +880,7 @@
     fetch('/api/refresh/status').then(function (r) { return r.json(); }).then(function (s) {
       state.refreshRunning = Boolean(s.running);
       state.refreshScoring = Boolean(s.scoring);
+      state.refreshTailoring = Boolean(s.tailoring);
       state.refreshProgress = s.running ? (s.progress || null) : null;
       renderRefreshCompleteness();
       if (s.running) {

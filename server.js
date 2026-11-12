@@ -36,6 +36,7 @@ import {
 } from './lib/tailoring.js';
 import { syncTracker } from './lib/tracker-sync.js';
 import { publish } from './lib/publisher.js';
+import { cyclePhase } from './lib/states.js';
 
 const logger = createLogger('server');
 
@@ -590,13 +591,23 @@ app.post('/api/roles/:id/make-cv', async (req, res) => {
   }
 });
 
+// The flags, plus one name for the phase of the cycle (lib/states.js
+// CYCLE_PHASES) and the work that waits for the cycle to end.
+function statusJson() {
+  return {
+    ...refreshState,
+    phase: cyclePhase({ ...refreshState, retryPending: Boolean(retryTimer) }),
+    queued: { scoring: scoreQueued, cvs: cvQueue.length },
+  };
+}
+
 app.get('/api/refresh/status', (_req, res) => {
-  res.json(refreshState);
+  res.json(statusJson());
 });
 
 app.post('/api/refresh', express.json(), (_req, res) => {
   const result = runRefresh('manual');
-  res.status(result.started ? 202 : 409).json({ ...result, ...refreshState });
+  res.status(result.started ? 202 : 409).json({ ...result, ...statusJson() });
 });
 
 // Employer directory for the board (config/employers.json holds no personal
