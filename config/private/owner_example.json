@@ -1,12 +1,39 @@
 {
   "home_city": "Pune",
+  "excluded_employers": [
+    "Example Bank"
+  ],
   "cv_checks": {
     "keep": "\\b(Kafka|AI)\\b|2 hours to 5 minutes",
-    "headline": { "name": "Kafka or AI keyword", "pattern": "\\b(Kafka|AI)\\b", "flags": "i" },
+    "headline": {
+      "name": "Kafka or AI keyword",
+      "pattern": "\\b(Kafka|AI)\\b",
+      "flags": "i"
+    },
     "accomplishments": [
-      { "name": "Kafka accomplishment", "pattern": "\\bKafka\\b" },
-      { "name": "AI accomplishment", "pattern": "\\bAI\\b", "flags": "i" },
-      { "name": "batch run time result", "pattern": "2 hours to 5 minutes", "or_latest_bullet": true }
+      {
+        "name": "Kafka accomplishment",
+        "pattern": "\\bKafka\\b"
+      },
+      {
+        "name": "AI accomplishment",
+        "pattern": "\\bAI\\b",
+        "flags": "i"
+      },
+      {
+        "name": "batch run time result",
+        "pattern": "2 hours to 5 minutes",
+        "or_latest_bullet": true
+      }
+    ],
+    "review": [
+      {
+        "name": "platform and batch numbers in one sentence",
+        "all": [
+          "2 hours to 5 minutes",
+          "70%"
+        ]
+      }
     ]
   }
 }

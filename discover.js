@@ -23,6 +23,7 @@ import { createLogger } from './lib/logger.js';
 import { settings } from './lib/settings.js';
 import { isPathAllowed } from './lib/scrapers/BaseScraper.js';
 import { sitemapLocs, summarizeCompanies, detectAts } from './lib/discovery.js';
+import { loadOwner } from './lib/owner.js';
 
 const logger = createLogger('discover');
 const OUT_DIR = path.join('.cache', 'discovery');
@@ -34,13 +35,14 @@ const client = axios.create({
 });
 const pause = () => new Promise((resolve) => setTimeout(resolve, DELAY_MS));
 
-// Employers already in config/employers.json (active or excluded), matched
-// loosely by name so the report can mark them.
+// Employers already in config/employers.json (active or excluded), and the
+// ones the owner excludes (config/private/owner.json), matched loosely by
+// name so the report can mark them.
 function knownEmployers() {
   const cfg = JSON.parse(fs.readFileSync(path.join('config', 'employers.json'), 'utf-8'));
   const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
   return [...cfg.employers, ...cfg.excluded].map((e) => ({ key: norm(e.name || e.id), name: e.name || e.id }))
-    .concat([]);
+    .concat(loadOwner().excluded_employers.map((name) => ({ key: norm(name), name: `${name} (excluded by owner)` })));
 }
 
 function markKnown(companies) {

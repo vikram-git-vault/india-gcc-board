@@ -40,3 +40,9 @@ Resume/
 # Owner facts for the CV rules and checks (never commit); the _example files are committed
 config/private/*
 !config/private/*_example.*
+
+# Claude Code local files (the skills in .claude/skills are committed)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/.cc-writes/
+.claude/.claude/
