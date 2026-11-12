@@ -38,17 +38,27 @@
     "batch_size": 10,
     "claude_timeout_minutes": 15,
     "max_attempts": 2,
-    "keep_score_files": 10
+    "keep_score_files": 10,
+    "rescore_min_fit": 65
+  },
+  "board": {
+    "max_age_days": 30
   },
   "tailoring": {
     "auto_tailor": true,
     "career_ops_dir": "~/Projects/career-ops",
     "output_dir": "~/Library/CloudStorage/OneDrive-Personal/Desktop/Resume_Tailored",
     "min_fit_score": 75,
+    "max_age_days": 3,
     "max_roles_per_run": 40,
     "worker_timeout_minutes": 20,
-    "model": "claude-sonnet-5-5",
     "max_attempts": 2
+  },
+  "models": {
+    "rm": "claude-opus-5-5",
+    "rm_effort": "medium",
+    "scoring": "claude-sonnet-5-5",
+    "documents": "claude-opus-5-5"
   },
   "discovery": {
     "delay_seconds": 5

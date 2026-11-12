@@ -29,6 +29,7 @@
         </div>
         <button class="refresh-btn" id="refreshBtn">Refresh now</button>
         <a class="header-link" href="/employers.html">Employer list</a>
+        <a class="header-link" href="/usage.html">Model usage</a>
       </div>
     </div>
 
@@ -40,8 +41,9 @@
     </ul>
 
     <div class="search-row">
-      <input type="search" class="search" id="search" placeholder="Search by title or employer" aria-label="Search roles">
+      <input type="search" class="search" id="search" placeholder="Search by title, employer or job ID" aria-label="Search roles">
       <select class="sort" id="sort" aria-label="Sort by">
+        <option value="career" selected>Best career-ops score first</option>
         <option value="fit">Best RM score first</option>
         <option value="ats">Best ATS score first</option>
         <option value="date">Newest first</option>
@@ -57,10 +59,12 @@
     <summary>Filters</summary>
     <div class="filter-panel">
       <section class="facet"><h2>RM score</h2><div class="facet-row" id="facetScore"></div></section>
+      <section class="facet"><h2>career-ops score</h2><div class="facet-row" id="facetCareerOps"></div></section>
       <section class="facet"><h2>Grade</h2><div class="facet-row" id="facetGrade"></div></section>
       <section class="facet"><h2>Role family</h2><div class="facet-row" id="facetFamily"></div></section>
       <section class="facet"><h2>City</h2><div class="facet-row" id="facetLocation"></div></section>
       <section class="facet"><h2>Posted</h2><div class="facet-row" id="facetPosted" role="group" aria-label="Posted"></div></section>
+      <section class="facet" hidden><h2>Older roles</h2><div class="facet-row" id="facetOlder"></div></section>
       <section class="facet"><h2>Employer</h2><div class="facet-row" id="facetEmployer"></div></section>
       <button class="text-btn" id="clearFilters">Clear all filters</button>
     </div>

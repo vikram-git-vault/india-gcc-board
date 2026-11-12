@@ -77,14 +77,20 @@ The settings are in two files:
 | `scoring.claude_timeout_minutes` | `15` | The time limit for one request to Claude Code. After the limit, `autoscore.js` sends the same batch one more time. Thus one batch can take two times this limit. |
 | `scoring.max_attempts` | `2` | After this number of rejected scores, the role is not sent again until its description changes. |
 | `scoring.keep_score_files` | `10` | The number of score files that `.cache/autoscore/` keeps. |
+| `scoring.rescore_min_fit` | `65` | After a rubric change, the scorer scores a role again only when its better RM score was this or more. A lower role keeps its score until its title or description changes. |
+| `board.max_age_days` | `30` | The board shows, and Claude scores, only the roles that are this number of days old or less (the posted date, or the day that the board found the role). An older role keeps its scores. The board shows it when you select **Show roles older than 30 days**. Roles that you marked and roles with a tailored CV always show. `--role ID` and a re-tailor after a confirmed gap are not limited. |
 | `tailoring.auto_tailor` | `true` | After the scoring, send the best-matched roles to career-ops for a tailored Word CV and cover letter. Refer to section 6.1. |
 | `tailoring.career_ops_dir` | `~/Projects/career-ops` | The career-ops folder. `~` is your home folder. |
 | `tailoring.output_dir` | `~/Library/CloudStorage/OneDrive-Personal/Desktop/Resume_Tailored` | The folder for the Word files. |
 | `tailoring.min_fit_score` | `75` | career-ops gets only the roles whose better RM score is this or more. |
+| `tailoring.max_age_days` | `3` | career-ops evaluates roles of all ages, but makes a Word CV only for a role that is this number of days old or less. The date is the posted date (or the day that the board found the role). When the employer changes the title or the text of the role, the date of the change is used. A new CV goes into a new folder. The earlier CVs stay. |
 | `tailoring.max_roles_per_run` | `40` | The maximum number of roles in one tailoring run. |
 | `tailoring.worker_timeout_minutes` | `20` | The time limit for one role. |
-| `tailoring.model` | `claude-sonnet-5-5` | The Claude model of the career-ops worker. |
 | `tailoring.max_attempts` | `2` | After this number of failed runs, the role is not sent again until its description changes. |
+| `models.rm` | `claude-opus-5-5` | The model for RM scoring. Refer to `docs/ARCHITECTURE.md`, section 17. |
+| `models.rm_effort` | `medium` | The effort level of RM scoring: `low`, `medium`, `high`, `xhigh` or `max`. Do a check run (`tools/shadow-score.js`) before you change it. |
+| `models.scoring` | `claude-sonnet-5-5` | The model for the career-ops evaluation. |
+| `models.documents` | `claude-opus-5-5` | The model for the tailored CV and cover letter (the second message of the career-ops worker). |
 | `discovery.delay_seconds` | `5` | The delay between requests of `discover.js`. |
 | `logging.level` | `info` | The minimum level of log messages: `error`, `warn`, `info` or `debug`. |
 | `database.path` | `./data/jobs.db` | The location of the database. |
@@ -99,6 +105,22 @@ The settings are in two files:
    ```
 
    `data/` contains the database and the scores. `Resume/` contains your resumes. `.cache/`, `logs/` and the pm2 logs can contain parts of the scores. The server writes new files in these folders. A folder with mode `700` keeps all of its files private.
+
+### 2.3 `config/private/` (your CV facts)
+
+This folder keeps your own facts out of git. Git ignores all files in it, except the `_example` files.
+
+1. Copy the two example files:
+
+   ```bash
+   cp config/private/owner_example.json config/private/owner.json
+   cp config/private/cv-rules_example.md config/private/cv-rules.md
+   ```
+
+2. In `owner.json`, write your home city (`home_city`) and the match patterns of your must-have CV items (`cv_checks`). The CV contact line shows the city of the role and then your home city, for example "Mumbai/Pune". When the role gives no city, the template's location stays.
+3. In `cv-rules.md`, write your own CV rules: your level, examples of bold facts, the items that each CV must have, and the city and availability for the cover letter. Use only facts from your master CV.
+
+Do not put your facts in other files that git tracks. When a private file is missing, the board uses its `_example` file and `tailor.js` writes a warning to the log.
 
 ## 3. Make the database
 
@@ -226,10 +248,9 @@ To score by hand, run `node autoscore.js`, or use the procedure that follows.
 
 > **CAUTION:** Keep the resume files only in `Resume/`. Do not copy resume text into a file that git tracks. The resume files contain personal data. Git ignores the `Resume/` folder.
 
-1. Make sure that these files are in the `Resume/` folder:
-   - `profile_product_owner.txt`
-   - `profile_engineering_leader.txt`
-   - `candidate_profile.txt`
+1. Make sure that these files are available:
+   - `cv.md` in the career-ops folder (`tailoring.career_ops_dir`): the master CV. career-ops uses the same file.
+   - `candidate_profile.txt` in the `Resume/` folder.
 2. Open Claude Code in the project folder.
 3. Type: "score the new roles".
 4. Wait until Claude Code shows the number of stored scores.
@@ -274,6 +295,12 @@ node tailor.js              # all roles that need it
 node tailor.js --max 5      # not more than 5 roles
 node tailor.js --role 463   # only role 463
 ```
+
+While tailoring runs, the server log (`pm2 logs india-gcc-board`) shows the progress, as for the scoring:
+
+- A progress line when a role starts a step (the career-ops evaluation or the CV and cover letter), and one time each minute. The line shows the roles done, the role in progress, its step and model, the time on this role, and the counts: scored, passed the gate, Word CVs, too old for a CV, failed, left.
+- One line for each finished role: its career-ops score and the result (Word CV made, below the CV threshold, too old for a CV, or the reason that it failed).
+- A summary line when tailoring ends. It also shows a usage limit that stopped the run.
 
 To stop tailoring, set `tailoring.auto_tailor` to `false` and restart the server.
 

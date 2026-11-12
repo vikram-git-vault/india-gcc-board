@@ -1,4 +1,4 @@
-import { validateScoreRecord, descriptionHash, rubricVersion } from '../lib/scoring.js';
+import { scoreState, validateScoreRecord, descriptionHash, rubricVersion } from '../lib/scoring.js';
 
 const good = () => ({
   role_id: 7,
@@ -63,9 +63,33 @@ describe('descriptionHash', () => {
   });
 });
 
+describe('long reason', () => {
+  test('a reason over 35 words is cut, not rejected', () => {
+    const r = good();
+    r.reason = Array.from({ length: 50 }, (_, i) => `w${i}`).join(' ');
+    const out = validateScoreRecord(r, { expectedHash: r.description_hash });
+    expect(out.ok).toBe(true);
+    expect(out.value.reason.split(' ')).toHaveLength(35);
+    expect(out.value.reason.endsWith('w34…')).toBe(true);
+  });
+});
+
+describe('scoreState', () => {
+  const base = { scoredHash: 'h', hash: 'h', scoredRubric: 1, rubric: 2, rescoreMinFit: 65 };
+  test('no score: new; changed description: stale at any fit', () => {
+    expect(scoreState({ ...base, scoredHash: null })).toBe('new');
+    expect(scoreState({ ...base, hash: 'x', bestFit: 40 })).toBe('stale');
+  });
+  test('rubric change: stale only at or above the minimum fit', () => {
+    expect(scoreState({ ...base, bestFit: 65 })).toBe('stale');
+    expect(scoreState({ ...base, bestFit: 64 })).toBe('scored');
+    expect(scoreState({ ...base, scoredRubric: 2, bestFit: 90 })).toBe('scored');
+  });
+});
+
 describe('rubricVersion', () => {
   test('reads the committed rubric', () => {
-    expect(rubricVersion()).toBe(1);
+    expect(rubricVersion()).toBe(2);
   });
   test('throws without a version line', () => {
     expect(() => rubricVersion('# no version')).toThrow();

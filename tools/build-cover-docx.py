@@ -44,8 +44,16 @@ def rpr(px):
     return ''
 
 
+def nodash(t):
+    """Owner's rule: no em or en dashes (same as build-cv-docx.py)."""
+    t = re.sub(r'(\d)\s*[–—]\s*(\d)', r'\1 to \2', t)
+    t = re.sub(r'(\w)[–—](\w)', r'\1-\2', t)
+    t = re.sub(r'\s*[–—]\s*$', '', t)
+    return re.sub(r'\s*[–—]\s*', ', ', t)
+
+
 def para(proto, t):
-    t = t.replace('**', '')
+    t = nodash(t.replace('**', ''))
     return f'<w:p>{ppr(proto)}<w:r>{rpr(proto)}<w:t xml:space="preserve">{escape(t)}</w:t></w:r></w:p>'
 
 

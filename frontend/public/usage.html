@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%A7%AD</text></svg>">
+<title>Model usage · India GCC Board</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/css/employers.css">
+<link rel="stylesheet" href="/css/usage.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <a href="/">← Back to the board</a>
+    <h1>Model usage</h1>
+    <p class="summary" id="summary">Loading…</p>
+    <div class="controls">
+      <label for="days">Period</label>
+      <select id="days" class="period">
+        <option value="1">Last day</option>
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <ul class="tiles" id="tiles"></ul>
+  <h2>By stage and model</h2>
+  <p class="note">Tokens include prompt-cache reads, which cost a tenth of new input. The cost is the list-price value that Claude Code reports; a Claude subscription does not bill each call. Check runs are not in the totals.</p>
+  <div class="table-wrap"><table id="stages"></table></div>
+  <h2>By day</h2>
+  <div class="table-wrap"><table id="days-table"></table></div>
+</main>
+
+<script src="/js/usage.js"></script>
+</body>
+</html>

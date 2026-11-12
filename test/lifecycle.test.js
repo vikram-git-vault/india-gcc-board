@@ -168,3 +168,44 @@ describe('AvatureScraper lifecycle', () => {
     expect(s.presence.complete).toBe(false);
   });
 });
+
+describe('changed_date and the kept CV', () => {
+  const read = async (sql, params) => {
+    const conn = new sqlite3.Database(db.databasePath());
+    const rows = await new Promise((resolve, reject) => conn.all(sql, params, (err, out) => (err ? reject(err) : resolve(out))));
+    conn.close();
+    return rows;
+  };
+  const roleRow = async (id) => (await read(`SELECT r.id, r.changed_date FROM roles r JOIN employers e ON e.id = r.employer_id
+    WHERE e.slug = ? AND r.external_job_id = ?`, [SLUG, id]))[0];
+
+  test('a new title or text sets changed_date; the same text and the first full text do not', async () => {
+    await db.syncRoles(SLUG, [role('ch1', { description: 'short' })]);
+    await db.syncRoles(SLUG, [role('ch1', { description: 'short' })]);
+    const { id } = await roleRow('ch1');
+    expect((await roleRow('ch1')).changed_date).toBeNull();
+    await db.saveDescriptionResult(id, { status: 'ok', text: 'full text' });
+    expect((await roleRow('ch1')).changed_date).toBeNull();
+    // The full text is what career-ops reads: a new listing snippet is no change.
+    await db.syncRoles(SLUG, [role('ch1', { description: 'other snippet' })]);
+    expect((await roleRow('ch1')).changed_date).toBeNull();
+    await db.syncRoles(SLUG, [role('ch1', { title: 'Role ch1 - Data', description: 'other snippet' })]);
+    expect((await roleRow('ch1')).changed_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await read('UPDATE roles SET changed_date = NULL WHERE id = ?', [id]);
+    await db.saveDescriptionResult(id, { status: 'ok', text: 'full text, edited' });
+    expect((await roleRow('ch1')).changed_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  test('an evaluation with no CV keeps the earlier CV; a new CV replaces it', async () => {
+    await db.syncRoles(SLUG, [role('cv1')]);
+    const { id } = await roleRow('cv1');
+    const base = { role_id: id, report_num: '001', gaps: [] };
+    await db.upsertTailored({ ...base, description_hash: 'h1', status: 'ready', score: 4.2, folder: '/o/A/2026-11-07_X', cv_file: 'cv.docx', cover_file: 'cl.docx' });
+    await db.upsertTailored({ ...base, description_hash: 'h2', status: 'evaluated', score: 4.2 });
+    let [t] = await read('SELECT * FROM tailored_docs WHERE role_id = ?', [id]);
+    expect([t.description_hash, t.status, t.folder, t.cv_file, t.cover_file]).toEqual(['h2', 'evaluated', '/o/A/2026-11-07_X', 'cv.docx', 'cl.docx']);
+    await db.upsertTailored({ ...base, description_hash: 'h3', status: 'ready', score: 4.4, folder: '/o/A/2026-11-12_X', cv_file: 'cv.docx', cover_file: null });
+    [t] = await read('SELECT * FROM tailored_docs WHERE role_id = ?', [id]);
+    expect([t.folder, t.cv_file, t.cover_file]).toEqual(['/o/A/2026-11-12_X', 'cv.docx', null]);
+  });
+});

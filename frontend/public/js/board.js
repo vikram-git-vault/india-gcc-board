@@ -20,13 +20,16 @@
     refreshProgress: null,  // the last step of the running refresh
     marks: loadMarks(),   // roleId -> status; the server keeps them (GET /api/marks), this browser keeps a copy
     query: '',
+    hiddenRoles: [],      // shown only for a job id search
     grades: new Set(),
     families: new Set(),
     locations: new Set(),
     employers: new Set(),
-    sort: 'fit',
+    sort: 'career',       // default: best career-ops score first
     scoreBands: new Set(),
+    coBands: new Set(),
     posted: null,         // one POSTED_BANDS id, or null for any date
+    showOlder: false,     // show the roles older than targeting.max_age_days
     tab: 'open',
   };
 
@@ -39,6 +42,20 @@
     { id: 'fit50', label: '50 to 74', test: function (r) { return r.score && r.score.fit >= 50 && r.score.fit < 75; } },
     { id: 'fitlow', label: 'Below 50', test: function (r) { return r.score && r.score.fit < 50; } },
     { id: 'unscored', label: 'Not scored', test: function (r) { return !r.score; } },
+  ];
+
+  // career-ops score bands (1 to 5). At 4 or more the board makes a
+  // tailored resume. Waiting: RM score at the minimum, no career-ops yet.
+  function coScore(r) { return r.tailor && r.tailor.score != null ? Number(r.tailor.score) : null; }
+  var CO_BANDS = [
+    { id: 'co40', label: '4 and above', test: function (r) { return coScore(r) != null && coScore(r) >= 4; } },
+    { id: 'co35', label: '3.5 to 3.9', test: function (r) { return coScore(r) != null && coScore(r) >= 3.5 && coScore(r) < 4; } },
+    { id: 'co30', label: '3 to 3.4', test: function (r) { return coScore(r) != null && coScore(r) >= 3 && coScore(r) < 3.5; } },
+    { id: 'colow', label: 'Below 3', test: function (r) { return coScore(r) != null && coScore(r) < 3; } },
+    { id: 'copending', label: 'Waiting for career-ops', test: function (r) {
+      var min = (state.targeting || {}).tailor_min_fit;
+      return coScore(r) == null && min != null && !!r.score && bestFit(r) >= min;
+    } },
   ];
   // "Within" bands include the newer ones; a role open more than a month
   // is less likely to still be hiring, so it has its own band.
@@ -92,6 +109,44 @@
 
   // Whole days from the posting date to today (the viewer's calendar), or
   // null when the site gave no date.
+  // The board window (targeting.max_age_days, 30): older roles are hidden,
+  // except the owner's marked roles and roles with a tailored CV. The age
+  // is the posted date, or the day the board first found the role.
+  function ageDays(role) {
+    var d = role.age_date || role.posted_date;
+    if (!/^\d{4}-\d{2}-\d{2}/.test(d || '')) return null;
+    var now = new Date();
+    var today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.max(0, Math.round((today - Date.parse(d.slice(0, 10) + 'T00:00:00Z')) / 86400000));
+  }
+  function isOlder(role) {
+    var max = (state.targeting || {}).max_age_days;
+    var d = ageDays(role);
+    return max != null && d !== null && d > max;
+  }
+  function inWindow(role) {
+    return !isOlder(role) || !!markOf(role) || !!(role.tailor && role.tailor.cv);
+  }
+  function buildOlderChip() {
+    var container = document.getElementById('facetOlder');
+    container.innerHTML = '';
+    var n = state.roles.filter(function (r) { return !inWindow(r); }).length;
+    var max = (state.targeting || {}).max_age_days;
+    if (!n || max == null) { container.parentNode.hidden = true; return; }
+    container.parentNode.hidden = false;
+    var btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.textContent = 'Show roles older than ' + max + ' days (' + n + ')';
+    btn.title = 'These roles are hidden: they are older than ' + max + ' days, you did not mark them, and they have no tailored resume. The board does not score them again.';
+    btn.setAttribute('aria-pressed', state.showOlder ? 'true' : 'false');
+    btn.addEventListener('click', function () {
+      state.showOlder = !state.showOlder;
+      btn.setAttribute('aria-pressed', state.showOlder ? 'true' : 'false');
+      render();
+    });
+    container.appendChild(btn);
+  }
+
   function postedAgeDays(role) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(role.posted_date || '')) return null;
     var now = new Date();
@@ -145,15 +200,31 @@
     var bandLabel = {};
     SCORE_BANDS.forEach(function (b) { bandLabel[b.id] = b.label; });
     buildFacetChips('facetScore', SCORE_BANDS.filter(function (b) { return state.roles.some(b.test); }).map(function (b) { return b.id; }), state.scoreBands, function (id) { return bandLabel[id]; });
+    var coLabel = {};
+    CO_BANDS.forEach(function (b) { coLabel[b.id] = b.label; });
+    buildFacetChips('facetCareerOps', CO_BANDS.filter(function (b) { return state.roles.some(b.test); }).map(function (b) { return b.id; }), state.coBands, function (id) { return coLabel[id]; });
     buildFacetChips('facetGrade', orderedPresent(GRADE_ORDER, state.roles.map(function (r) { return r.grade; })), state.grades);
     buildFacetChips('facetFamily', orderedPresent(FAMILY_ORDER, state.roles.map(function (r) { return r.family; })), state.families);
     buildFacetChips('facetLocation', uniqueSorted(state.roles.map(function (r) { return r.location; })), state.locations);
     buildPostedChips();
+    buildOlderChip();
     buildFacetChips('facetEmployer', uniqueSorted(state.roles.map(function (r) { return r.employer; })), state.employers);
   }
 
+  // The employer's job id, letters and digits only: "R-2680072" and
+  // "2680072" both find R-2680072.
+  function idKey(text) { return String(text || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function jobIdHit(role) {
+    var q = idKey(state.query);
+    return /\d{4}/.test(q) && !/\s/.test(state.query.trim()) && idKey(role.job_id).indexOf(q) !== -1;
+  }
+
   function matchesFacets(role) {
+    // A job id search also finds the roles older than the board window.
+    var idHit = !!state.query && jobIdHit(role);
+    if (!idHit && !state.showOlder && state.posted !== 'older' && !inWindow(role)) return false;
     if (state.scoreBands.size && !SCORE_BANDS.some(function (b) { return state.scoreBands.has(b.id) && b.test(role); })) return false;
+    if (state.coBands.size && !CO_BANDS.some(function (b) { return state.coBands.has(b.id) && b.test(role); })) return false;
     if (state.grades.size && !state.grades.has(role.grade)) return false;
     if (state.families.size && !state.families.has(role.family)) return false;
     if (state.locations.size && !state.locations.has(role.location)) return false;
@@ -164,7 +235,7 @@
     }
     if (state.query) {
       var q = state.query.toLowerCase();
-      if (role.title.toLowerCase().indexOf(q) === -1 && role.employer.toLowerCase().indexOf(q) === -1) return false;
+      if (!idHit && role.title.toLowerCase().indexOf(q) === -1 && role.employer.toLowerCase().indexOf(q) === -1) return false;
     }
     return true;
   }
@@ -182,7 +253,10 @@
   function sortRoles(list) {
     var copy = list.slice();
     function scoreKey(r, key) { return r.score ? r.score[key] : -1; }
-    if (state.sort === 'fit') copy.sort(function (a, b) { return scoreKey(b, 'fit') - scoreKey(a, 'fit') || scoreKey(b, 'ats') - scoreKey(a, 'ats'); });
+    // Roles with no career-ops score go after the scored ones.
+    function coKey(r) { var v = coScore(r); return v == null ? -1 : v; }
+    if (state.sort === 'career') copy.sort(function (a, b) { return coKey(b) - coKey(a) || scoreKey(b, 'fit') - scoreKey(a, 'fit'); });
+    else if (state.sort === 'fit') copy.sort(function (a, b) { return scoreKey(b, 'fit') - scoreKey(a, 'fit') || scoreKey(b, 'ats') - scoreKey(a, 'ats'); });
     else if (state.sort === 'ats') copy.sort(function (a, b) { return scoreKey(b, 'ats') - scoreKey(a, 'ats') || scoreKey(b, 'fit') - scoreKey(a, 'fit'); });
     else if (state.sort === 'date') copy.sort(function (a, b) { return (b.posted_date || '').localeCompare(a.posted_date || ''); });
     else if (state.sort === 'employer') copy.sort(function (a, b) { return a.employer.localeCompare(b.employer); });
@@ -199,7 +273,11 @@
     var metaParts = ['<span class="employer">' + escapeHtml(role.employer) + '</span>'];
     [role.location, role.family, department].filter(Boolean).forEach(function (m) { metaParts.push('<span>' + escapeHtml(m) + '</span>'); });
     metaParts.push('<span>' + posted + '</span>');
+    if (role.job_id) metaParts.push('<span class="job-id" title="The employer\'s job id">Job ID ' + escapeHtml(role.job_id) + '</span>');
 
+    var hiddenBadge = role.hidden
+      ? '<span class="badge hidden-role" title="The board hides this role (' + escapeHtml(role.hidden) + '). It shows because you searched its job ID.">Hidden: ' + escapeHtml(role.hidden) + '</span>'
+      : '';
     var exceptionBadge = role.tier === 'exception'
       ? '<span class="badge exception" title="AVP or Senior Manager grade. The board keeps it only when the RM score is 75 or more.">Exception</span>'
       : '';
@@ -225,7 +303,7 @@
         '<div class="card-body">' +
         '<div class="card-head">' +
           '<h3 class="card-title">' + escapeHtml(role.title) + '</h3>' +
-          '<span class="badges">' + exceptionBadge + '<span class="badge">' + escapeHtml(role.grade || '') + '</span></span>' +
+          '<span class="badges">' + hiddenBadge + exceptionBadge + '<span class="badge">' + escapeHtml(role.grade || '') + '</span></span>' +
         '</div>' +
         '<div class="card-meta">' + metaParts.join('') + '</div>' +
         scoreHtml(role) +
@@ -430,6 +508,8 @@
 
   function applyRender() {
     var filtered = state.roles.filter(function (r) { return matchesFacets(r) && matchesTab(r); });
+    // A job id search also finds the roles the board hides (below the RM minimum).
+    if (state.query) filtered = filtered.concat(state.hiddenRoles.filter(function (r) { return jobIdHit(r) && matchesTab(r); }));
     var sorted = sortRoles(filtered);
 
     document.getElementById('cards').innerHTML = sorted.map(cardHtml).join('');
@@ -665,8 +745,9 @@
   document.getElementById('emptyClear').addEventListener('click', function () { resetFacets(); });
 
   function resetFacets() {
-    state.scoreBands.clear(); state.grades.clear(); state.families.clear(); state.locations.clear(); state.employers.clear();
+    state.scoreBands.clear(); state.coBands.clear(); state.grades.clear(); state.families.clear(); state.locations.clear(); state.employers.clear();
     state.posted = null;
+    state.showOlder = false;
     state.query = ''; document.getElementById('search').value = '';
     Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', 'false'); });
     render();
@@ -695,6 +776,7 @@
       return r.json();
     }).then(function (payload) {
       state.roles = payload.roles || [];
+      state.hiddenRoles = payload.hidden_roles || [];
       state.meta = payload.meta || {};
       state.coverage = payload.coverage || state.coverage;
       state.targeting = payload.targeting || null;

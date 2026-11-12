@@ -1,4 +1,5 @@
-import { formatMinutes, formatProgress, reportProgress, formatScoringProgress, formatScoringSummary, formatRefreshSummary, reportSummary } from '../lib/progress.js';
+import { formatMinutes, formatProgress, reportProgress, formatScoringProgress, formatScoringSummary, formatRefreshSummary, reportSummary,
+  formatTailoringProgress, formatTailoringResult, formatTailoringSummary } from '../lib/progress.js';
 
 const start = '2026-10-14T00:30:00Z';
 const now = new Date('2026-10-14T02:19:30Z');
@@ -112,5 +113,33 @@ describe('formatRefreshSummary', () => {
 describe('reportSummary', () => {
   test('does nothing without an IPC channel', () => {
     expect(() => reportSummary(['=== Refresh complete ==='])).not.toThrow();
+  });
+});
+
+describe('tailoring progress', () => {
+  const start = '2026-11-05T02:53:00.000Z';
+  const now = new Date('2026-11-05T03:07:00.000Z');
+  const base = { total: 34, done: 5, scored: 5, passed: 2, ready: 1, too_old: 1, failed: 0, cv_from: '2026-11-02' };
+  test('before the count is known, and no roles', () => {
+    expect(formatTailoringProgress(null, start, now)).toBe('Tailoring running 14 min: finding the roles that need career-ops');
+    expect(formatTailoringProgress({ total: 0 }, start, now)).toBe('Tailoring running 14 min: no roles need career-ops');
+  });
+  test('the role in progress, its step, model and time', () => {
+    const p = { ...base, item: 'Barclays: Director', step: 'CV and cover letter', model: 'claude-opus-5-5', role_started: '2026-11-05T03:05:00.000Z' };
+    expect(formatTailoringProgress(p, start, now)).toBe('Tailoring running 14 min: 5 of 34 roles done '
+      + '(now: Barclays: Director, CV and cover letter on claude-opus-5-5, 2 min on this role); '
+      + '5 scored, 2 passed the gate, 1 Word CVs, 1 too old for a CV, 0 failed, 29 left');
+  });
+  test('a line for each finished role', () => {
+    const line = (last) => formatTailoringResult({ ...base, last: { role: 'Barclays: Director', seconds: 185, ...last } });
+    expect(line({ score: 4.2, outcome: 'ready' })).toBe('Tailoring role 5 of 34: Barclays: Director: career-ops 4.2/5, Word CV made (3 min 5 s)');
+    expect(line({ score: 3.5, outcome: 'below' })).toMatch(/career-ops 3\.5\/5, below the CV threshold, no CV/);
+    expect(line({ score: 4, outcome: 'too_old', age_date: '2026-10-30' })).toMatch(/dated 2026-10-30 \(posted or changed\), before 2026-11-02: no CV/);
+    expect(line({ score: null, outcome: 'failed', error: 'the worker took more than 20 minutes' })).toMatch(/: failed: the worker took more than 20 minutes/);
+    expect(formatTailoringResult(base)).toBeNull();
+  });
+  test('the summary, also after a usage limit', () => {
+    expect(formatTailoringSummary({ ...base, done: 34 })).toBe('5 scored, 2 passed the gate, 1 Word CVs, 1 too old for a CV, 0 failed, 0 left');
+    expect(formatTailoringSummary({ ...base, stopped: 'Claude usage limit: x' })).toMatch(/29 left; stopped: Claude usage limit: x$/);
   });
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds a Word CV from a career-ops CV payload (JSON).
 
-Usage: build-cv-docx.py <payload.json> <out.docx> <template.docx> [cv.md]
+Usage: build-cv-docx.py <payload.json> <out.docx> <template.docx> [cv.md] [--location CITY]
 
 tailor.js runs it. The template (Resume/templates/resume.docx, gitignored)
 must have these paragraphs: the name first and the headline second, a
@@ -13,11 +13,19 @@ The template is one of the owner's own Word resumes. Its styles, numbering,
 page setup, header and footer stay as they are. Only the body is rebuilt, by
 cloning the template's own paragraphs for each part of the CV.
 """
-import json, math, re, sys, zipfile
+import json, math, os, re, sys, zipfile
 from xml.sax.saxutils import escape
 
-payload_path, out_path, template_path = sys.argv[1:4]
-cv_path = sys.argv[4] if len(sys.argv) > 4 else None
+args = sys.argv[1:]
+# --location: the city of the role, for the contact line (owner, 2026-11-05:
+# a Pune role shows Pune). Without it, the template's own location stays.
+location = None
+if '--location' in args:
+    i = args.index('--location')
+    location = args[i + 1].strip() or None
+    del args[i:i + 2]
+payload_path, out_path, template_path = args[0:3]
+cv_path = args[3] if len(args) > 3 else None
 p = json.load(open(payload_path, encoding='utf-8'))
 
 MAX_LINES = 160  # 3 pages, with a small margin (see est_lines)
@@ -100,8 +108,27 @@ def bold(r):
     return r.replace('<w:rPr>', '<w:rPr><w:b/><w:bCs/>', 1) if r else '<w:rPr><w:b/><w:bCs/></w:rPr>'
 
 
+def nodash(t):
+    """Owner's rule: no em or en dashes. A range becomes "to", a joined pair
+    gets a hyphen, an aside gets a comma. The worker must rephrase them; this
+    is the last safety net."""
+    t = re.sub(r'(\d)\s*[–—]\s*(\d)', r'\1 to \2', t)
+    t = re.sub(r'(\w)[–—](\w)', r'\1-\2', t)
+    t = re.sub(r'\s*[–—]\s*$', '', t)
+    return re.sub(r'\s*[–—]\s*', ', ', t)
+
+
 def run(t, r='', tab=False):
-    return f'<w:r>{r}{"<w:tab/>" if tab else ""}<w:t xml:space="preserve">{escape(t)}</w:t></w:r>'
+    return f'<w:r>{r}{"<w:tab/>" if tab else ""}<w:t xml:space="preserve">{escape(nodash(t))}</w:t></w:r>'
+
+
+SMALL = {'and', 'or', 'of', 'for', 'the', 'to', 'in', 'on', 'with', 'vs'}
+
+
+def label(cat):
+    """Owner's skill label style: "Cloud and Architecture:"."""
+    words = cat.strip().rstrip(':').split()
+    return ' '.join(w if i and w.lower() in SMALL else w[:1].upper() + w[1:] for i, w in enumerate(words)) + ':'
 
 
 def runs_md(t, r):
@@ -110,8 +137,39 @@ def runs_md(t, r):
                    for i, seg in enumerate(re.split(r'\*\*', t)) if seg)
 
 
-def para(proto, inner):
-    return f'<w:p>{ppr(proto)}{inner}</w:p>'
+def para(proto, inner, spacing=None):
+    pp = ppr(proto)
+    if spacing:
+        pp = with_spacing(pp, *spacing)
+    return f'<w:p>{pp}{inner}</w:p>'
+
+
+# Owner's rule (2026-11-05): from Domain Expertise on, each bullet line has
+# 2 pt before and 2 pt after (40 twentieths of a point), the same for all.
+BULLET_SPACING = (40, 40)
+
+
+def with_spacing(pp, before, after):
+    """The paragraph properties with this space before and after. Other
+    spacing attributes (line) stay; automatic spacing is turned off."""
+    if not pp:
+        return f'<w:pPr><w:spacing w:before="{before}" w:after="{after}"/></w:pPr>'
+    m = re.search(r'<w:spacing\b[^>]*/>', pp)
+    if m:
+        attrs = re.sub(r'\s+w:(?:before|after|beforeAutospacing|afterAutospacing|beforeLines|afterLines)="[^"]*"', '', m.group(0)[len('<w:spacing'):-2])
+        return pp.replace(m.group(0), f'<w:spacing w:before="{before}" w:after="{after}"{attrs}/>', 1)
+    # Schema order: w:spacing comes before w:ind, w:jc and w:rPr.
+    tag = f'<w:spacing w:before="{before}" w:after="{after}"/>'
+    m = re.search(r'<w:(?:ind|contextualSpacing|mirrorIndents|suppressOverlap|jc|textDirection|textAlignment|textboxTightWrap|outlineLvl|divId|cnfStyle|rPr|sectPr|pPrChange)\b|</w:pPr>', pp)
+    return pp[:m.start()] + tag + pp[m.start():]
+
+
+def contact_line(px):
+    """The template's contact line, with the role's city as the location
+    (the text of its first run, before the first "|")."""
+    if not location:
+        return px
+    return re.sub(r'(<w:t(?:\s[^>]*)?>)[^<]*(</w:t>)', lambda m: m.group(1) + escape(location) + m.group(2), px, count=1)
 
 
 # Prototype paragraphs from the template.
@@ -131,11 +189,11 @@ P_ROLE = TAB_HEADS[0]
 P_SCOPE = find(lambda t: t.startswith('Scope:'), 'scope line')
 P_BULLET = after(P_SCOPE)
 P_SKILL = after(find(lambda t: t == 'Area of Expertise', 'skills heading'))
-P_RECOG = after(find(lambda t: t == 'Recognition', 'recognition heading'))
-P_EDU_HEAD = TAB_HEADS[-1]
-P_EDU_LINE = after(P_EDU_HEAD)
-P_SEC_PAD = next((x for x in paras if 'AfterSectionNamePadding' in x), '')
-P_CARD_PAD = next((x for x in paras if 'AfterCardPadding' in x), '')
+# From the Recognition heading to the end of the body (Recognition and
+# Education), exactly as the template has it. The payload's awards,
+# education and certifications are not used.
+_recog = body.index(find(lambda t: t == 'Recognition', 'recognition heading'))
+TAIL = re.findall(r'<w:p\b[^>]*/>|<w:p\b[^>]*>.*?</w:p>|<w:tbl\b.*?</w:tbl>', body[_recog:body.rindex('<w:sectPr')], re.S)
 
 
 def headline(p):
@@ -162,7 +220,7 @@ def build(p):
     title = headline(p)
     if title:
         out.append(para(P_HEAD, run(title.upper(), rpr(P_HEAD))))
-    out.append(P_CONTACT)
+    out.append(contact_line(P_CONTACT))
 
     if p.get('summary'):
         section('Professional Summary')
@@ -171,14 +229,15 @@ def build(p):
     if p.get('domain_expertise'):
         section('Domain Expertise')
         for line in p['domain_expertise']:
-            out.append(para(P_DOMAIN, runs_md(line, rpr(P_DOMAIN))))
+            out.append(para(P_DOMAIN, runs_md(line, rpr(P_DOMAIN)), BULLET_SPACING))
 
     if p.get('accomplishments'):
         section('Accomplishments')
         for a in p['accomplishments']:
             lead = a.get('lead', '')
-            inner = run(lead.rstrip('.') + '. ', bold(rpr(P_ACC, 0))) if lead else ''
-            out.append(para(P_ACC, inner + runs_md(a.get('text', ''), rpr(P_ACC, 1))))
+            # Owner's style: "**Lead.** text", the period inside the bold.
+            inner = run(lead.rstrip('. ') + '.', bold(rpr(P_ACC, 0))) + run(' ', rpr(P_ACC, 1)) if lead else ''
+            out.append(para(P_ACC, inner + runs_md(a.get('text', ''), rpr(P_ACC, 1)), BULLET_SPACING))
 
     if p.get('experience'):
         section('Professional Experience')
@@ -188,7 +247,7 @@ def build(p):
             if e.get('context'):
                 out.append(para(P_SCOPE, runs_md(e['context'], rpr(P_SCOPE))))
             for b in e.get('bullets', []):
-                out.append(para(P_BULLET, runs_md(b, rpr(P_BULLET))))
+                out.append(para(P_BULLET, runs_md(b, rpr(P_BULLET)), BULLET_SPACING))
 
     skills = list(p.get('skills') or [])
     if p.get('competencies'):
@@ -196,32 +255,16 @@ def build(p):
     if skills:
         section('Area of Expertise')
         for s in skills:
+            # Owner's style: "**Label:** item • item", no bold in the items.
             items = s['items'] if isinstance(s['items'], str) else ' • '.join(s['items'])
+            items = re.sub(r'\s*;\s*', ' • ', items.replace('**', '').strip().rstrip(';'))
             cat = s.get('category')
-            inner = run(cat.rstrip(':') + ': ', bold(rpr(P_SKILL, 0))) if cat else ''
-            out.append(para(P_SKILL, inner + runs_md(items, rpr(P_SKILL, 1))))
+            inner = run(label(cat), bold(rpr(P_SKILL, 0))) + run(' ', rpr(P_SKILL, 1)) if cat else ''
+            out.append(para(P_SKILL, inner + run(items, rpr(P_SKILL, 1)), BULLET_SPACING))
 
-    if p.get('awards'):
-        section('Recognition')
-        for a in p['awards']:
-            rest_txt = ', '.join(x for x in [a.get('org'), a.get('year')] if x)
-            inner = run(a['title'], bold(rpr(P_RECOG, 0))) + (run('. ' + rest_txt, rpr(P_RECOG, 1)) if rest_txt else '')
-            out.append(para(P_RECOG, inner))
-
-    edu = list(p.get('education') or []) + list(p.get('certifications') or [])
-    if edu:
-        section('Education')
-        if P_SEC_PAD:
-            out.append(P_SEC_PAD)
-        for i, x in enumerate(edu):
-            org = ', '.join(v for v in [x.get('org'), x.get('location')] if v)
-            out.append(para(P_EDU_HEAD, run(org or x['title'], rpr(P_EDU_HEAD, 0)) + run(' ' + (x.get('year') or ''), rpr(P_EDU_HEAD, 1), tab=True)))
-            if org:
-                out.append(para(P_EDU_LINE, runs_md(x['title'], rpr(P_EDU_LINE))))
-            if x.get('description'):
-                out.append(para(P_EDU_LINE, runs_md(x['description'], rpr(P_EDU_LINE))))
-            if P_CARD_PAD and i < len(edu) - 1:
-                out.append(P_CARD_PAD)
+    # Recognition and Education: the template's own paragraphs, copied as
+    # they are (owner's rule: same text and format as the latest resume).
+    out.extend(TAIL)
     return out
 
 
@@ -235,6 +278,23 @@ def est_lines(paras_):
     return n
 
 
+def owner_keep():
+    """The items that the trim keeps (owner's rules): cv_checks.keep in
+    config/private/owner.json (gitignored), else the _example file."""
+    folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config', 'private')
+    for name in ('owner.json', 'owner_example.json'):
+        f = os.path.join(folder, name)
+        if os.path.exists(f):
+            keep = json.load(open(f, encoding='utf-8')).get('cv_checks', {}).get('keep')
+            return re.compile(keep) if keep else re.compile(r'(?!)')
+    return re.compile(r'(?!)')
+
+
+KEEP_ACC = owner_keep()
+# Latest-role bullets that the trim keeps: the same owner items.
+KEEP_BULLET = KEEP_ACC
+
+
 def cut_one(p):
     """Removes the least important item. The worker lists items most relevant
     first, so the last one goes. Returns False when nothing is left to cut."""
@@ -246,16 +306,48 @@ def cut_one(p):
             return True
         return False
 
+    def pop_lead(keep):
+        """The last latest-role bullet that the owner's rules do not keep."""
+        if lead is None or len(lead) <= keep:
+            return False
+        for i in range(len(lead) - 1, -1, -1):
+            if not KEEP_BULLET.search(lead[i]):
+                lead.pop(i)
+                return True
+        return False
+
     def older(keep):
         return any(pop(exp[i].get('bullets'), keep) for i in range(len(exp) - 1, 0, -1))
 
+    def pop_acc(keep):
+        """The last accomplishment that is not one of the owner's must-have
+        items (KEEP_ACC): those always stay (owner's rule)."""
+        accs = p.get('accomplishments')
+        if not accs or len(accs) <= keep:
+            return False
+        for i in range(len(accs) - 1, -1, -1):
+            if not KEEP_ACC.search(accs[i].get('lead', '') + ' ' + accs[i].get('text', '')):
+                accs.pop(i)
+                return True
+        return False
+
+    # Skill groups count "Core Competencies" (the competencies) too.
+    core = 1 if p.get('competencies') else 0
     lead = exp[0].get('bullets') if exp else None
-    steps = [lambda: pop(p.get('accomplishments'), 5), lambda: pop(lead, 10),
-             lambda: pop(p.get('skills'), 5), lambda: older(2),
-             lambda: pop(p.get('accomplishments'), 4), lambda: pop(lead, 8),
-             lambda: pop(p.get('skills'), 4), lambda: older(1), lambda: pop(lead, 6)]
+    steps = [lambda: pop_acc(5), lambda: pop_lead(10),
+             lambda: pop(p.get('skills'), 5 - core), lambda: older(2),
+             lambda: pop_acc(4), lambda: pop_lead(8),
+             lambda: pop(p.get('skills'), 4 - core), lambda: older(1), lambda: pop_lead(6)]
     return any(step() for step in steps)
 
+
+# Owner's rule: 5 skill groups, 6 as an exception, never more. The worker
+# lists the groups most relevant first, so the last ones go.
+MAX_GROUPS = 6
+groups_cut = 0
+while p.get('skills') and len(p['skills']) + (1 if p.get('competencies') else 0) > MAX_GROUPS:
+    p['skills'].pop()
+    groups_cut += 1
 
 out = build(p)
 cut = 0
@@ -267,4 +359,4 @@ parts['word/document.xml'] = (head + '<w:body>' + ''.join(out) + sect + '</w:bod
 with zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for n, data in parts.items():
         z.writestr(n, data)
-print(f'wrote {out_path}: ~{est_lines(out):.0f} lines (limit {MAX_LINES}), {cut} items cut, headline: {headline(p)}')
+print(f'wrote {out_path}: ~{est_lines(out):.0f} lines (limit {MAX_LINES}), {cut} items cut, {groups_cut} skill groups over {MAX_GROUPS} cut, headline: {headline(p)}')

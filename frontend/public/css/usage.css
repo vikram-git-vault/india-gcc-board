@@ -1,0 +1,9 @@
+  h2 { font-size: 20px; margin: 32px 0 8px; }
+  .note { margin: 0 0 12px; color: var(--text-muted); font-size: 15px; max-width: 80ch; }
+  .controls label { color: var(--on-ink-muted); }
+  .period { font: inherit; padding: 8px 12px; border-radius: 10px; border: 0; background: var(--surface); color: var(--text); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+  .tiles li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .tiles .v { display: block; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tiles .l { color: var(--text-muted); font-size: 15px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

@@ -6,6 +6,7 @@
  *   node score.js --pending [--out FILE]   roles that need a score, as JSON
  *                           [--limit N]    (default FILE: .cache/scoring/pending.json)
  *                           [--exclude ID,ID]  skip these role ids
+ *                           [--since YYYY-MM-DD]  only roles posted on or after
  *   node score.js --import FILE            validate and store scores, then republish
  *                 [--scorer NAME]          (default scorer: claude-code)
  *
@@ -19,9 +20,11 @@ import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
 import { initDb, getRolesForScoring, upsertScore, closeDb } from './lib/database.js';
-import { rubricVersion, descriptionHash, validateScoreRecord } from './lib/scoring.js';
+import { rubricVersion, descriptionHash, validateScoreRecord, scoreState } from './lib/scoring.js';
 import { publish } from './lib/publisher.js';
 import { htmlToText } from './lib/descriptions.js';
+import { settings } from './lib/settings.js';
+import { ageCutoff, localDate } from './lib/tailoring.js';
 
 const logger = createLogger('score');
 const DEFAULT_PENDING = path.join('.cache', 'scoring', 'pending.json');
@@ -33,9 +36,9 @@ function argValue(args, name, fallback) {
 
 function classify(role, version) {
   const hash = descriptionHash(role.title, role.description);
-  if (role.scored_hash == null) return { state: 'new', hash };
-  if (role.scored_hash !== hash || role.scored_rubric_version !== version) return { state: 'stale', hash };
-  return { state: 'scored', hash };
+  const state = scoreState({ scoredHash: role.scored_hash, hash, scoredRubric: role.scored_rubric_version, rubric: version,
+    bestFit: role.scored_best_fit, rescoreMinFit: settings.scoring.rescore_min_fit });
+  return { state, hash };
 }
 
 async function status(version) {
@@ -45,8 +48,13 @@ async function status(version) {
   logger.info(`Rubric v${version}: ${roles.length} shortlisted, ${counts.scored} scored, ${counts.new} new, ${counts.stale} stale`);
 }
 
-async function pending(version, outFile, limit, exclude = new Set()) {
+async function pending(version, outFile, limit, exclude = new Set(), since = null) {
+  // Only roles in the board window (board.max_age_days): an older role
+  // keeps the score it has.
+  const cutoff = ageCutoff(localDate(settings.schedule.timezone), settings.board.max_age_days);
   const roles = (await getRolesForScoring())
+    .filter((r) => r.age_date && r.age_date >= cutoff)
+    .filter((r) => !since || (r.posted_date && r.posted_date >= since))
     .map((r) => ({ ...r, ...classify(r, version) }))
     .filter((r) => r.state !== 'scored' && !exclude.has(r.id))
     .slice(0, limit)
@@ -115,7 +123,9 @@ async function main() {
     const limit = Number(argValue(args, '--limit', Infinity));
     if (!(limit > 0)) throw new Error('--limit must be a positive number');
     const exclude = new Set(String(argValue(args, '--exclude', '')).split(',').filter(Boolean).map(Number));
-    await pending(version, argValue(args, '--out', DEFAULT_PENDING), limit, exclude);
+    const since = argValue(args, '--since', null);
+    if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error('--since needs a date: YYYY-MM-DD');
+    await pending(version, argValue(args, '--out', DEFAULT_PENDING), limit, exclude, since);
   } else if (args.includes('--import')) {
     const file = argValue(args, '--import');
     if (!file) throw new Error('--import needs a file path');

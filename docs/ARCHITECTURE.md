@@ -5,7 +5,7 @@
 India GCC Board is a personal job board. It runs on your own computer.
 It checks the career sites of 161 employers: BFSI (banking, financial services and insurance) employers and employers in other industries.
 It keeps the leadership roles in India GCC hub cities: Bengaluru, Mumbai, Delhi NCR, Pune, Hyderabad, Chennai, Gurugram and Noida.
-It shows only the roles that match a target profile, and it scores each role against two resume variants.
+It shows only the roles that match a target profile, and it scores each role against the master CV, as a product owner and as an engineering leader.
 
 **Terms that this document uses:**
 
@@ -47,7 +47,7 @@ SQLite database (employers, roles, role_scores, scrape_runs, meta)
         ↓
 Descriptions (full job description for target and exception roles)
         ↓
-Scoring (ATS and fit scores against two resume variants: score.js)
+Scoring (ATS and fit scores against the master CV, PO and EM: score.js)
         ↓
 Publisher (data/roles.json: target roles, and exception roles with fit 75 or more)
         ↓
@@ -810,16 +810,15 @@ The database keeps all roles, also the excluded roles. Only target roles and exc
 - **Fit score (0–100):** grade and scope (25), leadership type (20), domain (20), technology (20), location and practical fit (15).
 - **Calibration:** 85–100 strong match; 75–84 good match (the minimum for an exception role); 50–74 partial match; 0–49 weak match.
 
-The scorer scores each role against two resume variants: PO (Product Owner) and EM (Engineering Leader).
+The scorer scores each role against the master CV (`cv.md` in the career-ops folder), two times: as PO (Product Owner, the product facts of the CV) and as EM (Engineering Leader, the engineering facts of the CV). The career-ops evaluation and the tailored CV use the same file. Thus all scores come from the same facts. The owner made this decision on 2026-11-05 (rubric version 2). Before, the scorer used two separate resume files.
 The recommended resume is the variant with the higher fit score. When the fit scores are equal, the higher ATS score decides.
 
 ### 12.2 Personal data
 
 The scorer uses these files in `Resume/`:
 
-- `profile_product_owner.txt`
-- `profile_engineering_leader.txt`
-- `candidate_profile.txt` (current grade and scope, home city, city preferences, domain list)
+- `cv.md` in the career-ops folder (the master CV). The scorer gets it without the contact lines (email, phone, LinkedIn) and without the HTML comments (`scoringCv()` in `autoscore.js`). `cv.md` does not change: career-ops and the tailored CV keep the contact details.
+- `candidate_profile.txt` in `Resume/` (current grade and scope, home city, city preferences, domain list)
 
 > **CAUTION:** These files contain personal data. Git ignores `Resume/`. The rubric in `config/` is generic and contains no personal data. Do not copy resume text into a file that git tracks.
 
@@ -838,7 +837,7 @@ A score is stale when the title, the description or the rubric version changes. 
 `validateScoreRecord()` rejects a score in these conditions:
 
 - A score is not an integer from 0 to 100.
-- A resume variant is missing.
+- The master CV or the candidate profile is missing.
 - The recommended resume does not have the higher fit score.
 - The reason is empty or longer than 35 words.
 - There are more than 10 matched keywords or more than 3 gaps.
@@ -860,7 +859,7 @@ The scorer is Claude Code. It needs no API key. It uses the Claude Code login on
 `autoscore.js` does these steps for each batch of 10 roles. It does not score more than 50 roles in one run.
 
 1. It runs `score.js --pending`.
-2. It sends the rubric, the candidate profile, the two resume variants and the roles to `claude -p`.
+2. It sends the rubric, the candidate profile, the master CV and the roles to `claude -p`. The model router (section 17) selects the model: `models.rm` (Opus) with the effort level `models.rm_effort` (medium). The rubric, the profile and the master CV are the system prompt (`.cache/autoscore/scoring-system.md`). This text is the same for each batch, thus Claude reads it from the prompt cache after the first batch. The roles are the user message.
 3. It writes the reply to `.cache/autoscore/` and runs `score.js --import` with the scorer name `claude-code-auto`.
 
 Some rules prevent repeated work:
@@ -960,23 +959,40 @@ The discovery on 2026-10-13 added 113 employers: 35 active and 78 inactive. Some
 
 The board sends the roles with the best match to career-ops (https://github.com/career-ops-hq/career-ops, MIT license). career-ops evaluates each role and writes a tailored CV and cover letter. The board makes Word files from them. The owner opens the posting and applies by hand. Nothing applies automatically.
 
+### 16.0 The board window
+
+The board works on the roles that are `board.max_age_days` (30) days old or less. The age comes from the posted date. When a role has no posted date, the age comes from the day that the board first found it (`scraped_at`). The owner made this decision on 2026-11-05.
+
+- RM scoring (`score.js --pending`) and the career-ops evaluation (`selectForTailoring()`) send only roles in the window. An older role keeps the scores that it has. A rubric change does not score it again.
+- The board hides an older role, except a role that the owner marked and a role with a tailored CV. The chip **Show roles older than 30 days** shows the hidden roles. The posted band "More than a month" also shows them.
+- The database keeps all roles. A refresh still closes a role when its posting is gone. Thus no purge is necessary, and a role that is still on the employer site is not added again as a new role.
+- `tailor.js --role ID` (also the re-tailor after a confirmed gap) is not limited by the window.
+
 ### 16.1 The sequence
 
 After a successful refresh, the server starts `autoscore.js`. When the scoring stops, the server starts `tailor.js`. `tailor.js` does these steps for each role, one role at a time:
 
-1. It selects the active roles whose better RM score (PO or EM resume) is `tailoring.min_fit_score` (75) or more. It skips a role that career-ops evaluated with the same description. It sends a failed role again, but not more than `tailoring.max_attempts` (2) times for the same description.
+1. It selects the active roles whose better RM score (PO or EM resume) is `tailoring.min_fit_score` (75) or more. The newest role goes first. The age of a role comes from the posted date. When a role has no posted date, the age comes from the day that the board first found it (`scraped_at`). `--since DATE` sends only the roles of that date or later. It skips a role that career-ops evaluated with the same description. It sends a failed role again, but not more than `tailoring.max_attempts` (2) times for the same description.
 2. It writes the job description from the database to `jds/board-<role id>.md` in the career-ops folder. career-ops does not open the employer site.
-3. It starts one career-ops worker (`claude -p`) with the batch prompt of career-ops, the owner profile and `config/tailoring-rules.md`.
-4. The worker gives a score from 1 to 5 and writes a report. When the score is at or above `auto_pdf_score_threshold` in the career-ops profile (4.0), the worker also writes a CV payload and a cover letter payload (JSON).
-5. `tools/build-cv-docx.py` and `tools/build-cover-docx.py` make the Word files from the payloads. The templates are the owner's own Word files in `Resume/templates/` (git ignores them).
-6. `tailor.js` runs the career-ops fact check (`verify-cv-facts.mjs`) on the text of each Word file. If the check fails, `tailor.js` deletes the file and records the failure.
-7. It writes the result to `tailored_docs` and writes `data/roles.json` again.
+3. It starts one career-ops worker (`claude -p`) with the batch prompt of career-ops, the owner profile and `config/tailoring-rules.md`. The first message asks for the evaluation only, on `models.scoring` (Sonnet).
+4. The worker gives a score from 1 to 5 and writes a report and a tracker line. It does not write a CV in the first message.
+5. The qualification gate: the better RM score is `tailoring.min_fit_score` (75) or more AND the career-ops score is `auto_pdf_score_threshold` in the career-ops profile (4.0) or more. If the role passes and is `tailoring.max_age_days` (3) days old or less, `tailor.js` sends a second message in the **same session** (`claude -p --resume`), on `models.documents` (Opus). The second message asks for the CV payload and the cover letter payload (JSON), with Step 4 of `config/tailoring-rules.md`. The second model has all of the evaluation in its context: each file that the worker read and each text that it wrote. Thus it uses the same evidence, keywords, plan and gaps as the evaluation. The CV rules and the fact checks are the same as before the change. An older role that passes the gate keeps its evaluation and gets no Word CV. `--role ID` always makes the CV. The owner made this decision on 2026-11-04.
+
+   The age for the CV is the later of two dates: the posted date (or `scraped_at`), and `roles.changed_date`. The refresh and the description fetch set `changed_date` to today when the title or the text that career-ops reads changes. The first fetch of the full text is not a change. Each new CV goes into a new folder (the folder name has the date; a second CV on the same day gets `_2`). An evaluation that makes no CV keeps the link to the last CV in `tailored_docs`. The owner made these decisions on 2026-11-12.
+6. After the second message, `tailor.js` deletes the session file (`~/.claude/projects/<folder>/<id>.jsonl`), because it contains the CV text. It changes the PDF column of the tracker line to ✅. It compares the payloads with the length rules (`checkDocLimits()` in `lib/tailoring.js`) and writes a warning to the log for each rule that is not met.
+7. `tools/build-cv-docx.py` and `tools/build-cover-docx.py` make the Word files from the payloads. The templates are the owner's own Word files in `Resume/templates/` (git ignores them).
+8. `tailor.js` runs the career-ops fact check (`verify-cv-facts.mjs`) on the text of each Word file. If the check fails, `tailor.js` deletes the file and records the failure.
+9. It writes the result to `tailored_docs` and writes `data/roles.json` again.
+
+A Claude usage limit in the second message stops the run. The role does not count as failed, and the next run sends it again from the start.
+
+`node tailor.js --role ID[,ID] --trial DIR` is a check run. The Word files go to `DIR`. The board database, the board and the career-ops tracker do not change. Use it to compare new files with the files that the board made before.
 
 One role takes approximately 3 minutes. One run sends not more than `tailoring.max_roles_per_run` (40) roles. When a refresh starts, the server stops `tailor.js` and its worker.
 
 ### 16.2 The files
 
-The Word files go to `<tailoring.output_dir>/<Company>/<YYYY-MM-DD>_<Role>/`:
+The Word files go to `<tailoring.output_dir>/<Company>/<YYYY-MM-DD>_<Role>_<job id>/`. The job id is the employer's id of the job (for example `R_2584204_1`). Two roles with the same title on the same day thus get different folders. If a role has no employer job id, the board role id is used. Folders made before 2026-11-06 do not have the job id.
 
 | File | Contents |
 |---|---|
@@ -997,8 +1013,17 @@ The Word files go to `<tailoring.output_dir>/<Company>/<YYYY-MM-DD>_<Role>/`:
 
   All later CVs can use the new fact. The career-ops fact check also accepts it, because it reads all of `cv.md`.
 - **Headline.** The line below the name has the job title of the posting, then 4 to 6 search keywords from the job description, for example `SOFTWARE ENGINEERING DIRECTOR | CLOUD MODERNIZATION | ...`. The job title must agree with the owner's real level. The owner CV rules give the level. The master CV must support each keyword.
-- **Length.** Not more than 3 pages. `build-cv-docx.py` calculates the number of lines. Its calibration comes from the page counts that Word saved in the owner's resumes: 160 lines are approximately 3 pages. Above 160 lines, it removes the least relevant items: first an accomplishment, then the last bullets of the latest role and of the older roles, then skill groups. It does not remove a role.
+- **Length.** Not more than 3 pages. `build-cv-docx.py` calculates the number of lines. Its calibration comes from the page counts that Word saved in the owner's resumes: 160 lines are approximately 3 pages. Above 160 lines, it removes the least relevant items: first an accomplishment, then the last bullets of the latest role and of the older roles, then skill groups. It does not remove a role. It does not remove an item that matches `cv_checks.keep` in `config/private/owner.json` (the owner's must-have items).
 - **Format.** Word (`.docx`). The owner makes a PDF when necessary.
+- **Role lens.** Each tailored CV is a Product CV or an Engineering CV. `roleLens()` in `lib/tailoring.js` decides the lens from three signals, in this order of weight: the job title (3 points for each side whose words are in the title), the words of the JD (2 points for the side with clearly more product or engineering terms, else 1), and the RM scores (1 point for the variant with a fit score at least 3 points higher). When the points are equal, the title decides, then the RM recommendation. `tailor.js` writes the lens and its reasons to the log and gives them in the second message. The worker uses the lens, and changes it only when the JD clearly describes the other kind of role. It then puts the facts of that lens first in the headline, the summary, the accomplishments, the bullets of each role, the skill groups and the cover letter. The facts of the other lens stay, lower and shorter. The owner made this decision on 2026-11-05.
+- **Missing result block.** When the worker finishes but does not give its JSON result block, `tailor.js` uses the score line of the report (`reportScore()`). The log shows a warning.
+- **Style.** These rules come from the owner's own resumes. `config/tailoring-rules.md` gives them to the worker. `checkDocLimits()` writes a warning to the log when a payload does not obey them.
+  - The owner's own facts are not in git (owner, 2026-11-12). They are in `config/private/` (gitignored). `cv-rules.md` has the CV rules with the real facts: the level, the bold examples, the must-have items, and the city and availability for the cover letter. `tailor.js` adds it after `config/tailoring-rules.md`. `owner.json` has the home city and the match patterns of the must-have items (`cv_checks`). `checkDocLimits()` and `build-cv-docx.py` use these patterns. The `_example` files show the format, with made-up values. When a private file is missing, the board uses its `_example` file, and `tailor.js` writes a warning to the log.
+  - Do not use em dashes or en dashes. The master CV has some; the worker must write the sentence again. The two Word builders also replace each remaining dash: a range gets "to", a pair of words gets a hyphen, and other dashes get a comma.
+  - Bold: the theme of each accomplishment ("**Platform transformation.**", with the period), one or two key results in each accomplishment, the key number in the bullets of the latest role and each skill label ("**Cloud and Architecture:**"). Do not use bold in other text. The builder puts " • " between the skills.
+  - Recognition and Education do not change. `build-cv-docx.py` copies these two sections from the template (`Resume/templates/resume.docx`) with no change to the words or the format. It does not use the awards and the education in the payload. The template must have the same two sections as the owner's latest resume. When the owner changes them, copy the latest resume to the template again.
+  - Skill groups: 5, including "Core Competencies". 6 is an exception, and the log gives a warning for it. `build-cv-docx.py` removes the last groups above 6.
+  - Must-have items: each CV has the owner's must-have items (in `config/private/cv-rules.md`), also for an engineering role. If one is missing, `checkDocLimits` gives a warning. The headline has one of the owner's keywords.
 
 ### 16.4 Limited permissions
 
@@ -1043,3 +1068,50 @@ The server does the sync after each mark change. `tailor.js` does it after each 
 - `forbidden_phrases`: claims that the owner does not make, for example "Fortune 500", "patent", "PhD" and "P&L ownership". A file with one of these fails the check.
 - `warn_phrases`: clichés, for example "passionate", "results-driven" and "proven track record". The check shows a warning.
 
+## 17. Model router and Claude usage
+
+### 17.1 The router
+
+Each Claude call of the board goes through `claudeCall()` in `lib/models.js`. The call names a stage. The stage selects the model from `models` in `config/settings.json`:
+
+| Stage | Settings key | Default model | Caller |
+|---|---|---|---|
+| `rm_score` | `models.rm`, effort `models.rm_effort` | `claude-opus-5-5`, effort `medium` | `autoscore.js` |
+| `careerops_score` | `models.scoring` | `claude-sonnet-5-5` | `tailor.js`, first message |
+| `application_package` | `models.documents` | `claude-opus-5-5` | `tailor.js`, second message (CV, ATS headline, cover letter) |
+| `resume_tailoring`, `cover_letter`, `ats_optimization` | `models.documents` | `claude-opus-5-5` | Reserved. One message makes all three today |
+
+RM scoring stays on Opus. In the check runs of 2026-11-04 (50 roles), Sonnet gave RM scores 7 points lower on average, and only 93% of the roles had the same qualification. Opus with the effort `low` gave 94%, and one role that had a tailored CV went below 75. Opus with the effort `medium` gave 96%, the same as the stored scores. A Sonnet-first method with an Opus score for roles near the gate cost the same as Opus only, thus the board does not use it.
+
+An unknown stage is an error. No stage has a default model. The refresh (`refresh.js`, `lib/descriptions.js`, `discover.js`) has no stage and makes no Claude call. `test/models.test.js` makes sure that no other file starts `claude` itself.
+
+### 17.2 The usage record
+
+The router asks for the JSON reply (`--output-format json`). The reply gives the tokens of each model. Each call adds one row to `model_calls`: the stage, the model that the router asked for, the models that Claude Code used, the role, the number of roles, the input, output, cache-read and cache-write tokens, the list-price value, the time and the result. The log gets one line for each call, for example:
+
+```text
+Batch 1: router rm_score -> claude-sonnet-5-5 (used: claude-sonnet-5-5; 12 in, 9.8k out, 6.1k cache read, 40.2k cache write; $0.310 list; 71s)
+```
+
+If Claude Code did not use the model that the router asked for, `tailor.js` writes a warning.
+
+The list-price value is the value that Claude Code reports. With a Claude subscription, Anthropic does not bill each call. Use the value to compare stages and models.
+
+### 17.3 The usage page
+
+**Model usage** on the board (`/usage.html`, `GET /api/usage?days=30`) shows, for the period:
+
+- The number of calls, the tokens and the list-price value.
+- The part of the scoring calls that used Sonnet (the career-ops evaluation; RM scoring uses Opus), and the part of all calls that used the routed model.
+- For each stage and model: the tokens, the value and the time, in total and for one role.
+- For each day: the calls, the roles, the tokens and the value.
+
+### 17.4 The check run
+
+`node tools/shadow-score.js --roles 50 [--model M] [--effort E]` scores again roles that have a current score, with the current prompt, the model `M` and the effort level `E`. It does not store the scores. It records the tokens with `shadow = 1`, and the usage page shows them as a check run, not in the totals. It compares the new scores with the stored scores: the part of the roles with the same qualification (better RM score 75 or more), and the differences of the RM score. The details go to `.cache/shadow/`.
+
+### 17.5 What the router does not change
+
+- The rubric, the RM and career-ops scores, their thresholds and the gate.
+- The career-ops evaluation and the CV rules. The second message has all of the context of the first message.
+- The job cache: a role gets a new score only when its description or the rubric version changes (`role_scores`), and a new evaluation only when its description changes or the owner asks for it (`tailored_docs`).

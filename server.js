@@ -17,14 +17,18 @@ import fs from 'fs';
 import path from 'path';
 import { createLogger } from './lib/logger.js';
 import { settings } from './lib/settings.js';
-import { formatProgress, formatMinutes, formatScoringProgress, formatScoringSummary } from './lib/progress.js';
+import {
+  formatProgress, formatMinutes, formatScoringProgress, formatScoringSummary,
+  formatTailoringProgress, formatTailoringResult, formatTailoringSummary,
+} from './lib/progress.js';
 import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
 import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
 import { checkOnline, NETWORK_EXIT_CODE } from './lib/network.js';
 import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security.js';
 import {
-  getTailored, getMarks, getMark, setMark, roleExists, addGapAnswer, requestRetailor,
+  getTailored, getEmployerName, getMarks, getMark, setMark, roleExists, addGapAnswer, requestRetailor, getModelUsage,
 } from './lib/database.js';
+import { summarizeUsage, STAGES } from './lib/models.js';
 import {
   expandHome, MARKS, validateGapAnswer, appendConfirmedSkill, localDate,
 } from './lib/tailoring.js';
@@ -164,19 +168,32 @@ function runTailor(args = []) {
   const child = spawn('node', ['tailor.js', ...args], { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
   tailorChild = child;
   keepAwake();
+  // Log when the step of a role changes, a line for each finished role,
+  // and a progress line each minute (as for the scoring).
+  let lastLogged = null;
   child.on('message', (msg) => {
     if (!msg || msg.type !== 'progress') return;
     const { type, ...progress } = msg;
+    const prev = refreshState.tailoringProgress;
     refreshState.tailoringProgress = progress;
+    if (progress.last && (!prev || prev.done !== progress.done)) logger.info(formatTailoringResult(progress));
+    const key = `${progress.total}:${progress.done}:${progress.step || ''}`;
+    if (progress.total != null && key !== lastLogged) {
+      lastLogged = key;
+      logger.info(formatTailoringProgress(progress, refreshState.tailoringStartedAt));
+    }
   });
+  const progressTimer = setInterval(() => {
+    logger.info(formatTailoringProgress(refreshState.tailoringProgress, refreshState.tailoringStartedAt));
+  }, PROGRESS_LOG_EVERY_MS);
   child.on('error', (err) => { logger.warn(`Tailoring not started: ${err.message}`); });
   child.on('close', (code) => {
+    clearInterval(progressTimer);
     fs.closeSync(out);
     refreshState.tailoring = false;
     tailorChild = null;
-    const p = refreshState.tailoringProgress || {};
     const took = formatMinutes(Date.now() - new Date(refreshState.tailoringStartedAt));
-    logger.info(`Tailoring finished (exit code: ${code}, took ${took}): ${p.done || 0} roles evaluated, ${p.ready || 0} Word CVs made, ${p.failed || 0} failed; details in logs/combined.log`);
+    logger.info(`Tailoring finished (exit code: ${code}, took ${took}): ${formatTailoringSummary(refreshState.tailoringProgress)}; details in logs/combined.log`);
     logIdle(code === 0 ? 'Refresh, scoring and tailoring complete' : `Tailoring failed (exit code: ${code})`);
   });
   return true;
@@ -482,7 +499,7 @@ app.post('/api/roles/:id/gaps', express.json(), async (req, res) => {
     const tailored = await getTailored(id);
     if (!tailored) { res.status(404).json({ error: 'career-ops has not evaluated this role' }); return; }
     const cvFile = path.join(CAREER_OPS_DIR, 'cv.md');
-    const employer = path.basename(path.dirname(tailored.folder || '')) || `role ${id}`;
+    const employer = (await getEmployerName(id)) || `role ${id}`;
     const cv = fs.readFileSync(cvFile, 'utf-8');
     const tmp = `${cvFile}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, appendConfirmedSkill(cv, { ...checked, employer, date: localDate(REFRESH_TIMEZONE) }));
@@ -521,6 +538,20 @@ app.get('/api/employers', (_req, res) => {
     employers: cfg.employers.map(pick),
     excluded: cfg.excluded.map((e) => ({ name: e.name || e.id, reason: e.reason || '' })),
   });
+});
+
+// Claude use of each stage and model (model_calls, lib/models.js) for the
+// last ?days= days (default 30).
+app.get('/api/usage', async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const { byStage, byDay } = await getModelUsage(since);
+    res.json({ days, since, models: settings.models, stages: STAGES, ...summarizeUsage(byStage), byDay });
+  } catch (err) {
+    logger.error(`Usage: ${err.message}`);
+    res.status(500).json({ error: 'Cannot read the usage' });
+  }
 });
 
 app.get('/api/schedule', (_req, res) => {

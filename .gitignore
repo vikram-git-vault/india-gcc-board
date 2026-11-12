@@ -36,3 +36,7 @@ Resume/
 
 # Diagram working folders (archify); published copies live in docs/diagrams/
 .archify/
+
+# Owner facts for the CV rules and checks (never commit); the _example files are committed
+config/private/*
+!config/private/*_example.*
