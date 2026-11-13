@@ -574,8 +574,7 @@ The server answers `403` to a rejected request and writes a warning to the log.
 
 **Security headers (`helmet`).** The server sends a Content-Security-Policy. The policy lets the pages load scripts, styles, fonts and data only from the server itself. Thus the board does not run inline scripts, and an injected script cannot run. The pages keep their scripts in `frontend/public/js/`, their styles in `frontend/public/css/` and the Source Sans 3 font in `frontend/public/fonts/`. The board sends no requests to Google or to other sites. The policy does not let other sites show the board in a frame. The server does not send `X-Powered-By`.
 
-The workflow `.github/workflows/refresh-schedule.yml` is from an earlier cloud setup. Its schedule is in a comment, so it runs only when a person starts it. Do not enable the schedule.
-The workflow is a possible start point for a future cloud phase.
+The project has no GitHub workflow. The workflow of an earlier cloud setup was removed on 2026-11-13.
 
 ---
 
@@ -1275,3 +1274,33 @@ The guard is below the code. Thus it also stops a write that a new module adds l
 ### 19.3 The board file check
 
 `tools/board-status.js` compares `data/roles.json` with the database. Each role id must have the same title and URL in the `roles` table. If not, the report shows a `PROBLEM:` line, and the fix is `node tools/publish.js`. This command writes the board file again from the database. It does not scrape, score or call Claude.
+
+## 20. Personal data guard
+
+The owner's facts must never go into git (section 12.2 and section 16.5). Before 2026-11-13, a person did a manual search of each change before a push. Now git hooks do the check on each commit and each push. This is necessary before the repository becomes public, because a public commit stays in copies after it is removed.
+
+### 20.1 The check
+
+`lib/private-check.js` has the rules. `tools/check-private.js` gives them the text from git.
+
+- **The facts.** They come only from files that git ignores, so the committed code holds no fact: the career-ops `cv.md` (the name, the email addresses, the phone number, the LinkedIn name, and the employers from the `### Employer -- City` lines), `config/private/owner.json` (`excluded_employers`) and `config/private/private-terms.txt` (one word or phrase on each line). A term must have 4 characters or more. A phone number matches its digits only.
+- **Whole words.** A term matches only as a whole word, in any case. Thus a hash in `package-lock.json` does not match a short term.
+- **Blocked files.** `Resume/`, `config/private/` (except the `_example` files), Word, PowerPoint, Excel and PDF files, `.env` files (except `.env.example`), the database, `data/roles.json` and the logs (except `.gitkeep`). The check stops them also when `git add -f` adds them.
+- **The report.** It shows the file, the line, the first two characters and the length of the term, and the source file. It never shows the full fact.
+- **No private files.** With none of the files (a fresh clone), the list is empty and each check passes.
+
+### 20.2 When it runs
+
+| Hook (`.githooks/`) | Command | What it checks |
+|---|---|---|
+| pre-commit | `node tools/check-private.js` | The staged files and lines |
+| commit-msg | `--message FILE` | The commit message |
+| pre-push | `--push REMOTE` | Each commit that is not on the remote, also a commit made with `--no-verify` |
+| By hand | `npm run check:private` (`--all`, `--history`) | All tracked files, and all commits on all branches |
+
+`npm install` sets `core.hooksPath` to `.githooks` (the `prepare` script). The check of 2026-11-13 found no fact in the 81 commits.
+
+### 20.3 GitHub
+
+GitHub secret scanning and push protection find keys and tokens. They are free only for a public repository. Turn them on when the repository becomes public (`docs/SETUP.md`, section 9.1).
+

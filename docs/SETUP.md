@@ -40,7 +40,7 @@ The settings are in two files:
 | Variable | Default | Function |
 |---|---|---|
 | `ALLOWED_HOSTS` | (empty) | More host names that can open the board, with a comma between names. For example: your Tailscale name. The server always accepts `localhost` and IP addresses. It rejects other host names with `403`. Refer to section 7. |
-| `SLACK_WEBHOOK` | (empty) | Not used by local code. The GitHub workflow reads it from the repository secrets. Notifications are a Phase 4 item. |
+| `SLACK_WEBHOOK` | (empty) | Not used by local code. Notifications are a Phase 4 item. |
 
 > **CAUTION:** Do not put API keys, personal data or private host names in `config/settings.json`. Git keeps this file.
 
@@ -110,15 +110,17 @@ The settings are in two files:
 
 This folder keeps your own facts out of git. Git ignores all files in it, except the `_example` files.
 
-1. Copy the two example files:
+1. Copy the example files:
 
    ```bash
    cp config/private/owner_example.json config/private/owner.json
    cp config/private/cv-rules_example.md config/private/cv-rules.md
+   cp config/private/private-terms_example.txt config/private/private-terms.txt
    ```
 
 2. In `owner.json`, write your home city (`home_city`) and the match patterns of your must-have CV items (`cv_checks`). The CV contact line shows the city of the role and then your home city, for example "Mumbai/Pune". When the role gives no city, the template's location stays.
 3. In `cv-rules.md`, write your own CV rules: your level, examples of bold facts, the items that each CV must have, and the city and availability for the cover letter. Use only facts from your master CV.
+4. In `private-terms.txt`, write the words and phrases that must never go into git: award and project names, CV numbers, your education. Use specific phrases. Refer to section 9.
 
 Do not put your facts in other files that git tracks. When a private file is missing, the board uses its `_example` file and `tailor.js` writes a warning to the log.
 
@@ -396,12 +398,35 @@ The URL works while the tunnel runs. A person can open the board only with the e
 
 > **NOTE:** The quick-tunnel URL changes each time you start the tunnel. A named tunnel with your own domain needs a free Cloudflare account.
 
-## GitHub Actions (not used)
+## 9. Keep your personal data out of git
 
-The file `.github/workflows/refresh-schedule.yml` is from an earlier cloud setup. It refers to a publish step that the project does not use now.
-Its schedule is in a comment, so the workflow runs only when a person starts it.
-Do not enable the schedule. Do not add its secrets.
-Refer to `docs/ARCHITECTURE.md`, section 6.
+The git hooks in `.githooks/` stop a commit or a push that holds your personal facts or a private file. `npm install` turns them on (the `prepare` script sets `core.hooksPath`). To turn them on by hand:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+- **pre-commit:** checks the staged changes.
+- **commit-msg:** checks the commit message.
+- **pre-push:** checks each commit that is not on the remote. Thus a commit made with `--no-verify` is also checked.
+
+The hooks run `node tools/check-private.js`. It reads your facts from the files that git ignores: the career-ops `cv.md` (your name, email, phone, LinkedIn name and employers), `config/private/owner.json` (`excluded_employers`) and `config/private/private-terms.txt`. It also stops files that must never go into git, also with `git add -f`: the `Resume/` folder, the private config files, Word and PDF files, `.env`, the database, the board file and the logs. The report shows only the first two characters of a fact.
+
+To check all tracked files and all commits:
+
+```bash
+npm run check:private
+```
+
+If the check stops a line that is not personal (a false alarm), remove the word from `config/private/private-terms.txt`. Do not use `--no-verify`.
+
+### 9.1 A public repository
+
+GitHub secret scanning and push protection are free only for a public repository. Right after you make the repository public, turn them on:
+
+```bash
+gh api -X PATCH repos/<owner>/india-gcc-board -f 'security_and_analysis[secret_scanning][status]=enabled' -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'
+```
 
 ## Status
 

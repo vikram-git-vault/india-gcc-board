@@ -108,13 +108,13 @@ lib/scrapers/       scraper classes, one for each ATS type
 refresh.js          refresh: scrape, classify, get descriptions, publish
 score.js            scoring: export roles to score, import scores
 tailor.js           career-ops: tailored Word CV and cover letter for the best roles
-tools/              Word builders for the tailored CV and cover letter; read-only reports (find-role, board-status, check-cv); add-job; publish (writes the board file again)
+tools/              Word builders for the tailored CV and cover letter; read-only reports (find-role, board-status, check-cv); add-job; publish (writes the board file again); check-private
 discover.js         discovery: find companies and detect their ATS (manual run)
 server.js           server: shows the board, gives the API, runs the daily refresh
 frontend/public/    the board web page (index.html, js/, css/, fonts/)
 test/               Jest tests (test/setup/live-guard.cjs: tests write only to the temporary folder)
 docs/               documents
-.github/workflows/  workflow from an earlier cloud setup (schedule off)
+.githooks/          pre-commit, commit-msg and pre-push: stop personal data (tools/check-private.js)
 data/               SQLite database and roles.json (git ignores this folder)
 logs/               refresh logs (git ignores this folder)
 Resume/             resume variants and candidate profile (git ignores this folder)
@@ -122,4 +122,4 @@ Resume/             resume variants and candidate profile (git ignores this fold
 
 ## License
 
-MIT
+MIT. Refer to the `LICENSE` file.

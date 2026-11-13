@@ -9,7 +9,9 @@
     "serve": "node server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "lint": "eslint lib/ refresh.js",
-    "dev": "nodemon refresh.js"
+    "dev": "nodemon refresh.js",
+    "check:private": "node tools/check-private.js --all && node tools/check-private.js --history",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "keywords": [
     "bfsi",

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Checks each commit that is not yet on the remote, also a commit made with --no-verify.
+exec node tools/check-private.js --push "$1"

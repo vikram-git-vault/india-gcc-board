@@ -1,0 +1,9 @@
+# Words and phrases that must never go into git, one on each line.
+# Copy this file to private-terms.txt in this folder (gitignored) and write
+# your own. tools/check-private.js also reads the name, email, phone,
+# LinkedIn name and employers from the career-ops cv.md, and
+# excluded_employers from owner.json: do not repeat them here.
+# Use specific phrases: a common word (a city, a tool) also stops normal code.
+Example Award 2025
+Project Bluebird
+cut onboarding from 9 weeks to 3 days

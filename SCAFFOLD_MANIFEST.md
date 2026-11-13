@@ -75,7 +75,7 @@ Last update: 2026-10-13.
 | `package.json` | Packages and scripts. `npm test` runs Jest with ES modules. |
 | `.env.example` | The template for `.env`. |
 | `.gitignore` | Files that git must not track. |
-| `.github/workflows/refresh-schedule.yml` | A workflow from an earlier cloud setup. Its schedule is in a comment. Do not enable the schedule. |
+| `.githooks/` | Git hooks that stop personal data on each commit and push (`tools/check-private.js`). |
 
 ## Folders that git ignores
 
