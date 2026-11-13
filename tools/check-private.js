@@ -2,7 +2,7 @@
 /**
  * tools/check-private.js — stops the owner's personal facts from going into git.
  *
- *   node tools/check-private.js               the staged changes (pre-commit hook)
+ *   node tools/check-private.js               the staged changes and the author (pre-commit hook)
  *   node tools/check-private.js --message F   a commit message file (commit-msg hook)
  *   node tools/check-private.js --push REMOTE the commits that are not on REMOTE (pre-push hook)
  *   node tools/check-private.js --all         every tracked file
@@ -51,6 +51,8 @@ if (args.includes('--message')) {
     const short = sha.slice(0, 7);
     checkPaths(git('show', '--first-parent', '-m', '--format=', '--name-only', '--diff-filter=ACR', sha).split('\n'), `${short} `);
     report((l) => `${short} ${l.file}:${l.line}`, findLeaks(addedLines(git('show', '--first-parent', '-m', '--format=', '-U0', '--no-color', sha)), terms));
+    const who = git('log', '-1', '--format=%an <%ae> %cn <%ce>', sha);
+    report(() => `${short} author or committer`, findLeaks([{ file: 'identity', line: 1, text: who }], terms));
     const msg = git('log', '-1', '--format=%B', sha).split('\n').map((text, i) => ({ file: 'commit message', line: i + 1, text }));
     report((l) => `${short} ${l.file}:${l.line}`, findLeaks(msg, terms));
   }
@@ -72,6 +74,8 @@ if (args.includes('--message')) {
     if (hits.length) problems.push(`${maskTerm(t.term)} from ${t.source}: in ${hits.length} commit(s): ${hits.slice(0, 5).join(' ')}`);
   }
 } else {
+  const who = `${git('var', 'GIT_AUTHOR_IDENT')} ${git('var', 'GIT_COMMITTER_IDENT')}`;
+  report(() => 'the git author or committer (git config user.email)', findLeaks([{ file: 'identity', line: 1, text: who }], terms));
   checkPaths(git('diff', '--cached', '--name-only', '--diff-filter=ACR').split('\n'), '');
   report((l) => `${l.file}:${l.line}`, findLeaks(addedLines(git('diff', '--cached', '-U0', '--no-color')), terms));
 }

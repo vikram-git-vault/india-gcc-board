@@ -1286,6 +1286,7 @@ The owner's facts must never go into git (section 12.2 and section 16.5). Before
 - **The facts.** They come only from files that git ignores, so the committed code holds no fact: the career-ops `cv.md` (the name, the email addresses, the phone number, the LinkedIn name, and the employers from the `### Employer -- City` lines), `config/private/owner.json` (`excluded_employers`) and `config/private/private-terms.txt` (one word or phrase on each line). A term must have 4 characters or more. A phone number matches its digits only.
 - **Whole words.** A term matches only as a whole word, in any case. Thus a hash in `package-lock.json` does not match a short term.
 - **Blocked files.** `Resume/`, `config/private/` (except the `_example` files), Word, PowerPoint, Excel and PDF files, `.env` files (except `.env.example`), the database, `data/roles.json` and the logs (except `.gitkeep`). The check stops them also when `git add -f` adds them.
+- **The author.** The pre-commit and pre-push hooks also check the author and committer of each commit. Use the GitHub noreply address as `user.email` in this repository.
 - **The report.** It shows the file, the line, the first two characters and the length of the term, and the source file. It never shows the full fact.
 - **No private files.** With none of the files (a fresh clone), the list is empty and each check passes.
 
