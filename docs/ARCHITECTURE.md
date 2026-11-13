@@ -1,6 +1,6 @@
 # India GCC Board: architecture
 
-**Status:** Phases 0 to 3b and 5 to 8 are complete. | **Owner:** the repository owner | **Last update:** 2026-11-12
+**Status:** Phases 0 to 3b and 5 to 8 are complete. | **Owner:** the repository owner | **Last update:** 2026-11-13
 
 India GCC Board is a personal job board. It runs on your own computer.
 It checks the career sites of 161 employers: BFSI (banking, financial services and insurance) employers and employers in other industries.
@@ -781,7 +781,7 @@ Example entry in `config/employers.json`:
 | Scheduling | node-cron in `server.js` | No separate operating-system job. |
 | Logging | winston | It has levels, structured output and file rotation. |
 | Frontend | Static HTML and JavaScript | It needs no build step. |
-| Tests | Jest and nock | nock gives fake HTTP responses. The tests do not send requests to real sites. |
+| Tests | Jest and nock | nock gives fake HTTP responses. The tests do not send requests to real sites. The test guard (section 19) makes sure of this. |
 
 ---
 
@@ -1248,3 +1248,30 @@ The states are the marks: none, interested, applied, rejected, closed (`MARKS` i
 ### 18.8 The refresh checkpoint
 
 `lib/checkpoint.js` was explicit before. An employer in a run is pending, 'ok' or 'error'. A run is in progress, complete (`completed_at`), or resumable (not complete and started less than `refresh.checkpoint_max_age_hours` (12) before). Refer to section 6.1.
+
+## 19. Test guard
+
+On 2026-11-13 a test (`test/publisher.test.js`) sent the database to a temporary folder, but `publish()` wrote its default file, `data/roles.json`. Each test run replaced the live board with 5 test roles. The database did not change. `node tools/publish.js` wrote the board file again.
+
+### 19.1 The rules
+
+Jest loads `test/setup/live-guard.cjs` before each test file (`package.json`, `jest.setupFiles`). During a test:
+
+- A write is allowed only in the system temporary folder (`os.tmpdir()`). A write to another location fails with the error `live-guard: a test tried to ...` and the name of the file. This applies to the `fs` functions (sync, callback, promise and stream), and to a SQLite open that is not read-only.
+- A read of a live file is allowed.
+- A child process is not allowed, because the guard cannot see its writes.
+- A request to a real site fails. Only nock replies and localhost are allowed.
+- The logger writes to the console only. It does not write `logs/combined.log` or `logs/error.log`.
+
+The guard is below the code. Thus it also stops a write that a new module adds later.
+
+### 19.2 How to write a test
+
+- Make a temporary folder: `fs.mkdtempSync(path.join(os.tmpdir(), 'name-'))`.
+- Give each function a path in that folder: `useDatabasePath()` before the first query, `publish({ outputPath })`, `saveCheckpoint(cp, file)`.
+- When a new function writes a file, give it a path argument with the live file as the default. Do not remove the guard to make a test pass.
+- `test/live-guard.test.js` makes sure that the guard works. It also makes sure that the live files do not change during the run.
+
+### 19.3 The board file check
+
+`tools/board-status.js` compares `data/roles.json` with the database. Each role id must have the same title and URL in the `roles` table. If not, the report shows a `PROBLEM:` line, and the fix is `node tools/publish.js`. This command writes the board file again from the database. It does not scrape, score or call Claude.

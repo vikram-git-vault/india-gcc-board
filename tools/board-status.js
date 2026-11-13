@@ -2,9 +2,10 @@
 /**
  * tools/board-status.js — what the last run did, in one report. Read-only.
  *
- *   node tools/board-status.js [--since YYYY-MM-DDTHH:MM]
+ *   node tools/board-status.js [--since YYYY-MM-DDTHH:MM] [--board FILE]
  *
  * Without --since: from the start of the last refresh (the checkpoint).
+ * --board: check another board file (default data/roles.json).
  * Reports the refresh (employers ok and failed), the RM scoring, the
  * career-ops results, the warnings and errors in logs/refresh.log, and the
  * Claude cost. The /board-status skill (.claude/skills) reads this output.
@@ -16,6 +17,7 @@ import { loadCheckpoint } from '../lib/checkpoint.js';
 
 const args = process.argv.slice(2);
 const sinceArg = args.includes('--since') ? args[args.indexOf('--since') + 1] : null;
+const BOARD_FILE = args.includes('--board') ? args[args.indexOf('--board') + 1] : 'data/roles.json';
 const cp = loadCheckpoint();
 const since = new Date(sinceArg || (cp && cp.started_at) || Date.now() - 24 * 3600e3);
 // SQLite CURRENT_TIMESTAMP is UTC 'YYYY-MM-DD HH:MM:SS'.
@@ -61,7 +63,19 @@ recent.filter((l) => /\[autoscore\] Scored|\[tailor\] career-ops: \d+ roles|\[re
 // publisher's file: the RM score state and the career-ops state.
 line('\n## Roles on the board by state');
 try {
-  const board = JSON.parse(fs.readFileSync('data/roles.json', 'utf-8'));
+  const board = JSON.parse(fs.readFileSync(BOARD_FILE, 'utf-8'));
+  // The board file must come from this database: each role id has the same
+  // title and URL in the roles table. On 2026-11-13 a test replaced the file
+  // with 5 test roles and only the small state counts showed it.
+  const written = fs.statSync(BOARD_FILE).mtime.toISOString();
+  const dbRoles = new Map((await all('SELECT id, title, job_url FROM roles')).map((r) => [r.id, r]));
+  const wrong = board.roles.filter((r) => { const d = dbRoles.get(r.id); return !d || d.title !== r.title || d.job_url !== r.job_url; });
+  line(`Board file: ${board.roles.length} roles, written at ${written}.`);
+  if (wrong.length) {
+    line(`PROBLEM: ${wrong.length} of ${board.roles.length} roles in ${BOARD_FILE} do not match the database (id, title or URL), for example ${wrong[0].id} "${wrong[0].title}". Fix: node tools/publish.js`);
+  } else if (!board.roles.length) {
+    line('PROBLEM: the board file has no roles. Fix: node tools/publish.js');
+  }
   const count = (key) => {
     const n = {};
     board.roles.forEach((r) => { const s = key(r); if (s) n[s] = (n[s] || 0) + 1; });
@@ -73,7 +87,7 @@ try {
   attention.forEach((r) => line(`- ${r.id} ${r.employer}, ${r.title}: ${r.tailor_state.text}`));
   if (!board.roles.some((r) => r.tailor_state)) line('(The board file has no states yet: it is from before lib/states.js. The next refresh or scoring run writes them.)');
 } catch (err) {
-  line(`No board file (data/roles.json): ${err.message}`);
+  line(`No board file (${BOARD_FILE}): ${err.message}`);
 }
 
 line('\n## career-ops results');

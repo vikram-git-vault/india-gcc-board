@@ -340,7 +340,7 @@ node autoscore.js
 node tailor.js --role <role id>
 ```
 
-To see the state of a role (open or closed, the job text, the RM score, career-ops, the mark) and the `tailor.js` command for it, run `node tools/find-role.js <role id | job id | job URL>`. `node tools/board-status.js` reports the last run and counts the roles on the board in each state. Both are read-only.
+To see the state of a role (open or closed, the job text, the RM score, career-ops, the mark) and the `tailor.js` command for it, run `node tools/find-role.js <role id | job id | job URL>`. `node tools/board-status.js` reports the last run and counts the roles on the board in each state. Both are read-only. If the status report says that the board file does not match the database, run `node tools/publish.js`. It writes `data/roles.json` again from the database.
 
 > **NOTE:** Workday can give the legal name of the company (for example a name with "Private Limited"). Type the usual name in the **Company** field.
 

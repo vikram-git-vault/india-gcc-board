@@ -38,5 +38,14 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "jest": {
+    "setupFiles": [
+      "<rootDir>/test/setup/live-guard.cjs"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/test/setup/"
+    ]
   }
 }
