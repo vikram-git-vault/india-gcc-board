@@ -36,8 +36,9 @@ describe('publish: the named states on each role', () => {
     }
     await db.upsertTailored({ role_id: ids['p-4'], description_hash: descriptionHash('Role p-4', 'x'.repeat(1200)), status: 'ready', score: 4.3, report_num: '001', folder: '/o/A/f', cv_file: 'cv.docx', gaps: [] });
     await db.upsertTailored({ role_id: ids['p-5'], description_hash: descriptionHash('Role p-5', 'x'.repeat(1200)), status: 'failed', error: 'x', attempts: settings.tailoring.max_attempts, gaps: [] });
-    await publish();
-    const payload = JSON.parse(fs.readFileSync(path.join('data', 'roles.json'), 'utf-8'));
+    const outputPath = path.join(dir, 'roles.json');
+    await publish({ outputPath });
+    const payload = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
     byJob = {};
     payload.roles.forEach((r) => { byJob[r.title.replace('Role ', '')] = r; });
     byJob.targeting = payload.targeting;
