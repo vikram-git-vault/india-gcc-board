@@ -17,7 +17,6 @@ The daily operation does not need a cloud account or a Claude session.
 | [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html) | An interactive diagram of the system components. Open it in a browser. |
 | [`docs/diagrams/dataflow.html`](docs/diagrams/dataflow.html) | An interactive diagram of the data flow, from the career sites to the board. Open it in a browser. |
 | [`docs/EMPLOYERS.md`](docs/EMPLOYERS.md) | All employers, with a link to each career site. |
-| [`docs/BUILD_LOG.md`](docs/BUILD_LOG.md) | The frameworks and the concepts that the project uses. |
 | [`SCAFFOLD_MANIFEST.md`](SCAFFOLD_MANIFEST.md) | A list of the project files and their purpose. |
 
 ## Quick start

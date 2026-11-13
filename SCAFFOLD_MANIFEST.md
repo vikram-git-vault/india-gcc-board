@@ -66,7 +66,6 @@ Last update: 2026-10-13.
 | `docs/SETUP.md` | 0 | The procedures. |
 | `docs/ARCHITECTURE.md` | 0 | The design. |
 | `docs/EMPLOYERS.md` | 2 | The employer directory. |
-| `docs/BUILD_LOG.md` | 3b | The frameworks and the concepts. |
 
 ## Other files
 
