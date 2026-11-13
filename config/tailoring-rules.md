@@ -43,6 +43,9 @@ The owner wants Word files. The board makes the .docx files from your JSON paylo
      - `skills[].items`: a list of strings (the board joins them with " • "). `skills[].category` in title case ("Cloud and Architecture").
 3. Keep the CV to 3 pages: at most 10 bullets for the latest role, 4 for each older role at the same employer, 1 for the earliest employer, 5 accomplishments, 5 skill groups, most relevant first in every list.
 4. Run Step 18 (build-cv-html.mjs to `output/cv-candidate-<report number>-<company-slug>.html`) and Step 19 (verify-cv-facts.mjs). Fix the payload until the fact gate passes.
+   4a. The HTML of Step 18 does not show `headline`, `domain_expertise` and `accomplishments`, but the Word CV does. Write their text to `output/cv-extra-<report number>-<company-slug>.txt`: the headline, each domain expertise string, and each accomplishment as "lead: text", one per line. Run `node verify-cv-facts.mjs` on that file. Fix the payload until the check passes.
+   - Write a count with the same words that cv.md puts between the number and its noun. Do not drop a word in brackets.
+   - End a "using ..." list of tools before you add another fact. Start a new sentence for the other fact.
 5. Do NOT run generate-pdf.mjs.
 6. Write a cover letter payload to `output/cover-payload-<report number>-<company-slug>.json`:
    `{"greeting": "Dear Hiring Team,", "paragraphs": ["...", "..."], "closing": "Regards,"}`

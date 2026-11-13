@@ -56,8 +56,9 @@ import { loadOwner, ownerRules } from './lib/owner.js';
 import { ensureTracker, syncTracker } from './lib/tracker-sync.js';
 import {
   expandHome, ageCutoff, selectForTailoring, cvAllowed, cvDate, safeName, docFolder, freeFolder, limitedSettings, workerPrompt, jobMessage, documentsMessage, roleLens, cvLocation, jdMarkdown, parseWorkerResult, reportScore,
-  extractGaps, extractDecision, localDate, usageLimitMessage, documentThreshold, qualifies, checkDocLimits, markTrackerPdf,
+  extractGaps, extractDecision, localDate, usageLimitMessage, documentThreshold, qualifies, checkDocLimits, markTrackerPdf, repairMessage,
 } from './lib/tailoring.js';
+import { resolveFactFailures } from './lib/fact-equivalence.js';
 
 const logger = createLogger('tailor');
 const T = settings.tailoring;
@@ -162,10 +163,26 @@ async function buildDoc(kind, payload, outFile, reportNum, role = null) {
   fs.writeFileSync(htmlFile, html.stdout);
   const check = await run('node', ['verify-cv-facts.mjs', htmlFile], { cwd: CO });
   if (check.code !== 0) {
+    const same = await sameAsSource(htmlFile);
+    if (same) {
+      logger.info(`Role ${role ? role.id : reportNum}: the fact check flagged ${same.join(', ')}; cv.md says the same thing in other words (lib/fact-equivalence.js), so the check passes`);
+      return null;
+    }
     fs.rmSync(outFile, { force: true });
     return `fact check failed on the Word ${kind === 'cv' ? 'CV' : 'cover letter'}: ${(check.stdout + check.stderr).slice(-400)}`;
   }
   return null;
+}
+
+// The claims of a failed fact check, when each one says what cv.md says
+// (lib/fact-equivalence.js); else null, and the failure stays.
+async function sameAsSource(htmlFile) {
+  const json = await run('node', ['verify-cv-facts.mjs', htmlFile, '--json'], { cwd: CO });
+  let result;
+  try { result = JSON.parse(json.stdout.trim().split('\n').pop()); } catch { return null; }
+  const sources = ['cv.md', 'article-digest.md'].map((f) => path.join(CO, f)).filter((f) => fs.existsSync(f));
+  const out = resolveFactFailures(result, sources.map((f) => fs.readFileSync(f, 'utf-8')).join('\n'));
+  return out.resolved ? out.accepted : null;
 }
 
 // The session file of a worker (Claude Code keeps it under
@@ -289,8 +306,23 @@ async function tailorRole(role, files, onStep = () => {}) {
 
     const folder = freeFolder(docFolder(OUTPUT_DIR, role.employer, role.title, date, role.external_job_id || String(role.id)));
     fs.mkdirSync(folder, { recursive: true });
-    const cvError = await buildDoc('cv', cvPayload, path.join(folder, CV_NAME), reportNum, role);
-    if (cvError) return { ...failed(cvError), score: result.score, decision: rec.decision, gaps };
+    let cvError = await buildDoc('cv', cvPayload, path.join(folder, CV_NAME), reportNum, role);
+    // One repair try in the same session: the worker sees the checker's
+    // words and fixes its payload; then the Word CV is built again.
+    if (cvError && cvError.startsWith('fact check failed')) {
+      logger.warn(`Role ${role.id}: ${cvError.split('\n')[0]}; asking the worker to fix the payload (one try)`);
+      onStep('CV repair', modelFor('application_package'));
+      const repair = await workerCall('application_package', repairMessage({ reportNum, payload: cvPayload, failure: cvError }), files,
+        { roleId: role.id, logFile: logFile.replace(/\.log$/, '-repair.log'), resume: evaluation.sessionId });
+      if (!parseWorkerResult(repair.text) && repair.limit) throw new UsageLimitError(repair.limit);
+      cvError = await buildDoc('cv', cvPayload, path.join(folder, CV_NAME), reportNum, role);
+      logger.info(`Role ${role.id}: after the repair, the Word CV ${cvError ? 'still fails the fact check' : 'passes the fact check'}`);
+    }
+    if (cvError) {
+      // No Word file: leave no empty dated folder behind.
+      try { fs.rmdirSync(folder); } catch { /* not empty: keep it */ }
+      return { ...failed(cvError), score: result.score, decision: rec.decision, gaps };
+    }
     const coverPayload = newest(path.join(CO, 'output'), new RegExp(`^cover-payload-${reportNum}-.*\\.json$`));
     const coverError = coverPayload ? await buildDoc('cover', coverPayload, path.join(folder, COVER_NAME), reportNum) : 'no cover letter payload';
     if (coverError) logger.warn(`Role ${role.id}: cover letter not made: ${coverError}`);

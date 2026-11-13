@@ -3,7 +3,7 @@ import path from 'path';
 import {
   expandHome, safeName, docFolder, limitedSettings, workerPrompt, jobMessage, jdMarkdown, parseWorkerResult, extractGaps,
   extractDecision, localDate, trackerStatus, usageLimitMessage, documentThreshold, qualifies, checkDocLimits, markTrackerPdf,
-  documentsMessage, validateGapAnswer, appendConfirmedSkill, CONFIRMED_HEADING, ageCutoff, selectForTailoring, cvAllowed, cvDate, freeFolder, roleLens, reportScore, incompleteDescription, cvLocation,
+  documentsMessage, repairMessage, validateGapAnswer, appendConfirmedSkill, CONFIRMED_HEADING, ageCutoff, selectForTailoring, cvAllowed, cvDate, freeFolder, roleLens, reportScore, incompleteDescription, cvLocation,
 } from '../lib/tailoring.js';
 import { parseOwner } from '../lib/owner.js';
 
@@ -366,4 +366,15 @@ describe('markTrackerPdf', () => {
   test('no pdf column: unchanged', () => {
     expect(markTrackerPdf('a\tb\n1\t2')).toBe('a\tb\n1\t2');
   });
+});
+
+test('repairMessage: the payload path, the checker output and the fix rules, for the same report', () => {
+  const msg = repairMessage({ reportNum: '121', payload: 'output/cv-payload-121-acme.json', failure: 'CV fact check failed: x\n  - 8 clients' });
+  expect(msg).toContain('report number 121');
+  expect(msg).toContain('output/cv-payload-121-acme.json');
+  expect(msg).toContain('- 8 clients');
+  expect(msg).toMatch(/cv\.md only/);
+  expect(msg).toMatch(/item 4a/);
+  expect(msg).toMatch(/item 7/);
+  expect(repairMessage({ reportNum: '1', payload: 'p', failure: 'x'.repeat(5000) }).length).toBeLessThan(2500);
 });
