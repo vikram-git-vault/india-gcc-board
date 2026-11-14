@@ -108,6 +108,16 @@ describe('formatRefreshSummary', () => {
     const lines = formatRefreshSummary({ cp, names, finishedAt: '2026-10-17T02:28:35Z', incomplete: 'more than 50% of employers failed' });
     expect(lines[0]).toBe('=== Refresh NOT complete (more than 50% of employers failed) after 16 min: 2 of 3 employers succeeded, 1 failed ===');
   });
+
+  test('a platform outage gives one line before the failed employers', () => {
+    const lines = formatRefreshSummary({
+      cp, names, finishedAt: '2026-10-17T02:28:35Z', incomplete: 'platform down: workday wd5',
+      outages: ['workday wd5 (23 of 23 employers, HTTP 521)'],
+    });
+    expect(lines[0]).toBe('=== Refresh NOT complete (platform down: workday wd5) after 16 min: 2 of 3 employers succeeded, 1 failed ===');
+    expect(lines[1]).toBe('  Platform down: workday wd5 (23 of 23 employers, HTTP 521)');
+    expect(lines[2]).toMatch(/^ {2}Failed: Chubb/);
+  });
 });
 
 describe('reportSummary', () => {

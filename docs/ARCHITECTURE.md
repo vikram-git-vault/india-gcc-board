@@ -477,7 +477,11 @@ After a wake or a Wi-Fi change, the Mac can be without a network for some minute
 - **Pause.** If the network is not back after 15 minutes (`refresh.network_wait_minutes`), the refresh saves the checkpoint and stops with exit code 69. The server sets `paused` in `GET /api/refresh/status`. At each catch-up check, the server continues the run with `--resume` when there is a network.
 - **Start.** A scheduled, catch-up, retry or resumed run does not start without a network. A **Refresh now** click always starts.
 - **Detail pages.** In the sitemap and Avature scrapers, a network error stops the employer immediately, so that the refresh can wait and try again. If every detail page of an employer fails for another reason, the employer fails. Before this change, the result was "0 roles" and the employer counted as a success.
-- **Too many failures.** If more than 50% of the employers fail (`refresh.max_failed_percent`), the run is not complete. The refresh does not write `completed_at` or `last_refresh`, and it stops with exit code 1. The summary starts with "Refresh NOT complete". The server tries the run again after 10 minutes with `--resume`, and the retry scrapes only the failed employers. The roles from the employers that succeeded stay in the database and on the board.
+- **Too many failures.** If more than 15% of the employers fail (`refresh.max_failed_percent`), the run is not complete. On a normal day, 2 or 3 employers fail. Before 2026-11-14 the limit was 50%, and a run with 51 of 108 failed employers (47%) counted as complete. The refresh does not write `completed_at` or `last_refresh`, and it stops with exit code 1. The summary starts with "Refresh NOT complete". The server tries the run again after 10 minutes with `--resume`, and the retry scrapes only the failed employers. The roles from the employers that succeeded stay in the database and on the board.
+- **Platform outage.** `lib/outage.js` puts the employers in platform groups: one group for each Workday cluster (for example `workday wd5`), and one group for each other `ats_type`. A platform is down when at least 3 employers in its group fail with a server error (HTTP 500 to 599, `refresh.outage_min_employers`) and they are at least 50% of the group (`refresh.outage_min_percent`). HTTP 404 and other client errors are site changes, not an outage. The refresh keeps the HTTP status of each failure in the checkpoint (`http_status`).
+  - The refresh writes one line for each platform that is down, for example "Platform down: workday wd5 (23 of 23 employers, HTTP 521)". The run is not complete, and the refresh stops with exit code 76.
+  - The server starts the scoring for the roles that the run saved. Then it tries the failed employers again after 60 minutes (`schedule.outage_retry_minutes`) with `--resume`, up to 3 times (`schedule.outage_max_retries`). A retry that starts stops the scoring, and the next complete refresh starts it again. After the last retry, the next daily refresh tries the failed employers again.
+  - Example: on 2026-11-14 Cloudflare gave HTTP 521 for all the employers on Workday clusters `wd1` and `wd5` (44 employers). The other Workday clusters worked. HTTP 521 means that Cloudflare cannot connect to the Workday servers.
 
 The first full run with 6 employers at the same time (2026-10-16, on a copy of the database) took 14 minutes for 92 employers. The run before it took 96 minutes. The total work of the employers was 83 minutes in both runs. Nomura was the longest employer (9.5 minutes).
 
@@ -1235,11 +1239,11 @@ The states are the marks: none, interested, applied, rejected, closed (`MARKS` i
 
 | Phase | Meaning | Next |
 |---|---|---|
-| refreshing | `refresh.js` runs. | The scoring (exit code 0), a pause (75 or 69), a retry wait (other codes) or idle. |
+| refreshing | `refresh.js` runs. | The scoring (exit code 0), a pause (75 or 69), the scoring and an outage retry wait (76), a retry wait (other codes) or idle. |
 | scoring | `autoscore.js` runs. | The tailoring, or idle. A refresh that starts stops it. |
 | tailoring | `tailor.js` runs. | Queued work (a manual job's scoring, "Make CV anyway"), or idle. A refresh that starts stops it. |
 | paused | The refresh stopped because the Mac can sleep or has no network. | The catch-up check continues it (`--resume`). |
-| retry_wait | The refresh stopped with an error. | One retry after `schedule.retry_after_minutes` (10), with `--resume`. |
+| retry_wait | The refresh stopped with an error or a platform outage. | One retry after `schedule.retry_after_minutes` (10), with `--resume`. After an outage: up to 3 retries (`schedule.outage_max_retries`), 60 minutes apart (`schedule.outage_retry_minutes`). |
 | idle | Nothing runs. | The next scheduled refresh, or **Refresh now**. |
 
 `cyclePhase()` gives the phase from the flags, in this order of precedence. `queued` gives `scoring` (true when a manual job waits for the scoring) and `cvs` (the number of "Make CV anyway" requests that wait). The board still reads the flags; the phase is for the API readers.

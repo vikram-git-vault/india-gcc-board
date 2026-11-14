@@ -24,6 +24,7 @@ import {
 import { validateSchedule, defaultSchedule, timeToCron, isRefreshMissed, lastScheduledTime } from './lib/schedule.js';
 import { checkSleepRisk, PAUSED_EXIT_CODE } from './lib/power.js';
 import { checkOnline, NETWORK_EXIT_CODE } from './lib/network.js';
+import { OUTAGE_EXIT_CODE } from './lib/outage.js';
 import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security.js';
 import {
   getTailored, getEmployerName, getMarks, getMark, setMark, roleExists, addGapAnswer, requestRetailor, getModelUsage,
@@ -114,7 +115,7 @@ function logIdle(what) {
   if (refreshState.running || refreshState.scoring || refreshState.tailoring) return;
   allowSleep();
   let next;
-  if (retryTimer) next = `retry in ${RETRY_AFTER_MS / 60000} min`;
+  if (retryTimer) next = `retry in ${retryMinutes} min`;
   else if (refreshState.paused) next = `paused: ${refreshState.paused}`;
   else if (schedule.mode === 'daily') next = `next refresh daily at ${schedule.time} ${REFRESH_TIMEZONE}`;
   else next = 'next refresh on demand';
@@ -214,7 +215,18 @@ const PROGRESS_LOG_EVERY_MS = settings.server.progress_log_minutes * 60 * 1000;
 // A refresh that stops with an error is tried again once, after this
 // delay; with --resume it continues from the last saved employer.
 const RETRY_AFTER_MS = settings.schedule.retry_after_minutes * 60 * 1000;
+// A platform outage (lib/outage.js) is tried again later and more often:
+// up to outage_max_retries times, outage_retry_minutes apart.
+const OUTAGE_RETRY_MS = settings.schedule.outage_retry_minutes * 60 * 1000;
+const OUTAGE_MAX_RETRIES = settings.schedule.outage_max_retries;
 let retryTimer = null;
+let retryMinutes = 0;
+let outageRetries = 0;
+
+function scheduleRetry(trigger, ms) {
+  retryMinutes = ms / 60000;
+  retryTimer = setTimeout(() => { retryTimer = null; startWhenAwake(trigger); }, ms);
+}
 
 function runRefresh(trigger) {
   if (refreshState.running) {
@@ -245,6 +257,9 @@ function runRefresh(trigger) {
   args.push('--pause-on-sleep');
   refreshState.paused = null;
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+  // A new run (not a retry or a resume of the same run) counts its own
+  // outage retries.
+  if (!['outage-retry', 'retry', 'resume'].includes(trigger)) outageRetries = 0;
   const child = spawn('node', args, { cwd: process.cwd(), stdio: ['ignore', out, out, 'ipc'] });
   // Keep the Mac awake until the cycle ends (refresh, then scoring). A
   // closed lid on battery can still sleep, so refresh.js pauses then
@@ -293,9 +308,23 @@ function runRefresh(trigger) {
       logIdle('Refresh paused');
       return;
     }
+    if (code === OUTAGE_EXIT_CODE) {
+      if (outageRetries < OUTAGE_MAX_RETRIES) {
+        outageRetries += 1;
+        logger.warn(`Refresh not complete: platform down; trying the failed employers again in ${OUTAGE_RETRY_MS / 60000} min (retry ${outageRetries} of ${OUTAGE_MAX_RETRIES})`);
+        scheduleRetry('outage-retry', OUTAGE_RETRY_MS);
+      } else {
+        logger.warn(`Platform still down after ${OUTAGE_MAX_RETRIES} retries; the next daily refresh tries the failed employers again`);
+      }
+      // The roles of the employers that succeeded are saved: score them
+      // now. A retry that starts first stops the scorer, and the next
+      // complete refresh starts it again.
+      if (!runAutoScore() && !runTailor()) logIdle('Refresh not complete: platform down');
+      return;
+    }
     if (trigger !== 'retry') {
       logger.warn(`Refresh stopped before the end; trying again in ${RETRY_AFTER_MS / 60000} min from the last saved employer`);
-      retryTimer = setTimeout(() => { retryTimer = null; startWhenAwake('retry'); }, RETRY_AFTER_MS);
+      scheduleRetry('retry', RETRY_AFTER_MS);
       logIdle('Refresh stopped before the end');
       return;
     }
@@ -323,7 +352,7 @@ async function startWhenAwake(trigger) {
   if (refreshState.running) return false;
   const risk = (await checkSleepRisk()) || (await checkOnline() ? null : 'no network');
   if (risk) {
-    if (trigger === 'retry') refreshState.paused = refreshState.paused || waitText(risk);
+    if (trigger === 'retry' || trigger === 'outage-retry') refreshState.paused = refreshState.paused || waitText(risk);
     if (risk !== lastWaitReason) {
       logger.info(risk === 'no network'
         ? `Refresh (${trigger}) not started: no network; waiting`

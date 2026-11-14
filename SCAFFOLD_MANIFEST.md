@@ -27,6 +27,7 @@ Last update: 2026-10-13.
 | `lib/schedule.js` | 7 | Validates the refresh schedule (daily at a time, or on demand only). |
 | `lib/publisher.js` | 3b, 5, 6 | Writes `data/roles.json`: target roles, exception roles with fit 75 or more, and the scores. |
 | `lib/security.js` | 9 | The Host check, the cross-site check and the security headers (Content-Security-Policy) for `server.js`. |
+| `lib/outage.js` | 10 | Finds a platform outage (one Workday cluster or one ATS) in the failed employers of a run. |
 
 ## Scrapers (`lib/scrapers/`)
 
@@ -62,6 +63,7 @@ Last update: 2026-10-13.
 | `test/scoring.test.js` | 6 | Tests for the score validation. |
 | `test/parser.test.js` | 8 | Tests for the location mapping. |
 | `test/schedule.test.js` | 7 | Tests for the schedule validation. |
+| `test/outage.test.js` | 10 | Tests for the platform outage check. |
 | `README.md` | 0 | Overview and quick start. |
 | `docs/SETUP.md` | 0 | The procedures. |
 | `docs/ARCHITECTURE.md` | 0 | The design. |

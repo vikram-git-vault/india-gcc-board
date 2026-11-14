@@ -14,6 +14,8 @@
  *           Without a network the run waits, then stops (exit code 69,
  *           lib/network.js). More than refresh.max_failed_percent
  *           failed employers: exit code 1, the run is not complete.
+ *           A platform outage (lib/outage.js): exit code 76, the run is
+ *           not complete.
  *
  * data/roles.json is read live by server.js's GET /api/roles — there is
  * no separate publish/sync step. See docs/ARCHITECTURE.md §5.
@@ -29,6 +31,7 @@ import {
 } from './lib/checkpoint.js';
 import { checkSleepRisk, createSleepWatch, PAUSED_EXIT_CODE } from './lib/power.js';
 import { isNetworkError, checkOnline, createNetworkGate, NETWORK_EXIT_CODE } from './lib/network.js';
+import { findOutages, formatOutage, httpStatusOf, OUTAGE_EXIT_CODE } from './lib/outage.js';
 
 const logger = createLogger('refresh');
 
@@ -103,7 +106,7 @@ async function scrapeEmployers(employers, filters, cp, save, { pauseOnSleep = fa
       return { status: 'ok', count: roles.length, added, updated, closed };
     } catch (err) {
       logger.error(`Failed scraping ${employer.name}: ${err.message}`);
-      return { status: 'error', error: err.message, network: isNetworkError(err) };
+      return { status: 'error', error: err.message, http_status: httpStatusOf(err), network: isNetworkError(err) };
     }
   };
 
@@ -354,15 +357,21 @@ async function main() {
   const counts = await reclassify();
   logger.info(`Classified ${counts.total} roles: ${counts.target} target, ${counts.exception} exception, ${counts.excluded} excluded`);
   // Too many failed employers (for example a network fault that the
-  // network check did not see): not complete, so the retry (--resume)
-  // scrapes the failed employers again. The roles saved so far are kept.
+  // network check did not see) or a platform outage: not complete, so the
+  // retry (--resume) scrapes the failed employers again. The roles saved
+  // so far are kept.
   const results = Object.values(cp.employers);
   const failedPercent = results.length ? (100 * results.filter((r) => r.status === 'error').length) / results.length : 0;
   const tooManyFailed = !only && failedPercent > settings.refresh.max_failed_percent;
-  if (!tooManyFailed) await recordRun(cp, { updateLastRefresh: !only });
+  const outages = only ? [] : findOutages(cp, employers);
+  outages.forEach((o) => logger.warn(`Platform down: ${formatOutage(o)}`));
+  let incomplete = null;
+  if (outages.length) incomplete = `platform down: ${outages.map((o) => o.platform).join(', ')}`;
+  else if (tooManyFailed) incomplete = `more than ${settings.refresh.max_failed_percent}% of employers failed`;
+  if (!incomplete) await recordRun(cp, { updateLastRefresh: !only });
   // Mark complete before the last publish so the board shows "complete";
   // if the publish fails, unmark it so the retry resumes, not rescrapes.
-  if (!tooManyFailed) {
+  if (!incomplete) {
     cp.completed_at = new Date().toISOString();
     save(cp);
   }
@@ -379,11 +388,12 @@ async function main() {
   const names = Object.fromEntries(employers.map((e) => [e.id, e.name]));
   const summary = formatRefreshSummary({
     cp, names, resumed: cp.run_id !== runId, expired, descriptions, classified: counts, rolesOnBoard,
-    incomplete: tooManyFailed ? `more than ${settings.refresh.max_failed_percent}% of employers failed` : null,
+    incomplete, outages: outages.map(formatOutage),
   });
-  summary.forEach((line) => (tooManyFailed ? logger.warn(line) : logger.info(line)));
+  summary.forEach((line) => (incomplete ? logger.warn(line) : logger.info(line)));
   reportSummary(summary);
-  if (tooManyFailed) process.exitCode = 1;
+  if (outages.length) process.exitCode = OUTAGE_EXIT_CODE;
+  else if (tooManyFailed) process.exitCode = 1;
 }
 
 main().catch((err) => {

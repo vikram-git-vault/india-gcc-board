@@ -55,13 +55,17 @@ The settings are in two files:
 | `schedule.timezone` | `Asia/Kolkata` | The time zone of the refresh schedule. |
 | `schedule.catch_up_check_minutes` | `5` | The minutes between the checks for a missed refresh. |
 | `schedule.retry_after_minutes` | `10` | The minutes before the server tries a failed refresh again (one time). |
+| `schedule.outage_retry_minutes` | `60` | After a platform outage, the minutes before the server tries the failed employers again. |
+| `schedule.outage_max_retries` | `3` | The maximum number of retries after a platform outage. After the last retry, the next daily refresh tries the failed employers again. |
 | `refresh.scrape_concurrency` | `6` | The number of employers that the refresh scrapes at the same time (1 to 16). Refer to section 4.1 of `docs/ARCHITECTURE.md`. |
 | `refresh.employer_time_limit_minutes` | `20` | The time limit for one employer. After the limit, the employer counts as failed. |
 | `refresh.publish_interval_seconds` | `30` | The minimum time between two writes of `data/roles.json` during a refresh. |
 | `refresh.checkpoint_max_age_hours` | `12` | A resumed refresh continues an unfinished run only if the run is younger than this. |
 | `refresh.network_wait_minutes` | `15` | Without a network, the refresh waits this long. Then it pauses, and the server continues it when there is a network. |
 | `refresh.network_check_seconds` | `30` | The time between two network checks while the refresh waits. |
-| `refresh.max_failed_percent` | `50` | If more failed employers than this percentage, the run is not complete and the server tries it again. |
+| `refresh.max_failed_percent` | `15` | If more failed employers than this percentage, the run is not complete and the server tries it again. On a normal day, 2 or 3 employers (2% to 3%) fail. |
+| `refresh.outage_min_employers` | `3` | A platform outage needs at least this number of employers on one platform that fail with a server error (HTTP 500 to 599). |
+| `refresh.outage_min_percent` | `50` | A platform outage also needs at least this percentage of the employers on that platform to fail with a server error. |
 | `scraping.user_agent` | `india-gcc-board-bot/1.0 (...)` | The name that the scrapers send to the employer sites. |
 | `scraping.request_timeout_seconds` | `30` | The time limit for one request. |
 | `scraping.default_crawl_delay_seconds` | `5` | The crawl delay for an employer that has no `crawl_delay_seconds` in `config/employers.json`. |

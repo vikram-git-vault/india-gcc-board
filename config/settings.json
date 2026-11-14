@@ -8,7 +8,9 @@
     "refresh_cron": "0 6 * * *",
     "timezone": "Asia/Kolkata",
     "catch_up_check_minutes": 5,
-    "retry_after_minutes": 10
+    "retry_after_minutes": 10,
+    "outage_retry_minutes": 60,
+    "outage_max_retries": 3
   },
   "refresh": {
     "scrape_concurrency": 6,
@@ -17,7 +19,9 @@
     "checkpoint_max_age_hours": 12,
     "network_wait_minutes": 15,
     "network_check_seconds": 30,
-    "max_failed_percent": 50
+    "max_failed_percent": 15,
+    "outage_min_employers": 3,
+    "outage_min_percent": 50
   },
   "scraping": {
     "user_agent": "india-gcc-board-bot/1.0 (+https://github.com/vikram-git-vault/india-gcc-board)",
