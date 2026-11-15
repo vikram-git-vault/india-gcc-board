@@ -1,16 +1,16 @@
 # Employer directory
 
-This document lists all 161 employers and the method that tracks each employer.
+This document lists all 165 employers and the method that tracks each employer.
 
-- The refresh scrapes 106 employers automatically.
+- The refresh scrapes 110 employers automatically.
 - You must check 55 employers manually. A scraper for their career site does not exist yet, or their site does not show India roles.
 - 0 employers are excluded because their site does not permit crawlers.
 
-A script makes this document from `config/employers.json`. Do not edit the tables by hand. For the dated finding for each employer, refer to the `note` field in `config/employers.json`.
+The data in this document comes from `config/employers.json`. For the dated finding for each employer, refer to the `note` field in `config/employers.json`.
 
-*Last update: 2026-11-03. Each career site link opens in a new tab.*
+*Last update: 2026-11-15. Each career site link opens in a new tab.*
 
-## Automated (106)
+## Automated (110)
 
 The refresh scrapes these employers. The platform column gives the ATS that a test on the live site confirmed.
 
@@ -34,6 +34,7 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | Autodesk | Other industry | Workday | <a href="https://autodesk.wd1.myworkdayjobs.com/Ext" target="_blank" rel="noopener noreferrer">autodesk.wd1.myworkdayjobs.com/Ext</a> |
 | Bank of America | BFSI | Workday | <a href="https://ghr.wd1.myworkdayjobs.com/lateral-us" target="_blank" rel="noopener noreferrer">ghr.wd1.myworkdayjobs.com/lateral-us</a> |
 | Barclays | BFSI | Workday | <a href="https://barclays.wd3.myworkdayjobs.com/External_Career_Site_Barclays" target="_blank" rel="noopener noreferrer">barclays.wd3.myworkdayjobs.com/External_Career_Site_Barclays</a> |
+| Barry-Wehmiller | Other industry | Workday | <a href="https://barrywehmiller.wd1.myworkdayjobs.com/BWCareers" target="_blank" rel="noopener noreferrer">barrywehmiller.wd1.myworkdayjobs.com/BWCareers</a> |
 | BlackRock | BFSI | Workday | <a href="https://blackrock.wd1.myworkdayjobs.com/BlackRock_Professional" target="_blank" rel="noopener noreferrer">blackrock.wd1.myworkdayjobs.com/BlackRock_Professional</a> |
 | Blackstone | BFSI | Workday | <a href="https://blackstone.wd1.myworkdayjobs.com/Blackstone_Careers" target="_blank" rel="noopener noreferrer">blackstone.wd1.myworkdayjobs.com/Blackstone_Careers</a> |
 | BNY | BFSI | Oracle Fusion | <a href="https://eofe.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/BNY-Careers/jobs" target="_blank" rel="noopener noreferrer">eofe.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/BNY-Careers/jobs</a> |
@@ -49,6 +50,7 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | CSG | Other industry | Workday | <a href="https://csgi.wd5.myworkdayjobs.com/CSGCareers" target="_blank" rel="noopener noreferrer">csgi.wd5.myworkdayjobs.com/CSGCareers</a> |
 | Danaher | Other industry | Phenom | <a href="https://jobs.danaher.com/global/en" target="_blank" rel="noopener noreferrer">jobs.danaher.com/global/en</a> |
 | Deloitte USI | BFSI | Avature | <a href="https://usijobs.deloitte.com/en_US/careersUSI" target="_blank" rel="noopener noreferrer">usijobs.deloitte.com/en_US/careersUSI</a> |
+| DHL | Other industry | Phenom | <a href="https://careers.dhl.com/global/en/search-results" target="_blank" rel="noopener noreferrer">careers.dhl.com/global/en/search-results</a> |
 | DocuSign | Other industry | jibe | <a href="https://careers.docusign.com/" target="_blank" rel="noopener noreferrer">careers.docusign.com</a> |
 | DoorDash | Other industry | Greenhouse | <a href="https://careersatdoordash.com/" target="_blank" rel="noopener noreferrer">careersatdoordash.com</a> |
 | DTCC | BFSI | Oracle Fusion | <a href="https://ebxr.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs" target="_blank" rel="noopener noreferrer">ebxr.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/jobs</a> |
@@ -72,6 +74,7 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | Invesco | BFSI | Workday | <a href="https://invesco.wd1.myworkdayjobs.com/IVZ" target="_blank" rel="noopener noreferrer">invesco.wd1.myworkdayjobs.com/IVZ</a> |
 | JLL | Other industry | Workday | <a href="https://jll.wd1.myworkdayjobs.com/jllcareers" target="_blank" rel="noopener noreferrer">jll.wd1.myworkdayjobs.com/jllcareers</a> |
 | JPMorgan Chase | BFSI | Oracle Fusion | <a href="https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs" target="_blank" rel="noopener noreferrer">jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs</a> |
+| KLA | Other industry | Workday | <a href="https://kla.wd1.myworkdayjobs.com/en-US/Search" target="_blank" rel="noopener noreferrer">kla.wd1.myworkdayjobs.com/en-US/Search</a> |
 | LPL Financial | BFSI | Workday | <a href="https://lplfinancial.wd1.myworkdayjobs.com/India_Ext" target="_blank" rel="noopener noreferrer">lplfinancial.wd1.myworkdayjobs.com/India_Ext</a> |
 | LSEG | BFSI | Workday | <a href="https://lseg.wd3.myworkdayjobs.com/Careers" target="_blank" rel="noopener noreferrer">lseg.wd3.myworkdayjobs.com/Careers</a> |
 | Marsh & McLennan | BFSI | Custom (sitemap) | <a href="https://careers.marsh.com" target="_blank" rel="noopener noreferrer">careers.marsh.com</a> |
@@ -117,6 +120,7 @@ The refresh scrapes these employers. The platform column gives the ATS that a te
 | UBS | BFSI | brassring | <a href="https://jobs.ubs.com/TGnewUI/Search/Home/Home?partnerid=25008&siteid=5012" target="_blank" rel="noopener noreferrer">jobs.ubs.com/TGnewUI/Search/Home/Home?partnerid=25008&siteid=5012</a> |
 | Vanguard | BFSI | Workday | <a href="https://vanguard.wd5.myworkdayjobs.com/vanguard_external" target="_blank" rel="noopener noreferrer">vanguard.wd5.myworkdayjobs.com/vanguard_external</a> |
 | Visa | BFSI | Workday | <a href="https://visa.wd5.myworkdayjobs.com/Visa" target="_blank" rel="noopener noreferrer">visa.wd5.myworkdayjobs.com/Visa</a> |
+| Walmart Global Tech | Other industry | Workday | <a href="https://walmart.wd504.myworkdayjobs.com/WalmartExternal" target="_blank" rel="noopener noreferrer">walmart.wd504.myworkdayjobs.com/WalmartExternal</a> |
 | Wells Fargo | BFSI | Workday | <a href="https://wf.wd1.myworkdayjobs.com/WellsFargoJobs" target="_blank" rel="noopener noreferrer">wf.wd1.myworkdayjobs.com/WellsFargoJobs</a> |
 | Wise | BFSI | Custom (sitemap) | <a href="https://wise.jobs/" target="_blank" rel="noopener noreferrer">wise.jobs</a> |
 | ZEISS | Other industry | Workday | <a href="https://zeissgroup.wd3.myworkdayjobs.com/External" target="_blank" rel="noopener noreferrer">zeissgroup.wd3.myworkdayjobs.com/External</a> |
