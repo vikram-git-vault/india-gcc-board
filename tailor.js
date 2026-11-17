@@ -55,7 +55,7 @@ import { publish } from './lib/publisher.js';
 import { loadOwner, ownerRules } from './lib/owner.js';
 import { ensureTracker, syncTracker } from './lib/tracker-sync.js';
 import {
-  expandHome, ageCutoff, selectForTailoring, cvAllowed, cvDate, safeName, docFolder, freeFolder, limitedSettings, workerPrompt, jobMessage, documentsMessage, roleLens, cvLocation, jdMarkdown, parseWorkerResult, reportScore,
+  expandHome, ageCutoff, selectForTailoring, cvAllowed, cvDate, safeName, docFolder, freeFolder, limitedSettings, workerPrompt, jobMessage, documentsMessage, roleLens, roleLevel, cvLocation, jdMarkdown, parseWorkerResult, reportScore,
   extractGaps, extractDecision, localDate, usageLimitMessage, documentThreshold, qualifies, checkDocLimits, markTrackerPdf, repairMessage,
 } from './lib/tailoring.js';
 import { resolveFactFailures } from './lib/fact-equivalence.js';
@@ -149,7 +149,9 @@ const newest = (dir, re) => {
 
 // Builds one Word file and runs career-ops' fact check on its text.
 // Returns null when it passed, or the reason it failed (the file is removed).
-async function buildDoc(kind, payload, outFile, reportNum, role = null) {
+// A builder "WARNING: ..." line (a CV still over 3 pages after all the
+// cuts) goes to warnings[].
+async function buildDoc(kind, payload, outFile, reportNum, role = null, warnings = []) {
   const script = kind === 'cv' ? 'tools/build-cv-docx.py' : 'tools/build-cover-docx.py';
   const args = ['-I', script, payload, outFile, TEMPLATES[kind]];
   if (kind === 'cv') args.push(path.join(CO, 'cv.md'));
@@ -158,6 +160,10 @@ async function buildDoc(kind, payload, outFile, reportNum, role = null) {
   const built = await run('python3', args);
   if (built.code !== 0) return `Word build failed: ${(built.stderr || built.stdout).slice(-300)}`;
   logger.info(built.stdout.trim());
+  for (const m of built.stdout.matchAll(/^WARNING: (.+)$/gm)) {
+    warnings.push(m[1].trim());
+    logger.warn(`Role ${role ? role.id : reportNum}: ${m[1].trim()}`);
+  }
   const html = await run('textutil', ['-convert', 'html', '-stdout', outFile]);
   const htmlFile = path.join(CO, 'output', `${kind}-docx-${reportNum}.html`);
   fs.writeFileSync(htmlFile, html.stdout);
@@ -289,7 +295,9 @@ async function tailorRole(role, files, onStep = () => {}) {
     onStep('CV and cover letter', modelFor('application_package'));
     const lens = roleLens(role);
     if (lens) logger.info(`Role ${role.id}: ${lens.lens} CV (${lens.why})`);
-    const documents = await workerCall('application_package', documentsMessage({ reportNum, lens }), files,
+    const level = roleLevel(role);
+    if (level) logger.info(`Role ${role.id}: level ${role.grade || 'ungraded'}, ${level.below ? 'below' : 'at or above'} the owner's level`);
+    const documents = await workerCall('application_package', documentsMessage({ reportNum, lens, level }), files,
       { roleId: role.id, logFile: docsLog, resume: evaluation.sessionId });
     const docsResult = parseWorkerResult(documents.text);
     if (!docsResult && documents.limit) {
@@ -306,7 +314,8 @@ async function tailorRole(role, files, onStep = () => {}) {
 
     const folder = freeFolder(docFolder(OUTPUT_DIR, role.employer, role.title, date, role.external_job_id || String(role.id)));
     fs.mkdirSync(folder, { recursive: true });
-    let cvError = await buildDoc('cv', cvPayload, path.join(folder, CV_NAME), reportNum, role);
+    let cvWarnings = [];
+    let cvError = await buildDoc('cv', cvPayload, path.join(folder, CV_NAME), reportNum, role, cvWarnings);
     // One repair try in the same session: the worker sees the checker's
     // words and fixes its payload; then the Word CV is built again.
     if (cvError && cvError.startsWith('fact check failed')) {
@@ -315,7 +324,8 @@ async function tailorRole(role, files, onStep = () => {}) {
       const repair = await workerCall('application_package', repairMessage({ reportNum, payload: cvPayload, failure: cvError }), files,
         { roleId: role.id, logFile: logFile.replace(/\.log$/, '-repair.log'), resume: evaluation.sessionId });
       if (!parseWorkerResult(repair.text) && repair.limit) throw new UsageLimitError(repair.limit);
-      cvError = await buildDoc('cv', cvPayload, path.join(folder, CV_NAME), reportNum, role);
+      cvWarnings = [];
+      cvError = await buildDoc('cv', cvPayload, path.join(folder, CV_NAME), reportNum, role, cvWarnings);
       logger.info(`Role ${role.id}: after the repair, the Word CV ${cvError ? 'still fails the fact check' : 'passes the fact check'}`);
     }
     if (cvError) {
@@ -327,13 +337,14 @@ async function tailorRole(role, files, onStep = () => {}) {
     const coverError = coverPayload ? await buildDoc('cover', coverPayload, path.join(folder, COVER_NAME), reportNum) : 'no cover letter payload';
     if (coverError) logger.warn(`Role ${role.id}: cover letter not made: ${coverError}`);
     const limits = checkDocLimits(JSON.parse(fs.readFileSync(cvPayload, 'utf-8')),
-      coverPayload && !coverError ? JSON.parse(fs.readFileSync(coverPayload, 'utf-8')) : null);
+      coverPayload && !coverError ? JSON.parse(fs.readFileSync(coverPayload, 'utf-8')) : null, undefined, { level, title: role.title });
     if (limits.length) logger.warn(`Role ${role.id}: length rules not met: ${limits.join('; ')}`);
     fs.copyFileSync(jdFile, path.join(folder, 'job_description.md'));
     if (report) fs.copyFileSync(report, path.join(folder, 'evaluation.md'));
     const tsv = path.join(CO, 'batch', 'tracker-additions', `board-${role.id}.tsv`);
     if (!TRIAL && fs.existsSync(tsv)) fs.writeFileSync(tsv, markTrackerPdf(fs.readFileSync(tsv, 'utf-8')));
-    Object.assign(rec, { status: 'ready', outcome: 'ready', folder, cv_file: CV_NAME, cover_file: coverError ? null : COVER_NAME, error: coverError });
+    Object.assign(rec, { status: 'ready', outcome: 'ready', folder, cv_file: CV_NAME, cover_file: coverError ? null : COVER_NAME, error: coverError,
+      cv_warning: cvWarnings.length ? cvWarnings.join('; ') : null });
     logger.info(`Role ${role.id} (${role.employer}, ${role.title}): career-ops ${result.score}/5, Word CV made, ${gaps.length} gaps, ${Math.round((Date.now() - started) / 1000)}s`);
     return rec;
   } finally {

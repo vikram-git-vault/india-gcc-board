@@ -3,7 +3,7 @@ import path from 'path';
 import {
   expandHome, safeName, docFolder, limitedSettings, workerPrompt, jobMessage, jdMarkdown, parseWorkerResult, extractGaps,
   extractDecision, localDate, trackerStatus, usageLimitMessage, documentThreshold, qualifies, checkDocLimits, markTrackerPdf,
-  documentsMessage, repairMessage, validateGapAnswer, appendConfirmedSkill, CONFIRMED_HEADING, ageCutoff, selectForTailoring, cvAllowed, cvDate, freeFolder, roleLens, reportScore, incompleteDescription, cvLocation,
+  documentsMessage, repairMessage, validateGapAnswer, appendConfirmedSkill, CONFIRMED_HEADING, ageCutoff, selectForTailoring, cvAllowed, cvDate, freeFolder, roleLens, roleLevel, reportScore, incompleteDescription, cvLocation,
 } from '../lib/tailoring.js';
 import { parseOwner } from '../lib/owner.js';
 
@@ -277,6 +277,26 @@ describe('documentsMessage', () => {
     expect(r.why).toMatch(/title: both; JD: 4 product and 0 engineering terms; RM: PO 75, EM 75/);
     expect(roleLens({})).toBeNull();
   });
+  test('roleLens: Program words in the title give the Program lens', () => {
+    const jdEng = 'Lead engineers. Own the architecture, microservices, CI/CD and code review.';
+    for (const title of ['Project Manager', 'Senior Program Manager, Payments', 'Programme Manager', 'Delivery Manager, Cards',
+      'Delivery Lead', 'TPM, Data Platforms', 'Technical Program Manager', 'Director, PMO']) {
+      expect(roleLens({ title, description: jdEng, po_fit: 70, em_fit: 80 }).lens).toBe('Program');
+    }
+  });
+  test('roleLens: Program words win over Product and Engineering words; reasons are given', () => {
+    const r = roleLens({ title: 'Technical Program Manager, Product Engineering', description: 'roadmap backlog', po_fit: 80, em_fit: 70 });
+    expect(r.lens).toBe('Program');
+    expect(r.why).toMatch(/^title: Program \("Program Manager"\); JD: 2 product and 0 engineering terms; RM: PO 80, EM 70 \(points: /);
+  });
+  test('roleLens: "Program Management" and other words are not Program titles', () => {
+    expect(roleLens({ title: 'Director, Technical Program Management', description: 'roadmap backlog', po_fit: 70, em_fit: 80 }).lens).toBe('Product');
+    expect(roleLens({ title: 'Delivery Excellence Head', description: '', po_fit: 70, em_fit: 80 }).lens).toBe('Engineering');
+    expect(roleLens({ title: 'Senior Manager, Software Engineering', description: '', po_fit: 70, em_fit: 80 }).lens).toBe('Engineering');
+  });
+  test('documentsMessage gives the Program lens to the worker', () => {
+    expect(documentsMessage({ reportNum: '021', lens: { lens: 'Program', why: 'title: Program ("TPM")' } })).toMatch(/Role lens: Program \(from the title/);
+  });
 });
 
 // The owner's must-have items, as in config/private/owner_example.json.
@@ -377,4 +397,48 @@ test('repairMessage: the payload path, the checker output and the fix rules, for
   expect(msg).toMatch(/item 4a/);
   expect(msg).toMatch(/item 7/);
   expect(repairMessage({ reportNum: '1', payload: 'p', failure: 'x'.repeat(5000) }).length).toBeLessThan(2500);
+});
+
+// The role level against the owner's level (owner rule, 2026-11-17), with
+// the made-up level of config/private/owner_example.json.
+describe('roleLevel and the openings', () => {
+  const owner = parseOwner({ level: { title: 'Senior Manager', grades: ['Senior Manager', 'Director', 'VP', 'Head'] }, cv_checks: {} });
+  test('owner.json level is parsed; no level gives null', () => {
+    expect(owner.level.title).toBe('Senior Manager');
+    expect(owner.level.grades.has('VP')).toBe(true);
+    expect(parseOwner({}).level).toBeNull();
+    expect(roleLevel({ grade: 'VP' }, parseOwner({}))).toBeNull();
+  });
+  test('a grade at or above the owner level allows the level title', () => {
+    const l = roleLevel({ grade: 'Director' }, owner);
+    expect(l.below).toBe(false);
+    expect(l.text).toMatch(/at or above the owner's level\. The summary and the cover letter may open with "Senior Manager"/);
+  });
+  test('a lower grade or no grade is below: the openings use the JD words', () => {
+    expect(roleLevel({ grade: 'AVP' }, owner).below).toBe(true);
+    const l = roleLevel({ grade: null }, owner);
+    expect(l.below).toBe(true);
+    expect(l.text).toMatch(/no grade in the title, below the owner's level\. Do not use "Senior Manager" in the first sentence of the summary or in the first paragraph of the cover letter/);
+    expect(l.text).toMatch(/job titles in the experience section stay as in cv\.md/);
+  });
+  test('documentsMessage gives the level line to the worker', () => {
+    expect(documentsMessage({ reportNum: '7', level: roleLevel({ grade: 'AVP' }, owner) })).toMatch(/Role level: AVP, below the owner's level/);
+    expect(documentsMessage({ reportNum: '7' })).not.toMatch(/Role level/);
+  });
+  test('checkDocLimits warns when an opening has the level title for a lower role', () => {
+    const level = roleLevel({ grade: 'AVP' }, owner);
+    const opens = (cv, cover, title = 'AVP, Engineering') => checkDocLimits(cv, cover, owner, { level, title }).filter((w) => /opens with/.test(w));
+    const cv = { summary: 'Senior Manager and engineering leader with 15 years. Led a Senior Manager forum.' };
+    const cover = { paragraphs: ['As a Senior Manager, I want this role.', 'More.'] };
+    expect(opens(cv, cover)).toEqual([
+      'summary opens with "Senior Manager" for a role below the owner\'s level (rule: use the JD\'s role words)',
+      'cover letter opens with "Senior Manager" for a role below the owner\'s level (rule: use the JD\'s role words)',
+    ]);
+    // Only the first sentence and the first paragraph count.
+    expect(opens({ summary: 'Engineering leader with 15 years. Senior Manager since 2020.' }, { paragraphs: ['I want this role.', 'As a Senior Manager, ...'] })).toEqual([]);
+    // The JD title has the word: its own title words are permitted.
+    expect(opens(cv, cover, 'Senior Manager, Engineering (AVP)')).toEqual([]);
+    // At or above the owner's level: no warning.
+    expect(checkDocLimits(cv, cover, owner, { level: roleLevel({ grade: 'VP' }, owner), title: 'VP' }).filter((w) => /opens with/.test(w))).toEqual([]);
+  });
 });

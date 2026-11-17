@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node refresh.js",
     "serve": "node server.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js && python3 -m unittest discover -s test -p 'test_*.py'",
     "lint": "eslint lib/ refresh.js",
     "dev": "nodemon refresh.js",
     "check:private": "node tools/check-private.js --all && node tools/check-private.js --history",

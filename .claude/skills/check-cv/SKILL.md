@@ -28,7 +28,7 @@ The owner's own rules and facts are in `config/private/cv-rules.md` and `config/
 
 4. **Check what the script cannot.** Read the CV payload (`cv-payload-<report>-*.json`, path in the output folder of career-ops) and look at:
    - the headline job title agrees with the owner's real level (in `cv-rules.md`);
-   - the lens (Product or Engineering) suits the job title;
+   - the lens (Product, Engineering or Program) suits the job title;
    - the owner's must-have items are easy to see, near the top.
    Do this in a few lines. Do not write a full review of the CV text.
 

@@ -378,6 +378,7 @@
     if (t.cover) links += link('cover', 'Cover letter (Word)', 'Open the tailored cover letter in Word, in its OneDrive folder');
     if (t.cv) links += link('report', 'career-ops report', 'Open the career-ops evaluation');
     if (t.cv) links += link('folder', 'Folder', 'Open the OneDrive folder of this role in Finder');
+    if (t.cv_warning) links += '<span class="flag" title="' + escapeHtml(t.cv_warning) + '. The builder cut all it is allowed to cut.">Over 3 pages</span>';
     return links;
   }
 
@@ -464,6 +465,7 @@
     if (t.cv && ts && (ts.state === 'stale' || ts.state === 'rerun')) line += ' ' + ts.text.charAt(0).toUpperCase() + ts.text.slice(1) + '.';
     return '<div><h3>career-ops: ' + Number(t.score).toFixed(1) + ' of 5' + (t.decision ? ' (' + escapeHtml(t.decision) + ')' : '') + '</h3>' +
       '<p>' + escapeHtml(line) + '</p>' +
+      (t.cv_warning ? '<p class="gap-error">' + escapeHtml(t.cv_warning) + '.</p>' : '') +
       (g ? '<h3>Not in your master CV (left off the resume)</h3><p>If you have done one of these, click <em>I have done this</em> and write it in your own words. The board adds it to your master CV, and career-ops makes this resume again.</p><ul class="gap-list">' + g + '</ul>' : '') +
       (c ? '<h3>Added to your master CV</h3><ul class="gap-list confirmed">' + c + '</ul>' : '') +
       '</div>';

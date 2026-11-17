@@ -208,4 +208,21 @@ describe('changed_date and the kept CV', () => {
     [t] = await read('SELECT * FROM tailored_docs WHERE role_id = ?', [id]);
     expect([t.folder, t.cv_file, t.cover_file]).toEqual(['/o/A/2026-11-12_X', 'cv.docx', null]);
   });
+  test('the builder warning stays with its CV', async () => {
+    await db.syncRoles(SLUG, [role('cvw')]);
+    const { id } = await roleRow('cvw');
+    const base = { role_id: id, report_num: '002', gaps: [] };
+    const over = 'CV still over 3 pages after all cuts; owner to decide (~172 lines, limit 160)';
+    await db.upsertTailored({ ...base, description_hash: 'h1', status: 'ready', score: 4.1, folder: '/o/A/1', cv_file: 'cv.docx', cv_warning: over });
+    let [t] = await read('SELECT cv_warning FROM tailored_docs WHERE role_id = ?', [id]);
+    expect(t.cv_warning).toBe(over);
+    // An evaluation with no CV keeps the CV and its warning.
+    await db.upsertTailored({ ...base, description_hash: 'h2', status: 'evaluated', score: 4.1 });
+    [t] = await read('SELECT cv_warning FROM tailored_docs WHERE role_id = ?', [id]);
+    expect(t.cv_warning).toBe(over);
+    // A new CV in 3 pages clears it.
+    await db.upsertTailored({ ...base, description_hash: 'h3', status: 'ready', score: 4.3, folder: '/o/A/2', cv_file: 'cv.docx' });
+    [t] = await read('SELECT cv_warning FROM tailored_docs WHERE role_id = ?', [id]);
+    expect(t.cv_warning).toBeNull();
+  });
 });

@@ -1,5 +1,17 @@
 {
   "home_city": "Pune",
+  "level": {
+    "title": "Senior Manager",
+    "grades": [
+      "Senior Manager",
+      "AVP",
+      "Associate Director",
+      "Director",
+      "VP",
+      "SVP",
+      "Head"
+    ]
+  },
   "excluded_employers": [
     "Example Bank"
   ],

@@ -16,6 +16,11 @@ cloning the template's own paragraphs for each part of the CV.
 import json, math, os, re, sys, zipfile
 from xml.sax.saxutils import escape
 
+# tailor.js runs this with python3 -I, which does not add this folder to
+# the import path.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from cv_cuts import load_protected, trim  # noqa: E402
+
 args = sys.argv[1:]
 # --location: the city of the role, for the contact line (owner, 2026-11-05:
 # a Pune role shows Pune). Without it, the template's own location stays.
@@ -291,54 +296,8 @@ def owner_keep():
 
 
 KEEP_ACC = owner_keep()
-# Latest-role bullets that the trim keeps: the same owner items.
-KEEP_BULLET = KEEP_ACC
-
-
-def cut_one(p):
-    """Removes the least important item. The worker lists items most relevant
-    first, so the last one goes. Returns False when nothing is left to cut."""
-    exp = p.get('experience') or []
-
-    def pop(lst, keep):
-        if lst is not None and len(lst) > keep:
-            lst.pop()
-            return True
-        return False
-
-    def pop_lead(keep):
-        """The last latest-role bullet that the owner's rules do not keep."""
-        if lead is None or len(lead) <= keep:
-            return False
-        for i in range(len(lead) - 1, -1, -1):
-            if not KEEP_BULLET.search(lead[i]):
-                lead.pop(i)
-                return True
-        return False
-
-    def older(keep):
-        return any(pop(exp[i].get('bullets'), keep) for i in range(len(exp) - 1, 0, -1))
-
-    def pop_acc(keep):
-        """The last accomplishment that is not one of the owner's must-have
-        items (KEEP_ACC): those always stay (owner's rule)."""
-        accs = p.get('accomplishments')
-        if not accs or len(accs) <= keep:
-            return False
-        for i in range(len(accs) - 1, -1, -1):
-            if not KEEP_ACC.search(accs[i].get('lead', '') + ' ' + accs[i].get('text', '')):
-                accs.pop(i)
-                return True
-        return False
-
-    # Skill groups count "Core Competencies" (the competencies) too.
-    core = 1 if p.get('competencies') else 0
-    lead = exp[0].get('bullets') if exp else None
-    steps = [lambda: pop_acc(5), lambda: pop_lead(10),
-             lambda: pop(p.get('skills'), 5 - core), lambda: older(2),
-             lambda: pop_acc(4), lambda: pop_lead(8),
-             lambda: pop(p.get('skills'), 4 - core), lambda: older(1), lambda: pop_lead(6)]
-    return any(step() for step in steps)
+# Older-role bullets that are never cut (config/private/cv-rules.md).
+PROTECTED = load_protected(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config', 'private'))
 
 
 # Owner's rule: 5 skill groups, 6 as an exception, never more. The worker
@@ -349,14 +308,16 @@ while p.get('skills') and len(p['skills']) + (1 if p.get('competencies') else 0)
     p['skills'].pop()
     groups_cut += 1
 
+# The cut order is in cv_cuts.py. A CV still over 3 pages after all the
+# cuts is kept as it is: the owner decides (the warning line below).
+cut, over = trim(p, lambda q: est_lines(build(q)), MAX_LINES, KEEP_ACC, PROTECTED)
 out = build(p)
-cut = 0
-while est_lines(out) > MAX_LINES and cut_one(p):
-    cut += 1
-    out = build(p)
 
 parts['word/document.xml'] = (head + '<w:body>' + ''.join(out) + sect + '</w:body>' + tail).encode('utf-8')
 with zipfile.ZipFile(out_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for n, data in parts.items():
         z.writestr(n, data)
 print(f'wrote {out_path}: ~{est_lines(out):.0f} lines (limit {MAX_LINES}), {cut} items cut, {groups_cut} skill groups over {MAX_GROUPS} cut, headline: {headline(p)}')
+if over:
+    # tailor.js reads this line and shows it on the board.
+    print(f'WARNING: {over} (~{est_lines(out):.0f} lines, limit {MAX_LINES})')

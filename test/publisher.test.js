@@ -34,7 +34,7 @@ describe('publish: the named states on each role', () => {
       await db.upsertScore({ role_id: ids[j], po_ats: 70, po_fit: 82, em_ats: 60, em_fit: 77, recommended: 'PO', ats_score: 70, fit_score: 82, reason: 'r', matched_keywords: [], gaps: [], confidence: 'high' },
         { scorer: 'test', rubricVersion: rubricVersion(), descriptionHash: descriptionHash(`Role ${j}`, 'x'.repeat(1200)) });
     }
-    await db.upsertTailored({ role_id: ids['p-4'], description_hash: descriptionHash('Role p-4', 'x'.repeat(1200)), status: 'ready', score: 4.3, report_num: '001', folder: '/o/A/f', cv_file: 'cv.docx', gaps: [] });
+    await db.upsertTailored({ role_id: ids['p-4'], description_hash: descriptionHash('Role p-4', 'x'.repeat(1200)), status: 'ready', score: 4.3, report_num: '001', folder: '/o/A/f', cv_file: 'cv.docx', gaps: [], cv_warning: 'CV still over 3 pages after all cuts; owner to decide' });
     await db.upsertTailored({ role_id: ids['p-5'], description_hash: descriptionHash('Role p-5', 'x'.repeat(1200)), status: 'failed', error: 'x', attempts: settings.tailoring.max_attempts, gaps: [] });
     const outputPath = path.join(dir, 'roles.json');
     await publish({ outputPath });
@@ -60,6 +60,10 @@ describe('publish: the named states on each role', () => {
   test('the raw tailored_docs columns stay out of the board file', () => {
     expect(byJob['p-4']).not.toHaveProperty('t_attempts');
     expect(byJob['p-4']).not.toHaveProperty('t_rerun');
+    expect(byJob['p-4']).not.toHaveProperty('t_cv_warning');
+  });
+  test('the builder warning of a CV reaches the board', () => {
+    expect(byJob['p-4'].tailor.cv_warning).toBe('CV still over 3 pages after all cuts; owner to decide');
   });
   test('targeting has the career-ops threshold and the counts by state', () => {
     expect(byJob.targeting).toHaveProperty('cv_min_score');
