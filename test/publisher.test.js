@@ -25,10 +25,10 @@ describe('publish: the named states on each role', () => {
     await db.syncRoles(SLUG, [role('p-1'), role('p-2'), role('p-3'), role('p-4'), role('p-5')]);
     const ids = {};
     (await db.getRolesForScoring()).forEach((r) => { ids[r.title.replace('Role ', '')] = r.id; });
-    // p-1: no score. p-2: RM 80, no career-ops. p-3: RM 70. p-4: ready. p-5: failed twice.
+    // p-1: no score. p-2: RM 80, no career-ops. p-3: RM 65 (below the gate). p-4: ready. p-5: failed twice.
     await db.upsertScore({ role_id: ids['p-2'], po_ats: 70, po_fit: 80, em_ats: 60, em_fit: 75, recommended: 'PO', ats_score: 70, fit_score: 80, reason: 'r', matched_keywords: [], gaps: [], confidence: 'high' },
       { scorer: 'test', rubricVersion: rubricVersion(), descriptionHash: descriptionHash('Role p-2', 'x'.repeat(1200)) });
-    await db.upsertScore({ role_id: ids['p-3'], po_ats: 70, po_fit: 70, em_ats: 60, em_fit: 65, recommended: 'PO', ats_score: 70, fit_score: 70, reason: 'r', matched_keywords: [], gaps: [], confidence: 'high' },
+    await db.upsertScore({ role_id: ids['p-3'], po_ats: 65, po_fit: 65, em_ats: 60, em_fit: 60, recommended: 'PO', ats_score: 65, fit_score: 65, reason: 'r', matched_keywords: [], gaps: [], confidence: 'high' },
       { scorer: 'test', rubricVersion: rubricVersion(), descriptionHash: descriptionHash('Role p-3', 'x'.repeat(1200)) });
     for (const j of ['p-4', 'p-5']) {
       await db.upsertScore({ role_id: ids[j], po_ats: 70, po_fit: 82, em_ats: 60, em_fit: 77, recommended: 'PO', ats_score: 70, fit_score: 82, reason: 'r', matched_keywords: [], gaps: [], confidence: 'high' },

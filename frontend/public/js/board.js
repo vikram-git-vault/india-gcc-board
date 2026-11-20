@@ -44,17 +44,18 @@
     { id: 'unscored', label: 'Not scored', test: function (r) { return !r.score; } },
   ];
 
-  // career-ops score bands (1 to 5). At 4 or more the board makes a
-  // tailored resume. Waiting: RM score at the minimum, no career-ops yet.
+  // career-ops score bands (1 to 5). At the CV threshold (cvMinScore) or
+  // more the board makes a tailored resume. Waiting: RM score at the minimum, no career-ops yet.
   function coScore(r) { return r.tailor && r.tailor.score != null ? Number(r.tailor.score) : null; }
   var CO_BANDS = [
-    { id: 'co40', label: '4 and above', test: function (r) { return coScore(r) != null && coScore(r) >= 4; } },
-    { id: 'co35', label: '3.5 to 3.9', test: function (r) { return coScore(r) != null && coScore(r) >= 3.5 && coScore(r) < 4; } },
+    // The top band starts at the CV threshold (3.8 since 2026-11-20).
+    { id: 'cocv', label: function () { return cvMinScore() + ' and above'; }, test: function (r) { return coScore(r) != null && coScore(r) >= cvMinScore(); } },
+    { id: 'co35', label: function () { return '3.5 to ' + (cvMinScore() - 0.1).toFixed(1); }, test: function (r) { return coScore(r) != null && coScore(r) >= 3.5 && coScore(r) < cvMinScore(); } },
     { id: 'co30', label: '3 to 3.4', test: function (r) { return coScore(r) != null && coScore(r) >= 3 && coScore(r) < 3.5; } },
     { id: 'colow', label: 'Below 3', test: function (r) { return coScore(r) != null && coScore(r) < 3; } },
     { id: 'copending', label: 'Waiting for career-ops', test: function (r) {
       var min = (state.targeting || {}).tailor_min_fit;
-      return coScore(r) == null && min != null && !!r.score && bestFit(r) >= min;
+      return coScore(r) == null && min != null && !!r.score && bestFit(r) >= min && !(r.tailor_state && r.tailor_state.state === 'not_new');
     } },
   ];
   // "Within" bands include the newer ones; a role open more than a month
@@ -202,7 +203,7 @@
     SCORE_BANDS.forEach(function (b) { bandLabel[b.id] = b.label; });
     buildFacetChips('facetScore', SCORE_BANDS.filter(function (b) { return state.roles.some(b.test); }).map(function (b) { return b.id; }), state.scoreBands, function (id) { return bandLabel[id]; });
     var coLabel = {};
-    CO_BANDS.forEach(function (b) { coLabel[b.id] = b.label; });
+    CO_BANDS.forEach(function (b) { coLabel[b.id] = typeof b.label === 'function' ? b.label() : b.label; });
     buildFacetChips('facetCareerOps', CO_BANDS.filter(function (b) { return state.roles.some(b.test); }).map(function (b) { return b.id; }), state.coBands, function (id) { return coLabel[id]; });
     buildFacetChips('facetGrade', orderedPresent(GRADE_ORDER, state.roles.map(function (r) { return r.grade; })), state.grades);
     buildFacetChips('facetFamily', orderedPresent(FAMILY_ORDER, state.roles.map(function (r) { return r.family; })), state.families);
@@ -327,7 +328,9 @@
 
   // career-ops (tailor.js): its score from 1 to 5. A role with a better
   // RM score at or above the minimum and no result yet is waiting.
-  var CO_TIP = 'career-ops score: how well this job fits you, from 1 to 5, from the career-ops evaluation. At 4 or more, the board makes a tailored Word resume and cover letter.';
+  function coTip() {
+    return 'career-ops score: how well this job fits you, from 1 to 5, from the career-ops evaluation. At ' + cvMinScore() + ' or more, the board makes a tailored Word resume and cover letter.';
+  }
   function bestFit(role) {
     var v = (role.score && role.score.variants) || {};
     return Math.max((v.PO || {}).fit || 0, (v.EM || {}).fit || 0);
@@ -343,24 +346,24 @@
   }
   // Short labels for the waiting box and the status panel.
   var TAILOR_LABEL = {
-    unscored: 'not scored', not_eligible: 'RM below the minimum', outside_window: 'outside the board window', incomplete: 'empty job text',
+    unscored: 'not scored', not_eligible: 'RM below the minimum', outside_window: 'outside the board window', incomplete: 'empty job text', not_new: 'older, not sent (Make CV)',
     waiting: 'waiting', stale: 'to evaluate again', rerun: 'to evaluate again', retry: 'failed, to try again', given_up: 'failed, given up',
     below_gate: 'below the gate', no_cv: 'passed, no CV (too old)', evaluated: 'evaluated', ready: 'CV ready',
   };
-  var TAILOR_LABEL_ORDER = ['ready', 'no_cv', 'below_gate', 'evaluated', 'waiting', 'stale', 'rerun', 'retry', 'given_up', 'incomplete', 'outside_window'];
+  var TAILOR_LABEL_ORDER = ['ready', 'no_cv', 'below_gate', 'evaluated', 'waiting', 'stale', 'rerun', 'retry', 'given_up', 'incomplete', 'not_new', 'outside_window'];
   function tailorBox(role) {
     var t = role.tailor;
     var ts = tailorStateOf(role);
     if (t && t.score != null) {
-      var b = t.score >= 4 ? 'high' : t.score >= 3 ? 'mid' : 'low';
-      return '<div class="score-box ' + b + '" title="' + CO_TIP + (t.stale ? ' The job description changed after this evaluation.' : '') + '"><span class="num">' + Number(t.score).toFixed(1) + '</span><span class="lbl">career-ops</span></div>';
+      var b = t.score >= cvMinScore() ? 'high' : t.score >= 3 ? 'mid' : 'low';
+      return '<div class="score-box ' + b + '" title="' + coTip() + (t.stale ? ' The job description changed after this evaluation.' : '') + '"><span class="num">' + Number(t.score).toFixed(1) + '</span><span class="lbl">career-ops</span></div>';
     }
     var min = (state.targeting || {}).tailor_min_fit;
     if (min != null && role.score && bestFit(role) >= min) {
       // The box says what career-ops does next: waiting, a retry, or given up.
       var why = ts && ts.text ? ' ' + escapeHtml(ts.text) + '.' : ' This role is waiting for career-ops.';
       var lbl = ts && (ts.state === 'retry' || ts.state === 'given_up') ? 'career-ops ' + (ts.state === 'retry' ? 'retry' : 'failed') : 'career-ops';
-      return '<div class="score-box pending" title="' + CO_TIP + why + '"><span class="num">–</span><span class="lbl">' + lbl + '</span></div>';
+      return '<div class="score-box pending" title="' + coTip() + why + '"><span class="num">–</span><span class="lbl">' + lbl + '</span></div>';
     }
     return '';
   }
@@ -383,10 +386,12 @@
   }
 
   // "Make CV anyway": a job added by hand or marked Interested that failed
-  // the gate (RM below the minimum, or career-ops below 4) and has no
+  // the gate (RM below the minimum, or career-ops below cvMinScore) and has no
   // tailored resume. "Make CV": a job marked Interested that passed the
-  // gate but got no resume (older than the CV age limit). A role that waits
-  // for career-ops gets no button: the automatic run makes its CV.
+  // gate but got no resume (older than the CV age limit), or that the
+  // automatic run does not evaluate (not_new: older than
+  // tailoring.evaluate_max_age_days). A role that waits for career-ops
+  // gets no button: the automatic run makes its CV.
   var cvRequested = {};
   function makeCvButton(role) {
     var interested = markOf(role) === 'interested';
@@ -395,9 +400,12 @@
     var t = role.tailor;
     var failed = (t && t.score != null && t.score < cvMinScore()) || (min != null && bestFit(role) < min);
     var noCv = interested && t && t.score != null;
-    if (!failed && !noCv) return '';
+    var ts = tailorStateOf(role);
+    var notNew = interested && !failed && ts && ts.state === 'not_new';
+    if (!failed && !noCv && !notNew) return '';
     var busy = cvRequested[role.id];
     var tip = (failed ? 'This job is below the score for a tailored resume. career-ops makes the resume and cover letter anyway'
+      : notNew ? 'This job is older than the automatic career-ops window, so it was not evaluated. career-ops evaluates it and makes the resume and cover letter now'
       : 'This job got no tailored resume (it was older than the CV age limit). career-ops makes the resume and cover letter now') +
       ' (about 5 to 10 minutes, about $3).';
     return '<button class="make-cv" data-role-id="' + role.id + '"' + (busy ? ' disabled' : '') +

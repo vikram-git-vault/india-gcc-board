@@ -32,7 +32,8 @@ const today = localDate(settings.schedule.timezone);
 const boardFrom = ageCutoff(today, settings.board.max_age_days);
 const cvMinScore = readCvMinScore(expandHome(settings.tailoring.career_ops_dir));
 const rmOpts = { rubric: rubricVersion(), rescoreMinFit: settings.scoring.rescore_min_fit, boardFrom, attempts: readScoreAttempts(), maxAttempts: settings.scoring.max_attempts };
-const tailorOpts = { minFit, cvMinScore, maxAttempts: settings.tailoring.max_attempts, boardFrom };
+const evaluateFrom = settings.tailoring.evaluate_max_age_days > 0 ? ageCutoff(today, settings.tailoring.evaluate_max_age_days) : null;
+const tailorOpts = { minFit, cvMinScore, maxAttempts: settings.tailoring.max_attempts, boardFrom, evaluateFrom };
 
 const SELECT = `
   SELECT r.id, e.name AS employer, r.title, r.location, r.is_active, r.tier, r.source, r.deadline, r.external_job_id, r.job_url,

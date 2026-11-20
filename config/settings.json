@@ -52,8 +52,9 @@
     "auto_tailor": true,
     "career_ops_dir": "~/Projects/career-ops",
     "output_dir": "~/Library/CloudStorage/OneDrive-Personal/Desktop/Resume_Tailored",
-    "min_fit_score": 75,
+    "min_fit_score": 70,
     "max_age_days": 3,
+    "evaluate_max_age_days": 3,
     "max_roles_per_run": 40,
     "worker_timeout_minutes": 20,
     "max_attempts": 2

@@ -180,6 +180,19 @@ describe('a manual role in the database', () => {
     expect(await db.getCvRequestRole(scraped.id)).toMatchObject({ id: scraped.id, mark: 'interested' });
     await db.setMark(scraped.id, null);
   });
+
+  test('getRolesForTailoring: an exception role needs the exception minimum too', async () => {
+    const added = await addManualJob({ text: TEXT, company: 'Eta Bank', title: 'AVP, Engineering', url: 'https://eta.example.com/jobs/7' });
+    await db.upsertScore({ role_id: added.roleId, po_ats: 72, po_fit: 72, em_ats: 60, em_fit: 60, recommended: 'PO', ats_score: 72, fit_score: 72,
+      reason: 'r', matched_keywords: [], gaps: [], confidence: 'high' }, { scorer: 'test', rubricVersion: 'test', descriptionHash: 'h' });
+    const ids = async (min, exceptionMin) => (await db.getRolesForTailoring(min, exceptionMin)).map((r) => r.id);
+    await query("UPDATE roles SET tier = 'target' WHERE id = ?", [added.roleId]);
+    expect(await ids(70, 75)).toContain(added.roleId);
+    await query("UPDATE roles SET tier = 'exception' WHERE id = ?", [added.roleId]);
+    expect(await ids(70, 75)).not.toContain(added.roleId);
+    expect(await ids(70, 70)).toContain(added.roleId);
+    expect(await ids(70)).toContain(added.roleId);
+  });
 });
 
 test('cvAllowed: the CV window does not apply to a manual role', () => {

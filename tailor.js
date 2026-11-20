@@ -52,6 +52,7 @@ import { descriptionHash } from './lib/scoring.js';
 import { initDb, closeDb, getRolesForTailoring, upsertTailored, recordModelCall } from './lib/database.js';
 import { claudeCall, modelFor, parseEnvelope, usageFromEnvelope, routeLine } from './lib/models.js';
 import { publish } from './lib/publisher.js';
+import { loadTargets } from './lib/targeting.js';
 import { loadOwner, ownerRules } from './lib/owner.js';
 import { ensureTracker, syncTracker } from './lib/tracker-sync.js';
 import {
@@ -374,15 +375,18 @@ async function main() {
   if (loadOwner().example || ownerRules().example) logger.warn('config/private has no owner.json or cv-rules.md: the CV rules use the _example files');
   fs.mkdirSync(WORK_DIR, { recursive: true });
   await initDb();
-  const rows = await getRolesForTailoring(anyFit ? 0 : T.min_fit_score);
-  // The evaluation: all ages, newest first (the RM scoring rule). The
-  // Word CV: only roles posted on or after CV_CUTOFF (max_age_days).
+  const rows = anyFit ? await getRolesForTailoring(0)
+    : await getRolesForTailoring(T.min_fit_score, Math.max(T.min_fit_score, loadTargets().exceptionMinFitScore));
+  // The evaluation: newest first (the RM scoring rule), only roles of the
+  // last evaluate_max_age_days days (0: all ages). The Word CV: only roles
+  // posted on or after CV_CUTOFF (max_age_days).
   CV_CUTOFF = ageCutoff(localDate(settings.schedule.timezone), T.max_age_days);
   FORCED = Boolean(onlyRoles);
   const boardFrom = ageCutoff(localDate(settings.schedule.timezone), settings.board.max_age_days);
-  const todo = selectForTailoring(rows, { since, boardFrom, onlyRoles, maxAttempts: T.max_attempts, hash: descriptionHash });
+  const evaluateFrom = T.evaluate_max_age_days > 0 ? ageCutoff(localDate(settings.schedule.timezone), T.evaluate_max_age_days) : null;
+  const todo = selectForTailoring(rows, { since, boardFrom, evaluateFrom, onlyRoles, maxAttempts: T.max_attempts, hash: descriptionHash });
   const batch = todo.slice(0, max);
-  logger.info(`${todo.length} roles need career-ops (posted on or after ${since && since > boardFrom ? since : boardFrom})${todo.length > batch.length ? `; this run sends ${batch.length}` : ''}; Word CVs only for roles posted or changed on or after ${CV_CUTOFF}`);
+  logger.info(`${todo.length} roles need career-ops (posted on or after ${[boardFrom, since, onlyRoles ? null : evaluateFrom].filter(Boolean).sort().pop()})${todo.length > batch.length ? `; this run sends ${batch.length}` : ''}; Word CVs only for roles posted or changed on or after ${CV_CUTOFF}`);
   // The counts for the server log (lib/progress.js formatTailoringProgress).
   const counts = { done: 0, scored: 0, passed: 0, ready: 0, too_old: 0, failed: 0 };
   const report = (extra = {}) => reportProgress('tailor', { total: batch.length, cv_from: FORCED ? null : CV_CUTOFF, ...counts, ...extra });

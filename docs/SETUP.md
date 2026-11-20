@@ -86,8 +86,9 @@ The settings are in two files:
 | `tailoring.auto_tailor` | `true` | After the scoring, send the best-matched roles to career-ops for a tailored Word CV and cover letter. Refer to section 6.1. |
 | `tailoring.career_ops_dir` | `~/Projects/career-ops` | The career-ops folder. `~` is your home folder. |
 | `tailoring.output_dir` | `~/Library/CloudStorage/OneDrive-Personal/Desktop/Resume_Tailored` | The folder for the Word files. |
-| `tailoring.min_fit_score` | `75` | career-ops gets only the roles whose better RM score is this or more. |
-| `tailoring.max_age_days` | `3` | career-ops evaluates roles of all ages, but makes a Word CV only for a role that is this number of days old or less. The date is the posted date (or the day that the board found the role). When the employer changes the title or the text of the role, the date of the change is used. A new CV goes into a new folder. The earlier CVs stay. |
+| `tailoring.min_fit_score` | `70` | career-ops gets only the roles whose better RM score is this or more. An exception role (AVP, Senior Manager) also needs `exception_min_fit_score` in `config/targets.json` (75), because the board hides it below that score. |
+| `tailoring.evaluate_max_age_days` | `3` | The automatic run evaluates only a role that is this number of days old or less (the same date as `tailoring.max_age_days`). `0` evaluates all ages in the board window. To get a CV for an older role, mark it **Interested** and click **Make CV**. The owner made this decision on 2026-11-20. |
+| `tailoring.max_age_days` | `3` | career-ops makes a Word CV only for a role that is this number of days old or less. The date is the posted date (or the day that the board found the role). When the employer changes the title or the text of the role, the date of the change is used. A new CV goes into a new folder. The earlier CVs stay. |
 | `tailoring.max_roles_per_run` | `40` | The maximum number of roles in one tailoring run. |
 | `tailoring.worker_timeout_minutes` | `20` | The time limit for one role. |
 | `tailoring.max_attempts` | `2` | After this number of failed runs, the role is not sent again until its description changes. |
@@ -282,7 +283,7 @@ The board shows a stale score with the label "score out of date". A role with no
 
 ### 6.1 Tailored resumes (career-ops)
 
-After the scoring, the server sends each role with an RM score of 75 or more to career-ops (`tailor.js`). career-ops gives the role a score from 1 to 5. At 4 or more, the board makes a tailored Word CV and cover letter. The role card shows:
+After the scoring, the server sends each role with an RM score of 70 or more to career-ops (`tailor.js`). AVP and Senior Manager roles need 75. career-ops gives the role a score from 1 to 5. At 3.8 or more (`auto_pdf_score_threshold` in the career-ops profile), the board makes a tailored Word CV and cover letter. The role card shows:
 
 - The career-ops score next to the ATS score and the RM score. A dashed box means that the role waits for career-ops; its tooltip says what the next run does (waiting, a retry, or given up after two failed runs). "Why this score" names the state: a Word CV is ready, the role is below the gate, or it passed the gate but was too old for a CV. The refresh status panel (point to "Updated") counts the roles in each state. `docs/ARCHITECTURE.md`, section 18.5, lists the states.
 - The links **Resume (Word)**, **Cover letter (Word)**, **career-ops report** and **Folder**. On the computer that runs the board, a click opens the file in its OneDrive folder (Word files open in Word) or opens the folder in Finder. On another device, a click downloads the file.

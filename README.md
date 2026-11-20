@@ -75,7 +75,7 @@ To change the schedule, use the **Auto refresh** control in the board header: **
 
 After each refresh, the server scores the new roles with Claude Code (`autoscore.js`). To score by hand, run `node autoscore.js`. Refer to [`docs/SETUP.md`](docs/SETUP.md), section 6.
 
-Then the server sends the roles with an RM score of 75 or more to career-ops (`tailor.js`). career-ops gives a score from 1 to 5. At 4 or more, the board makes a tailored Word CV and cover letter for the role. You open the posting and apply. Refer to [`docs/SETUP.md`](docs/SETUP.md), section 6.1.
+Then the server sends the roles with an RM score of 70 or more to career-ops (`tailor.js`). AVP and Senior Manager roles need 75. career-ops gives a score from 1 to 5. At 3.8 or more, the board makes a tailored Word CV and cover letter for the role. You open the posting and apply. Refer to [`docs/SETUP.md`](docs/SETUP.md), section 6.1.
 
 > **CAUTION:** The resumes are personal data. Keep them only in the `Resume/` folder. Git ignores this folder. Do not copy resume text into a file that git tracks.
 

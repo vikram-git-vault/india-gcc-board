@@ -144,7 +144,7 @@ describe('tailorState', () => {
   const opts = { minFit: 75, cvMinScore: 4.0, maxAttempts: 2, boardFrom: '2026-10-13', hash };
 
   test('every state has a text', () => {
-    ['unscored', 'not_eligible', 'outside_window', 'incomplete', 'waiting', 'stale', 'rerun', 'retry', 'given_up', 'below_gate', 'no_cv', 'evaluated', 'ready']
+    ['unscored', 'not_eligible', 'outside_window', 'incomplete', 'not_new', 'waiting', 'stale', 'rerun', 'retry', 'given_up', 'below_gate', 'no_cv', 'evaluated', 'ready']
       .forEach((s) => expect(TAILOR_STATES[s]).toBeTruthy());
   });
   test('before career-ops: unscored, not eligible, outside the window, incomplete, waiting', () => {
@@ -154,6 +154,13 @@ describe('tailorState', () => {
     expect(tailorState(row({ age_date: '2026-09-01' }), opts)).toMatchObject({ state: 'outside_window', next: false });
     expect(tailorState(row({ description: 'Your opportunitynullWhat is in it' }), opts)).toMatchObject({ state: 'incomplete', next: false });
     expect(tailorState(row(), opts)).toMatchObject({ state: 'waiting', next: true });
+  });
+  test('evaluate_max_age_days: an older role is not_new; a changed posting counts from its change', () => {
+    const newOnly = { ...opts, evaluateFrom: '2026-11-08' };
+    expect(tailorState(row({ age_date: '2026-11-01' }), newOnly)).toMatchObject({ state: 'not_new', next: false, text: /older than 2026-11-08/ });
+    expect(tailorState(row({ age_date: '2026-11-01', changed_date: '2026-11-09' }), newOnly)).toMatchObject({ state: 'waiting', next: true });
+    expect(tailorState(row(), newOnly)).toMatchObject({ state: 'waiting', next: true });
+    expect(tailorState(row({ age_date: '2026-11-01', tailored_status: 'failed', tailored_hash: hash('t', 'd'), attempts: 1 }), newOnly)).toMatchObject({ state: 'retry', next: false });
   });
   test('failed: retry, then given up; a new description is sent again', () => {
     expect(tailorState(row({ tailored_status: 'failed', tailored_hash: h, attempts: 1 }), opts)).toMatchObject({ state: 'retry', next: true });

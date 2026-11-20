@@ -173,6 +173,11 @@ describe('evaluation selection and CV window', () => {
       role(9, '2026-10-03', { tailored_hash: 't|d', rerun: 1 })];
     expect(selectForTailoring(rows, opts).map((r) => r.id)).toEqual([8, 9]);
   });
+  test('evaluation: evaluateFrom keeps new and changed roles; --role skips it', () => {
+    const rows = [role(1, '2026-11-04'), role(2, '2026-10-01'), role(3, '2026-10-01', { changed_date: '2026-11-05' }), role(4, null)];
+    expect(selectForTailoring(rows, { ...opts, evaluateFrom: '2026-11-03' }).map((r) => r.id)).toEqual([1, 3]);
+    expect(selectForTailoring(rows, { ...opts, evaluateFrom: '2026-11-03', onlyRoles: new Set([2]) }).map((r) => r.id)).toEqual([2]);
+  });
   test('evaluation: only roles in the board window; --role skips it', () => {
     const rows = [role(1, '2026-11-04'), role(2, '2026-10-01'), role(3, null)];
     expect(selectForTailoring(rows, { ...opts, boardFrom: '2026-10-06' }).map((r) => r.id)).toEqual([1]);
