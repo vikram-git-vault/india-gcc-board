@@ -338,6 +338,8 @@ The board reads Workday links and most career sites. If it cannot read the link,
 
 If the job fails the gate, click **Make CV anyway** on its card to get a CV. The 3-day age limit does not apply to a manual job. The refresh never closes a manual job: when you do not need it, mark it **Closed**.
 
+You can also get a CV for a scraped job that you mark **Interested**. If the job failed the gate, its card shows **Make CV anyway**. If the job passed the gate but was older than the 3-day limit, its card shows **Make CV**. One CV costs approximately $3.
+
 You can also add a job from the command line:
 
 ```bash

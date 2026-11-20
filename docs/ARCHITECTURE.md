@@ -247,7 +247,7 @@ A role that a run did not read stays active. When a role is on the site again, i
 The owner can add a job that the board did not scrape: with the **Add a job** form on the board (`POST /api/manual-jobs`), or with `node tools/add-job.js` (the `/tailor-role` skill). `lib/manual-job.js` does these steps:
 
 1. If a role has the same link (a query or a last "/" is not part of the compare), it uses that role. It does not add a second role.
-2. If the owner gave no job text, it reads the link. For a Workday link, it uses the Workday job API. For other links, it reads the schema.org `JobPosting` data in the page. If it gets less than 500 characters, the owner must paste the text. LinkedIn, Naukri and pages with a login always need the pasted text.
+2. If the owner gave no job text, it reads the link. For a Workday link, it uses the Workday job API. For other links, it reads the schema.org `JobPosting` data in the page: first the JSON-LD block, then the Microdata (`itemprop` attributes). SAP SuccessFactors pages (`jobs2web.com`) have only Microdata. If it gets less than 500 characters, the owner must paste the text. LinkedIn, Naukri and pages with a login always need the pasted text.
 3. It adds the role with `source` 'manual', `tier` 'target', the posted date of today, and the text in `full_description`.
 
 The server reads only public internet addresses. It refuses loopback, private and link-local addresses, also after a redirect.
@@ -261,6 +261,13 @@ Rules for a manual role:
 - When it fails the gate, the board shows **Make CV anyway** (`POST /api/roles/:id/make-cv`, `tailor.js --role ID --force-cv`).
 
 The owner made these decisions on 2026-11-12.
+
+A scraped role that the owner marks **Interested** can also get a CV on request (the owner's decision on 2026-11-20). The board shows the button only when the role has no CV and one of these conditions is true:
+
+- The role failed the gate: **Make CV anyway**.
+- career-ops evaluated the role, but the role was older than the 3-day CV limit: **Make CV**.
+
+A role that waits for career-ops gets no button, because the automatic run makes its CV. The server accepts the request only for a manual role or a role with the Interested mark. Roles with other marks (for example, Applied) get no button.
 
 ### `source_urls`
 

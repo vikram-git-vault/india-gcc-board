@@ -50,7 +50,9 @@ const SELECT = `
 for (const input of inputs) {
   let rows;
   if (/^\d+$/.test(input) && input.length <= 6) {
+    // A short number is a role id, else an employer job id (Publicis: 180718).
     rows = await all(`${SELECT} WHERE r.id = ?`, [Number(input)]);
+    if (!rows.length) rows = await byJobId(input);
   } else if (/^https?:\/\//.test(input)) {
     const url = input.split(/[?#]/)[0].replace(/\/$/, '');
     rows = await all(`${SELECT} WHERE r.job_url LIKE ?`, [`${url}%`]);
@@ -81,7 +83,7 @@ for (const input of inputs) {
     if (!r.is_active) console.log('  tailor.js: the role is closed; tailor.js selects only active roles.');
     else if (!scored) console.log(`  tailor.js: not RM scored yet; ${rm === 'given_up' ? 'autoscore.js does not send it again until the description changes' : 'run node autoscore.js first (it scores all pending roles)'}.`);
     else if (bestFit >= minFit) console.log(`  tailor.js: node tailor.js --role ${r.id}  (RM ${bestFit} >= ${minFit}: a Word CV if career-ops >= ${cvMinScore == null ? 'the threshold' : cvMinScore})`);
-    else console.log(`  tailor.js: node tailor.js --role ${r.id} --any-fit  (RM ${bestFit} < ${minFit}: score and gaps only, never a Word CV${life.manual ? '; --force-cv makes one anyway' : ''})`);
+    else console.log(`  tailor.js: node tailor.js --role ${r.id} --any-fit  (RM ${bestFit} < ${minFit}: score and gaps only, never a Word CV${life.manual || r.mark === 'interested' ? '; --force-cv makes one anyway' : ''})`);
   });
 }
 db.close();

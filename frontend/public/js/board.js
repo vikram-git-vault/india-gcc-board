@@ -382,19 +382,26 @@
     return links;
   }
 
-  // "Make CV anyway": a job added by hand that failed the gate (RM below
-  // the minimum, or career-ops below 4) and has no tailored resume.
+  // "Make CV anyway": a job added by hand or marked Interested that failed
+  // the gate (RM below the minimum, or career-ops below 4) and has no
+  // tailored resume. "Make CV": a job marked Interested that passed the
+  // gate but got no resume (older than the CV age limit). A role that waits
+  // for career-ops gets no button: the automatic run makes its CV.
   var cvRequested = {};
   function makeCvButton(role) {
-    if (!role.manual || !role.score || (role.tailor && role.tailor.cv)) return '';
+    var interested = markOf(role) === 'interested';
+    if (!(role.manual || interested) || !role.score || (role.tailor && role.tailor.cv)) return '';
     var min = (state.targeting || {}).tailor_min_fit;
     var t = role.tailor;
     var failed = (t && t.score != null && t.score < cvMinScore()) || (min != null && bestFit(role) < min);
-    if (!failed) return '';
+    var noCv = interested && t && t.score != null;
+    if (!failed && !noCv) return '';
     var busy = cvRequested[role.id];
+    var tip = (failed ? 'This job is below the score for a tailored resume. career-ops makes the resume and cover letter anyway'
+      : 'This job got no tailored resume (it was older than the CV age limit). career-ops makes the resume and cover letter now') +
+      ' (about 5 to 10 minutes, about $3).';
     return '<button class="make-cv" data-role-id="' + role.id + '"' + (busy ? ' disabled' : '') +
-      ' title="This job is below the score for a tailored resume. career-ops makes the resume and cover letter anyway (about 5 to 10 minutes).">' +
-      (busy ? 'CV requested' : 'Make CV anyway') + '</button>';
+      ' title="' + tip + '">' + (busy ? 'CV requested' : failed ? 'Make CV anyway' : 'Make CV') + '</button>';
   }
 
   function scoreHtml(role) {

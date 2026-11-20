@@ -28,7 +28,7 @@ import { OUTAGE_EXIT_CODE } from './lib/outage.js';
 import { requestGuard, parseAllowedHosts, securityHeaders } from './lib/security.js';
 import {
   getTailored, getEmployerName, getMarks, getMark, setMark, roleExists, addGapAnswer, requestRetailor, getModelUsage,
-  getManualRole, initDb,
+  getCvRequestRole, initDb,
 } from './lib/database.js';
 import { addManualJob } from './lib/manual-job.js';
 import { summarizeUsage, STAGES } from './lib/models.js';
@@ -595,14 +595,15 @@ app.post('/api/manual-jobs', express.json({ limit: '256kb' }), async (req, res) 
   }
 });
 
-// "Make CV anyway": a Word CV for a job the owner added by hand, also when
-// it fails the gate (tailor.js --force-cv). The role needs its RM score.
+// "Make CV" / "Make CV anyway": a Word CV for a job the owner added by hand
+// or marked Interested, also when it fails the gate or is older than the
+// CV age limit (tailor.js --force-cv). The role needs its RM score.
 app.post('/api/roles/:id/make-cv', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) { res.status(400).json({ error: 'Bad role' }); return; }
   try {
-    const role = await getManualRole(id);
-    if (!role) { res.status(404).json({ error: 'Only a job added by hand can get a CV anyway' }); return; }
+    const role = await getCvRequestRole(id);
+    if (!role) { res.status(404).json({ error: 'Only a job added by hand or marked Interested can get a CV on request' }); return; }
     if (!role.is_active) { res.status(409).json({ error: 'The job is closed' }); return; }
     if (role.best_fit == null) { res.status(409).json({ error: 'The job has no RM score yet' }); return; }
     const args = ['--role', String(id), '--force-cv'];

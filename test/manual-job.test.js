@@ -86,6 +86,20 @@ describe('reading a job link', () => {
     expect(jobPostingFromHtml('<html><body>no data</body></html>')).toBeNull();
   });
 
+  test('jobPostingFromHtml reads schema.org Microdata (SAP SuccessFactors pages)', () => {
+    const page = `<html><body><div itemscope="itemscope" itemtype="http://schema.org/JobPosting">
+      <span itemprop="jobLocation" itemscope itemtype="http://schema.org/Place"><span itemprop="address" itemscope itemtype="http://schema.org/PostalAddress">
+      <meta itemprop="streetAddress" content="Chennai, IN, 600 032"></span></span>
+      <meta itemprop="hiringOrganization" content="ASSA ABLOY">
+      <span itemprop="title">Product Owner Business Enablement</span>
+      <span itemprop="description"><p>Own the <b>backlog</b>.</p><ul><li>Work with UX</li></ul></span></div></body></html>`;
+    const job = jobPostingFromHtml(page);
+    expect(job).toMatchObject({ title: 'Product Owner Business Enablement', company: 'ASSA ABLOY', location: 'Chennai', via: 'the job data in the page' });
+    expect(job.text).toContain('Own the backlog.');
+    expect(job.text).toContain('Work with UX');
+    expect(jobPostingFromHtml('<div itemscope itemtype="https://schema.org/JobPosting"></div>')).toBeNull();
+  });
+
   test('a page with no job data asks for the pasted text, and keeps what the owner typed', async () => {
     nock('https://www.linkedin.example').get('/jobs/view/1').reply(200, '<html><body>Sign in</body></html>');
     const out = await prepareManualJob({ url: 'https://www.linkedin.example/jobs/view/1', company: 'Acme' }, { lookup });
@@ -155,11 +169,16 @@ describe('a manual role in the database', () => {
     expect(due.map((x) => x.id)).not.toContain(added.roleId);
   });
 
-  test('getManualRole finds only manual roles', async () => {
+  test('getCvRequestRole finds manual roles and roles marked Interested', async () => {
     const added = await addManualJob({ text: TEXT, company: 'Zeta Analytics', title: 'Director', url: 'https://zeta.example.com/jobs/91' });
-    expect(await db.getManualRole(added.roleId)).toMatchObject({ id: added.roleId, is_active: 1, best_fit: null });
+    expect(await db.getCvRequestRole(added.roleId)).toMatchObject({ id: added.roleId, is_active: 1, source: 'manual', best_fit: null });
     const [scraped] = await query("SELECT id FROM roles WHERE source IS NULL LIMIT 1");
-    expect(await db.getManualRole(scraped.id)).toBeUndefined();
+    expect(await db.getCvRequestRole(scraped.id)).toBeUndefined();
+    await db.setMark(scraped.id, 'applied');
+    expect(await db.getCvRequestRole(scraped.id)).toBeUndefined();
+    await db.setMark(scraped.id, 'interested');
+    expect(await db.getCvRequestRole(scraped.id)).toMatchObject({ id: scraped.id, mark: 'interested' });
+    await db.setMark(scraped.id, null);
   });
 });
 
