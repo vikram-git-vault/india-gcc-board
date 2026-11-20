@@ -55,6 +55,7 @@
     "min_fit_score": 70,
     "max_age_days": 3,
     "evaluate_max_age_days": 3,
+    "evaluate_found_from": "2026-11-21",
     "max_roles_per_run": 40,
     "worker_timeout_minutes": 20,
     "max_attempts": 2

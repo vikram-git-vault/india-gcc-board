@@ -178,6 +178,11 @@ describe('evaluation selection and CV window', () => {
     expect(selectForTailoring(rows, { ...opts, evaluateFrom: '2026-11-03' }).map((r) => r.id)).toEqual([1, 3]);
     expect(selectForTailoring(rows, { ...opts, evaluateFrom: '2026-11-03', onlyRoles: new Set([2]) }).map((r) => r.id)).toEqual([2]);
   });
+  test('evaluation: foundFrom keeps only roles found on or after it; --role skips it', () => {
+    const rows = [role(1, '2026-11-20', { found_date: '2026-11-20' }), role(2, '2026-11-15', { found_date: '2026-11-21' }), role(3, null)];
+    expect(selectForTailoring(rows, { ...opts, foundFrom: '2026-11-21' }).map((r) => r.id)).toEqual([2]);
+    expect(selectForTailoring(rows, { ...opts, foundFrom: '2026-11-21', onlyRoles: new Set([1]) }).map((r) => r.id)).toEqual([1]);
+  });
   test('evaluation: only roles in the board window; --role skips it', () => {
     const rows = [role(1, '2026-11-04'), role(2, '2026-10-01'), role(3, null)];
     expect(selectForTailoring(rows, { ...opts, boardFrom: '2026-10-06' }).map((r) => r.id)).toEqual([1]);

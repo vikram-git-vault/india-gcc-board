@@ -33,12 +33,12 @@ const boardFrom = ageCutoff(today, settings.board.max_age_days);
 const cvMinScore = readCvMinScore(expandHome(settings.tailoring.career_ops_dir));
 const rmOpts = { rubric: rubricVersion(), rescoreMinFit: settings.scoring.rescore_min_fit, boardFrom, attempts: readScoreAttempts(), maxAttempts: settings.scoring.max_attempts };
 const evaluateFrom = settings.tailoring.evaluate_max_age_days > 0 ? ageCutoff(today, settings.tailoring.evaluate_max_age_days) : null;
-const tailorOpts = { minFit, cvMinScore, maxAttempts: settings.tailoring.max_attempts, boardFrom, evaluateFrom };
+const tailorOpts = { minFit, cvMinScore, maxAttempts: settings.tailoring.max_attempts, boardFrom, evaluateFrom, foundFrom: settings.tailoring.evaluate_found_from || null };
 
 const SELECT = `
   SELECT r.id, e.name AS employer, r.title, r.location, r.is_active, r.tier, r.source, r.deadline, r.external_job_id, r.job_url,
          COALESCE(r.full_description, r.description, '') AS description, r.description_status, r.description_fetched_at,
-         COALESCE(r.posted_date, DATE(r.scraped_at)) AS age_date, r.changed_date,
+         COALESCE(r.posted_date, DATE(r.scraped_at)) AS age_date, DATE(r.scraped_at) AS found_date, r.changed_date,
          s.po_fit, s.em_fit, s.fit_score, s.description_hash AS scored_hash, s.rubric_version AS scored_rubric_version,
          t.status AS tailored_status, t.score AS tailored_score, t.description_hash AS tailored_hash, t.attempts, t.rerun,
          t.cv_file, t.folder, t.report_num,

@@ -160,7 +160,14 @@ describe('tailorState', () => {
     expect(tailorState(row({ age_date: '2026-11-01' }), newOnly)).toMatchObject({ state: 'not_new', next: false, text: /older than 2026-11-08/ });
     expect(tailorState(row({ age_date: '2026-11-01', changed_date: '2026-11-09' }), newOnly)).toMatchObject({ state: 'waiting', next: true });
     expect(tailorState(row(), newOnly)).toMatchObject({ state: 'waiting', next: true });
-    expect(tailorState(row({ age_date: '2026-11-01', tailored_status: 'failed', tailored_hash: hash('t', 'd'), attempts: 1 }), newOnly)).toMatchObject({ state: 'retry', next: false });
+    expect(tailorState(row({ age_date: '2026-11-01', tailored_status: 'failed', tailored_hash: hash('t', 'd'), attempts: 1 }), newOnly))
+      .toMatchObject({ state: 'retry', next: false, text: /automatic run does not send it/ });
+  });
+  test('evaluate_found_from: a role found before the date is not_new, also when it is recent', () => {
+    const found = { ...opts, foundFrom: '2026-11-21' };
+    expect(tailorState(row({ age_date: '2026-11-20', found_date: '2026-11-20' }), found)).toMatchObject({ state: 'not_new', next: false, text: /found the role before 2026-11-21/ });
+    expect(tailorState(row({ age_date: '2026-11-21', found_date: '2026-11-21' }), found)).toMatchObject({ state: 'waiting', next: true });
+    expect(tailorState(row({ found_date: '2026-11-20', tailored_hash: 'old', tailored_status: 'evaluated' }), found)).toMatchObject({ state: 'stale', next: false });
   });
   test('failed: retry, then given up; a new description is sent again', () => {
     expect(tailorState(row({ tailored_status: 'failed', tailored_hash: h, attempts: 1 }), opts)).toMatchObject({ state: 'retry', next: true });

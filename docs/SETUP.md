@@ -88,6 +88,7 @@ The settings are in two files:
 | `tailoring.output_dir` | `~/Library/CloudStorage/OneDrive-Personal/Desktop/Resume_Tailored` | The folder for the Word files. |
 | `tailoring.min_fit_score` | `70` | career-ops gets only the roles whose better RM score is this or more. An exception role (AVP, Senior Manager) also needs `exception_min_fit_score` in `config/targets.json` (75), because the board hides it below that score. |
 | `tailoring.evaluate_max_age_days` | `3` | The automatic run evaluates only a role that is this number of days old or less (the same date as `tailoring.max_age_days`). `0` evaluates all ages in the board window. To get a CV for an older role, mark it **Interested** and click **Make CV**. The owner made this decision on 2026-11-20. |
+| `tailoring.evaluate_found_from` | `"2026-11-21"` | The automatic run evaluates only a role that the board first found on or after this date. `""` removes the limit. With this date, the roles that the board found before the RM gate changed to 70 do not go to career-ops automatically. |
 | `tailoring.max_age_days` | `3` | career-ops makes a Word CV only for a role that is this number of days old or less. The date is the posted date (or the day that the board found the role). When the employer changes the title or the text of the role, the date of the change is used. A new CV goes into a new folder. The earlier CVs stay. |
 | `tailoring.max_roles_per_run` | `40` | The maximum number of roles in one tailoring run. |
 | `tailoring.worker_timeout_minutes` | `20` | The time limit for one role. |

@@ -12,6 +12,9 @@ await db.initDb();
 afterAll(() => db.closeDb());
 
 const SLUG = 'nomura'; // any active employer in config/employers.json
+// The live config can hold a one-time date limit for career-ops; the test
+// roles are found today, so the test runs without it.
+settings.tailoring.evaluate_found_from = '';
 const today = new Date().toISOString().slice(0, 10);
 const role = (id, extra = {}) => ({
   external_job_id: id, title: `Role ${id}`, description: 'x'.repeat(1200), location: 'Mumbai', country: 'India', department: null,

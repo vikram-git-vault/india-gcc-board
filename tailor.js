@@ -384,9 +384,10 @@ async function main() {
   FORCED = Boolean(onlyRoles);
   const boardFrom = ageCutoff(localDate(settings.schedule.timezone), settings.board.max_age_days);
   const evaluateFrom = T.evaluate_max_age_days > 0 ? ageCutoff(localDate(settings.schedule.timezone), T.evaluate_max_age_days) : null;
-  const todo = selectForTailoring(rows, { since, boardFrom, evaluateFrom, onlyRoles, maxAttempts: T.max_attempts, hash: descriptionHash });
+  const foundFrom = T.evaluate_found_from || null;
+  const todo = selectForTailoring(rows, { since, boardFrom, evaluateFrom, foundFrom, onlyRoles, maxAttempts: T.max_attempts, hash: descriptionHash });
   const batch = todo.slice(0, max);
-  logger.info(`${todo.length} roles need career-ops (posted on or after ${[boardFrom, since, onlyRoles ? null : evaluateFrom].filter(Boolean).sort().pop()})${todo.length > batch.length ? `; this run sends ${batch.length}` : ''}; Word CVs only for roles posted or changed on or after ${CV_CUTOFF}`);
+  logger.info(`${todo.length} roles need career-ops (posted on or after ${[boardFrom, since, onlyRoles ? null : evaluateFrom].filter(Boolean).sort().pop()})${foundFrom && !onlyRoles ? ` and found on or after ${foundFrom}` : ''}${todo.length > batch.length ? `; this run sends ${batch.length}` : ''}; Word CVs only for roles posted or changed on or after ${CV_CUTOFF}`);
   // The counts for the server log (lib/progress.js formatTailoringProgress).
   const counts = { done: 0, scored: 0, passed: 0, ready: 0, too_old: 0, failed: 0 };
   const report = (extra = {}) => reportProgress('tailor', { total: batch.length, cv_from: FORCED ? null : CV_CUTOFF, ...counts, ...extra });
